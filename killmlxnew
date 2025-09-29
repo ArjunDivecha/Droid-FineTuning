@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# MLX Fine-Tuning GUI Shutdown Script
+echo "🛑 Stopping MLX Fine-Tuning GUI..."
+
+# Kill backend on port 8000
+echo "Stopping backend (port 8000)..."
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+
+# Kill frontend on port 3000
+echo "Stopping frontend (port 3000)..."
+lsof -ti:3000 | xargs kill -9 2>/dev/null
+
+# Kill any vite processes
+pkill -f "vite" 2>/dev/null
+
+# Kill any uvicorn processes
+pkill -f "uvicorn" 2>/dev/null
+
+sleep 1
+
+echo "✅ MLX Fine-Tuning GUI stopped!"
