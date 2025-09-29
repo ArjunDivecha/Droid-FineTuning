@@ -26,7 +26,7 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Add the parent directory to path to import existing modules
+# Add the parent directory to path to import existing modules (using original for compatibility)
 sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
 
 app = FastAPI(title="MLX Fine-Tuning GUI API", version="1.0.0")
@@ -66,6 +66,7 @@ class TrainingManager:
         self.current_config: Optional[TrainingConfig] = None
         self.training_metrics: Dict[str, Any] = {}
         self.websocket_clients: List[WebSocket] = []
+        # Use the original paths to maintain compatibility with existing MLX setup
         self.output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
         self.log_file = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/logs/gui_training.log"
         self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
@@ -415,7 +416,8 @@ class TrainingManager:
         # Start training process
         try:
             cmd = [
-                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Fine Tuner XXX/one_step_finetune/run_finetune.py",
+                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python",
+                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/run_finetune.py",
                 "--config", config_path
             ]
             
