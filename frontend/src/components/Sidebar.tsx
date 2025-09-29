@@ -8,7 +8,8 @@ import {
   GitCompare, 
   ChevronLeft,
   ChevronRight,
-  Zap
+  Zap,
+  Sparkles
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { setActiveNavItem, toggleSidebar, type ActivePage } from '../store/slices/uiSlice';
@@ -28,6 +29,13 @@ const navItems: NavItem[] = [
     icon: Settings,
     path: '/setup',
     description: 'Configure models and datasets'
+  },
+  {
+    id: 'enhanced-setup' as ActivePage,
+    label: 'Enhanced Setup',
+    icon: Sparkles,
+    path: '/enhanced-setup',
+    description: 'GSPO, Dr. GRPO & advanced methods'
   },
   {
     id: 'training',
