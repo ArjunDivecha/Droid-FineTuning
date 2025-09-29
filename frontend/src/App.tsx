@@ -4,6 +4,7 @@ import { Provider } from 'react-redux';
 import { store } from './store/store';
 import { Layout } from './components/Layout';
 import { SetupPage } from './pages/SetupPage';
+import EnhancedSetupPage from './pages/EnhancedSetupPage';
 import { TrainingPage } from './pages/TrainingPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { ComparePage } from './pages/ComparePage';
@@ -29,6 +30,7 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<SetupPage />} />
           <Route path="/setup" element={<SetupPage />} />
+          <Route path="/enhanced-setup" element={<EnhancedSetupPage />} />
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/compare" element={<ComparePage />} />
