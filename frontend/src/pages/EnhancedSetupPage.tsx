@@ -118,6 +118,7 @@ const EnhancedSetupPage: React.FC = () => {
   const [dataValidation, setDataValidation] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isEstimating, setIsEstimating] = useState(false);
+  const [availableModels, setAvailableModels] = useState<Array<{name: string, path: string}>>([]);
   
   // Form state matching your existing design
   const [formData, setFormData] = useState<Partial<EnhancedTrainingConfig>>({
@@ -146,6 +147,24 @@ const EnhancedSetupPage: React.FC = () => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Fetch available models on mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await axios.get(`${BACKEND_URL}/models`);
+        if (response.data.models) {
+          setAvailableModels(response.data.models.map((m: any) => ({
+            name: m.name,
+            path: m.path
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+      }
+    };
+    fetchModels();
+  }, []);
 
   // Update form data when method changes
   useEffect(() => {
@@ -232,17 +251,35 @@ const EnhancedSetupPage: React.FC = () => {
     e.preventDefault();
     
     try {
-      dispatch(setTrainingConfig(formData as any));
-      dispatch(addNotification({
-        type: 'success',
-        title: 'Training Started',
-        message: `${selectedMethod.toUpperCase()} training has been initiated`
-      }));
-    } catch (error) {
+      // Validate required fields
+      if (!formData.model_path || !formData.train_data_path) {
+        dispatch(addNotification({
+          type: 'error',
+          title: 'Validation Error',
+          message: 'Please provide model path and training data path'
+        }));
+        return;
+      }
+
+      // Start training via backend API
+      const response = await axios.post(`${BACKEND_URL}/training/start`, formData);
+      
+      if (response.data.status === 'started') {
+        dispatch(setTrainingConfig(formData as any));
+        dispatch(addNotification({
+          type: 'success',
+          title: 'Training Started',
+          message: `${selectedMethod.toUpperCase()} training has been initiated successfully`
+        }));
+      } else {
+        throw new Error('Training failed to start');
+      }
+    } catch (error: any) {
+      console.error('Training start error:', error);
       dispatch(addNotification({
         type: 'error',
         title: 'Training Failed',
-        message: 'Failed to start enhanced training'
+        message: error.response?.data?.detail || error.message || 'Failed to start enhanced training'
       }));
     }
   };
@@ -358,13 +395,28 @@ const EnhancedSetupPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Model Path
                 </label>
-                <input
-                  type="text"
-                  value={formData.model_path || ''}
-                  onChange={(e) => handleInputChange('model_path', e.target.value)}
-                  className="input-field"
-                  placeholder="Path to your model directory"
-                />
+                {availableModels.length > 0 ? (
+                  <select
+                    value={formData.model_path || ''}
+                    onChange={(e) => handleInputChange('model_path', e.target.value)}
+                    className="input-field"
+                  >
+                    <option value="">Select a model...</option>
+                    {availableModels.map((model) => (
+                      <option key={model.path} value={model.path}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.model_path || ''}
+                    onChange={(e) => handleInputChange('model_path', e.target.value)}
+                    className="input-field"
+                    placeholder="Path to your model directory"
+                  />
+                )}
               </div>
 
               <div>
