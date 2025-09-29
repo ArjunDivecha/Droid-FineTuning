@@ -1,0 +1,485 @@
+# backend/main_enhancements.py
+# Enhanced functionality to integrate with existing main.py for GSPO and Dr. GRPO support
+
+from dataclasses import dataclass, asdict
+from typing import Dict, Any, List, Optional
+import subprocess
+import json
+import os
+import yaml
+import logging
+from datetime import datetime
+
+from training_methods import (
+    TrainingMethod, 
+    TRAINING_METHODS, 
+    TrainingDataValidator, 
+    ResourceEstimator
+)
+
+logger = logging.getLogger(__name__)
+
+@dataclass 
+class EnhancedTrainingConfig:
+    """Enhanced training configuration that extends the existing TrainingConfig"""
+    # Existing fields from your TrainingConfig
+    model_path: str
+    train_data_path: str
+    val_data_path: Optional[str] = None
+    learning_rate: float = 1e-5
+    batch_size: int = 1
+    max_seq_length: int = 2048
+    iterations: int = 100
+    steps_per_report: int = 10
+    steps_per_eval: int = 25
+    save_every: int = 100
+    early_stop: bool = False
+    patience: int = 10
+    adapter_name: str = "adapter"
+    
+    # NEW: Enhanced fields for different training methods
+    training_method: str = "sft"  # sft, gspo, dr_grpo, grpo
+    
+    # GSPO specific parameters
+    sparse_ratio: float = 0.7
+    efficiency_threshold: float = 0.85
+    sparse_optimization: bool = True
+    
+    # Dr. GRPO specific parameters
+    domain: str = "general"
+    expertise_level: str = "advanced"
+    domain_adaptation_strength: float = 1.0
+    
+    # GRPO specific parameters
+    reasoning_steps: int = 8
+    multi_step_training: bool = True
+
+class EnhancedTrainingManager:
+    """Enhanced training manager that extends the existing TrainingManager functionality"""
+    
+    def __init__(self, base_training_manager):
+        """Initialize with reference to existing TrainingManager"""
+        self.base_manager = base_training_manager
+        self.logger = logging.getLogger(__name__)
+    
+    def get_available_methods(self) -> Dict[str, Any]:
+        """Get available training methods with their configurations"""
+        methods = {}
+        for method, config in TRAINING_METHODS.items():
+            methods[method.value] = {
+                "display_name": config.display_name,
+                "description": config.description,
+                "complexity": config.complexity,
+                "use_case": config.use_case,
+                "badge": config.badge,
+                "resource_intensity": config.resource_intensity,
+                "estimated_speedup": config.estimated_speedup,
+                "data_format": config.data_format,
+                "requires_reasoning_chains": config.requires_reasoning_chains,
+                "additional_params": config.additional_params
+            }
+        return methods
+    
+    def validate_training_data(self, method: str, data_path: str) -> Dict[str, Any]:
+        """Validate training data format for specific method"""
+        try:
+            training_method = TrainingMethod(method)
+            return TrainingDataValidator.validate_data_format(training_method, data_path)
+        except ValueError:
+            return {"valid": False, "error": f"Unknown training method: {method}"}
+    
+    def estimate_resources(self, method: str, model_path: str, dataset_size: int) -> Dict[str, Any]:
+        """Estimate resource requirements for training"""
+        try:
+            training_method = TrainingMethod(method)
+            return ResourceEstimator.estimate_requirements(training_method, model_path, dataset_size)
+        except ValueError:
+            return {"error": f"Unknown training method: {method}"}
+    
+    def create_enhanced_config_file(self, config: EnhancedTrainingConfig) -> str:
+        """Create configuration file for enhanced training methods"""
+        
+        # Get method-specific configuration
+        method = TrainingMethod(config.training_method)
+        method_config = TRAINING_METHODS[method]
+        
+        # Base configuration (compatible with existing system)
+        yaml_config = {
+            "model": config.model_path,
+            "train": config.train_data_path,
+            "valid": config.val_data_path or "",
+            "adapter_path": os.path.join(self.base_manager.output_dir, config.adapter_name),
+            "save_every": config.save_every,
+            "val_batches": config.steps_per_eval,
+            "learning_rate": config.learning_rate,
+            "batch_size": config.batch_size,
+            "iters": config.iterations,
+            "max_seq_length": config.max_seq_length
+        }
+        
+        # Add method-specific parameters
+        if method == TrainingMethod.GSPO:
+            yaml_config.update({
+                "sparse_ratio": config.sparse_ratio,
+                "efficiency_threshold": config.efficiency_threshold,
+                "sparse_optimization": config.sparse_optimization,
+                "method": "gspo"
+            })
+        elif method == TrainingMethod.DR_GRPO:
+            yaml_config.update({
+                "domain": config.domain,
+                "expertise_level": config.expertise_level,
+                "domain_adaptation_strength": config.domain_adaptation_strength,
+                "method": "dr_grpo"
+            })
+        elif method == TrainingMethod.GRPO:
+            yaml_config.update({
+                "reasoning_steps": config.reasoning_steps,
+                "multi_step_training": config.multi_step_training,
+                "method": "grpo"
+            })
+        else:
+            yaml_config["method"] = "sft"
+        
+        # Create config file
+        config_path = os.path.join(self.base_manager.output_dir, f"{config.adapter_name}_config.yaml")
+        os.makedirs(os.path.dirname(config_path), exist_ok=True)
+        
+        with open(config_path, 'w') as f:
+            yaml.dump(yaml_config, f, default_flow_style=False)
+        
+        return config_path
+    
+    def build_enhanced_training_command(self, config: EnhancedTrainingConfig, config_path: str) -> List[str]:
+        """Build training command for enhanced methods"""
+        
+        method = TrainingMethod(config.training_method)
+        method_config = TRAINING_METHODS[method]
+        
+        # Use Python from current environment or specify your MLX environment path
+        python_path = "python"  # Will use current environment
+        
+        # Build command based on method
+        if method == TrainingMethod.GSPO:
+            # For now, use standard MLX training with GSPO config
+            # Future: python_path, "-m", "mlx_lm_lora.gspo"
+            cmd = [
+                python_path,
+                "-m", "mlx_lm.lora",
+                "--config", config_path
+            ]
+        elif method == TrainingMethod.DR_GRPO:
+            # For now, use standard MLX training with Dr. GRPO config
+            # Future: python_path, "-m", "mlx_lm_lora.dr_grpo"
+            cmd = [
+                python_path,
+                "-m", "mlx_lm.lora",
+                "--config", config_path
+            ]
+        elif method == TrainingMethod.GRPO:
+            # For now, use standard MLX training with GRPO config
+            # Future: python_path, "-m", "mlx_lm_lora.grpo"
+            cmd = [
+                python_path,
+                "-m", "mlx_lm.lora",
+                "--config", config_path
+            ]
+        else:
+            # Default SFT (use existing approach)
+            cmd = [
+                python_path,
+                "-m", "mlx_lm.lora",
+                "--config", config_path
+            ]
+        
+        self.logger.info(f"Built {method.value.upper()} command: {' '.join(cmd)}")
+        return cmd
+    
+    def start_enhanced_training(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Start training with enhanced method support"""
+        try:
+            # Convert to enhanced config
+            enhanced_config = EnhancedTrainingConfig(**config_data)
+            
+            # Validate data format if specified
+            if enhanced_config.train_data_path:
+                validation = self.validate_training_data(
+                    enhanced_config.training_method, 
+                    enhanced_config.train_data_path
+                )
+                if not validation.get("valid", False):
+                    return {
+                        "success": False,
+                        "error": f"Data validation failed: {validation.get('error', 'Unknown error')}"
+                    }
+            
+            # Update base manager's configuration
+            self.base_manager.current_config = enhanced_config
+            self.base_manager.training_state = "running"
+            
+            # Reset metrics
+            self.base_manager.training_metrics = {
+                "current_step": 0,
+                "total_steps": enhanced_config.iterations,
+                "train_loss": 0.0,
+                "val_loss": 0.0,
+                "learning_rate": enhanced_config.learning_rate,
+                "start_time": datetime.now().isoformat(),
+                "estimated_time_remaining": "Calculating...",
+                "method": enhanced_config.training_method,
+                "best_val_loss": float('inf'),
+                "best_model_step": 0
+            }
+            
+            # Create enhanced config file
+            config_path = self.create_enhanced_config_file(enhanced_config)
+            
+            # Build training command
+            cmd = self.build_enhanced_training_command(enhanced_config, config_path)
+            
+            # Start training process (similar to existing start_training)
+            self.logger.info(f"Starting {enhanced_config.training_method.upper()} training...")
+            
+            self.base_manager.current_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+                cwd=os.path.dirname(enhanced_config.train_data_path) if enhanced_config.train_data_path else os.getcwd()
+            )
+            
+            # Start monitoring (reuse existing monitoring with enhancements)
+            import asyncio
+            if hasattr(self.base_manager, '_monitor_training'):
+                asyncio.create_task(self.base_manager._monitor_training())
+            
+            return {
+                "success": True,
+                "message": f"Enhanced training started with {enhanced_config.training_method.upper()}",
+                "method": enhanced_config.training_method,
+                "config_path": config_path,
+                "pid": self.base_manager.current_process.pid
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Enhanced training start failed: {str(e)}")
+            self.base_manager.training_state = "error"
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def generate_sample_data(self, method: str, output_path: str, num_samples: int = 10) -> Dict[str, Any]:
+        """Generate sample training data for testing"""
+        try:
+            training_method = TrainingMethod(method)
+            method_config = TRAINING_METHODS[training_method]
+            
+            samples = []
+            
+            if method == "gspo":
+                for i in range(num_samples):
+                    sample = {
+                        "problem": f"Solve this optimization problem: Find the minimum value of f(x) = x² + {i+1}x + {i}",
+                        "reasoning_steps": [
+                            f"Identify the quadratic function f(x) = x² + {i+1}x + {i}",
+                            "Find the vertex using x = -b/(2a)",
+                            f"Calculate x = -{i+1}/2 = {-(i+1)/2}",
+                            f"Substitute back to find minimum value"
+                        ],
+                        "solution": f"The minimum value is {i - (i+1)**2/4}",
+                        "sparse_indicators": [1, 1, 0, 1],  # Critical steps
+                        "efficiency_markers": {
+                            "computation_cost": "low",
+                            "reasoning_depth": 4,
+                            "optimization_applied": True
+                        }
+                    }
+                    samples.append(sample)
+            
+            elif method == "dr_grpo":
+                medical_cases = [
+                    "chest pain and shortness of breath",
+                    "fever and rash in pediatric patient", 
+                    "confusion and memory loss in elderly",
+                    "severe headache with vision changes"
+                ]
+                
+                for i in range(num_samples):
+                    case = medical_cases[i % len(medical_cases)]
+                    sample = {
+                        "problem": f"Patient presents with {case}. Provide differential diagnosis.",
+                        "reasoning_steps": [
+                            "Obtain comprehensive history",
+                            "Perform focused physical examination",
+                            "Consider most likely diagnoses",
+                            "Order appropriate diagnostic tests",
+                            "Formulate evidence-based treatment plan"
+                        ],
+                        "solution": "Systematic diagnostic approach with evidence-based recommendations",
+                        "domain": "medical",
+                        "expertise_level": "advanced",
+                        "domain_context": {
+                            "medical_specialty": "internal_medicine",
+                            "complexity": "high",
+                            "evidence_level": "grade_A"
+                        }
+                    }
+                    samples.append(sample)
+            
+            elif method == "grpo":
+                for i in range(num_samples):
+                    sample = {
+                        "problem": f"Complex reasoning: If A implies B, and B implies C, what can we conclude about A and C when we know C is false?",
+                        "reasoning_steps": [
+                            "Identify the logical structure: A → B → C",
+                            "Apply modus tollens: ¬C → ¬B",
+                            "Apply modus tollens again: ¬B → ¬A",
+                            "Conclude: ¬C → ¬A (if C is false, A must be false)"
+                        ],
+                        "solution": "By contraposition and logical chaining, if C is false, then A must also be false."
+                    }
+                    samples.append(sample)
+            
+            else:  # SFT
+                for i in range(num_samples):
+                    sample = {
+                        "instruction": f"Explain the concept of {['machine learning', 'neural networks', 'deep learning', 'artificial intelligence'][i % 4]}",
+                        "response": f"A comprehensive explanation of {['machine learning', 'neural networks', 'deep learning', 'artificial intelligence'][i % 4]} with examples and applications."
+                    }
+                    samples.append(sample)
+            
+            # Write samples to file
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            with open(output_path, 'w', encoding='utf-8') as f:
+                for sample in samples:
+                    f.write(json.dumps(sample, ensure_ascii=False) + '\n')
+            
+            return {
+                "success": True,
+                "message": f"Generated {num_samples} samples for {method}",
+                "output_path": output_path,
+                "method": method,
+                "sample_count": num_samples
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Sample data generation failed: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+# Enhanced API endpoints to add to your existing FastAPI app
+def create_enhanced_endpoints(app, training_manager, enhanced_manager):
+    """Create enhanced API endpoints"""
+    
+    @app.get("/api/training/methods")
+    async def get_training_methods():
+        """Get available training methods"""
+        try:
+            methods = enhanced_manager.get_available_methods()
+            return {"success": True, "methods": methods}
+        except Exception as e:
+            logger.error(f"Failed to get training methods: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    @app.post("/api/training/validate-data")
+    async def validate_training_data(request_data: dict):
+        """Validate training data format"""
+        try:
+            method = request_data.get("method")
+            data_path = request_data.get("data_path")
+            
+            if not method or not data_path:
+                return {"success": False, "error": "Missing method or data_path"}
+            
+            validation = enhanced_manager.validate_training_data(method, data_path)
+            return {"success": True, "validation": validation}
+        except Exception as e:
+            logger.error(f"Data validation failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    @app.post("/api/training/estimate-resources")
+    async def estimate_resources(request_data: dict):
+        """Estimate resource requirements"""
+        try:
+            method = request_data.get("method")
+            model_path = request_data.get("model_path", "7B")
+            dataset_size = request_data.get("dataset_size", 1000)
+            
+            if not method:
+                return {"success": False, "error": "Missing method"}
+            
+            estimation = enhanced_manager.estimate_resources(method, model_path, dataset_size)
+            return {"success": True, "estimation": estimation}
+        except Exception as e:
+            logger.error(f"Resource estimation failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    @app.post("/api/training/start-enhanced")
+    async def start_enhanced_training(config: dict):
+        """Start training with enhanced method support"""
+        try:
+            # Stop any existing training first
+            if training_manager.current_process and training_manager.current_process.poll() is None:
+                training_manager.stop_training()
+            
+            result = enhanced_manager.start_enhanced_training(config)
+            
+            # Broadcast status update
+            if result.get("success"):
+                await training_manager.broadcast({
+                    "type": "training_started", 
+                    "method": result.get("method", "unknown"),
+                    "message": result.get("message", "Training started")
+                })
+            
+            return result
+        except Exception as e:
+            logger.error(f"Enhanced training start failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    @app.post("/api/training/generate-sample-data")
+    async def generate_sample_data(request_data: dict):
+        """Generate sample training data for testing"""
+        try:
+            method = request_data.get("method")
+            output_path = request_data.get("output_path")
+            num_samples = request_data.get("num_samples", 10)
+            
+            if not method or not output_path:
+                return {"success": False, "error": "Missing method or output_path"}
+            
+            result = enhanced_manager.generate_sample_data(method, output_path, num_samples)
+            return result
+        except Exception as e:
+            logger.error(f"Sample data generation failed: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+# Integration function for existing main.py
+def integrate_enhanced_training(app, training_manager):
+    """
+    Integration function to add enhanced training to existing main.py
+    
+    Add this to your existing main.py:
+    
+    from main_enhancements import integrate_enhanced_training
+    
+    # After creating your TrainingManager instance:
+    integrate_enhanced_training(app, training_manager)
+    """
+    
+    # Create enhanced manager
+    enhanced_manager = EnhancedTrainingManager(training_manager)
+    
+    # Add enhanced endpoints
+    create_enhanced_endpoints(app, training_manager, enhanced_manager)
+    
+    # Add enhanced manager to app state for access in other endpoints
+    app.state.enhanced_manager = enhanced_manager
+    
+    logger.info("Enhanced training methods integrated successfully")
+    return enhanced_manager

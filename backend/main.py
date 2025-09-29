@@ -628,6 +628,10 @@ class TrainingManager:
 # Global training manager instance
 training_manager = TrainingManager()
 
+# NEW: Integrate enhanced training methods (GSPO and Dr. GRPO)
+from main_enhancements import integrate_enhanced_training
+enhanced_manager = integrate_enhanced_training(app, training_manager)
+
 # REST API endpoints
 @app.get("/health")
 async def health_check():
