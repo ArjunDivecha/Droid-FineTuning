@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# MLX Fine-Tuning GUI Startup Script
+echo "🚀 Starting MLX Fine-Tuning GUI..."
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Kill any existing processes on ports 8000 and 3000
+echo "🧹 Cleaning up existing processes..."
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+lsof -ti:3000 | xargs kill -9 2>/dev/null
+sleep 1
+
+# Start backend
+echo "🔧 Starting backend server on port 8000..."
+cd "$SCRIPT_DIR/backend"
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 > "$SCRIPT_DIR/logs/backend.log" 2>&1 &
+BACKEND_PID=$!
+echo "Backend PID: $BACKEND_PID"
+
+# Wait for backend to start
+sleep 3
+
+# Start frontend
+echo "🎨 Starting frontend dev server on port 3000..."
+cd "$SCRIPT_DIR/frontend"
+npm run dev > "$SCRIPT_DIR/logs/frontend.log" 2>&1 &
+FRONTEND_PID=$!
+echo "Frontend PID: $FRONTEND_PID"
+
+# Wait for frontend to start
+sleep 3
+
+echo "✅ MLX Fine-Tuning GUI is running!"
+echo "   Backend:  http://localhost:8000"
+echo "   Frontend: http://localhost:3000"
+echo ""
+echo "📝 Logs are in $SCRIPT_DIR/logs/"
+echo "🛑 To stop, run: ./killmlxnew"

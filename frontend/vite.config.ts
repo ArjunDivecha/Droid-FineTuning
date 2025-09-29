@@ -17,6 +17,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  base: './', // Use relative paths for Electron
   build: {
     outDir: 'dist',
     sourcemap: true,

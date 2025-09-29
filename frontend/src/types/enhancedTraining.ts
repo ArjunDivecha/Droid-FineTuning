@@ -211,12 +211,3 @@ export const getValidationRules = (method: TrainingMethod): ValidationRules => {
       return baseRules;
   }
 };
-
-// Export all types
-export type {
-  TrainingMethodConfig,
-  EnhancedTrainingConfig,
-  ResourceEstimation,
-  ValidationResult,
-  EnhancedTrainingState
-};
