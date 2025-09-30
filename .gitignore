@@ -55,3 +55,4 @@ adapters/
 tmp/
 temp/
 .cache/
+adapter_fusion/.env

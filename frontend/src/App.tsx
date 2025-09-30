@@ -8,6 +8,7 @@ import EnhancedSetupPage from './pages/EnhancedSetupPage';
 import { TrainingPage } from './pages/TrainingPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { ComparePage } from './pages/ComparePage';
+import FusionPage from './pages/FusionPage';
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
@@ -34,6 +35,7 @@ const AppContent: React.FC = () => {
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/compare" element={<ComparePage />} />
+          <Route path="/fusion" element={<FusionPage />} />
         </Routes>
       </Layout>
     </Router>
