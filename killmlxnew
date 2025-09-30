@@ -1,22 +1,17 @@
 #!/bin/bash
 
-# MLX Fine-Tuning GUI Shutdown Script
-echo "🛑 Stopping MLX Fine-Tuning GUI..."
+# MLX Fine-Tuning GUI Stop Script
+echo " Stopping MLX Fine-Tuning GUI..."
+# Kill Electron app
+echo " killing Electron app..."
+pkill -f "Electron.*MLX Fine-Tuner" 2>/dev/null
+pkill -f "npm start" 2>/dev/null
 
-# Kill backend on port 8000
-echo "Stopping backend (port 8000)..."
+# Kill backend
+echo " killing backend..."
 lsof -ti:8000 | xargs kill -9 2>/dev/null
-
-# Kill frontend on port 3000
-echo "Stopping frontend (port 3000)..."
-lsof -ti:3000 | xargs kill -9 2>/dev/null
-
-# Kill any vite processes
-pkill -f "vite" 2>/dev/null
-
-# Kill any uvicorn processes
-pkill -f "uvicorn" 2>/dev/null
+pkill -f "uvicorn main:app" 2>/dev/null
 
 sleep 1
-
+echo " All processes stopped!"
 echo "✅ MLX Fine-Tuning GUI stopped!"
