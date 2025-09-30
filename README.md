@@ -117,13 +117,32 @@ cd frontend && npm run build && cd .. && npm start
 ### Enhanced Training (Enhanced Setup Page) 🆕
 1. **Choose Training Method:**
    - **SFT** - Standard supervised fine-tuning
-   - **GSPO** - Gradient-based Sparse Policy Optimization (2x faster)
-   - **Dr. GRPO** - Domain-Refined Group Relative Policy Optimization
+   - **GSPO** - Group Sparse Policy Optimization with importance sampling
+   - **Dr. GRPO** - Decoupled Rewards GRPO for stable training
    - **GRPO** - Group Relative Policy Optimization for reasoning tasks
 
 2. **Select Model** - Auto-populated dropdown with all available models
 3. **Configure Training** - Method-specific parameters
 4. **Start Training** - GPU will run at optimal performance
+
+### 📊 Sample Training Data Available
+
+For testing GRPO/GSPO/Dr. GRPO methods, converted training data is ready at:
+- **Location:** `grpo_training_data/`
+  - `train.jsonl` - 17 examples (Arjun Divecha investment writing)
+  - `valid.jsonl` - 2 examples
+
+**Data format:**
+```json
+{"prompt": "Write an article on: ...", "answer": "...", "system": "You are..."}
+```
+
+To use your own data, run the conversion script:
+```bash
+python3.11 convert_to_grpo.py
+```
+
+This converts messages format (SFT) to GRPO format automatically.
 
 ### Other Pages
 - **Training Page** - Monitor real-time training progress with live metrics
