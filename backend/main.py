@@ -1192,6 +1192,14 @@ try:
 except Exception as e:
     logger.warning(f"Evaluation API not available: {e}")
 
+# Setup fusion API routes
+try:
+    from fusion_api import router as fusion_router
+    app.include_router(fusion_router)
+    logger.info("Fusion API integrated")
+except Exception as e:
+    logger.warning(f"Fusion API not available: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
