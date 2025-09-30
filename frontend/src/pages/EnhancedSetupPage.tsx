@@ -41,18 +41,18 @@ interface EnhancedTrainingConfig {
   steps_per_report: number;
   steps_per_eval: number;
   save_every: number;
-  early_stop: boolean;
-  patience: number;
   adapter_name: string;
   training_method: TrainingMethod;
-  sparse_ratio?: number;
-  efficiency_threshold?: number;
-  sparse_optimization?: boolean;
-  domain?: string;
-  expertise_level?: string;
-  domain_adaptation_strength?: number;
-  reasoning_steps?: number;
-  multi_step_training?: boolean;
+  // GRPO/GSPO/Dr.GRPO parameters (actual mlx-lm-lora flags)
+  group_size?: number;
+  epsilon?: number;
+  temperature?: number;
+  max_completion_length?: number;
+  importance_sampling_level?: string;
+  grpo_loss_type?: string;
+  epsilon_high?: number;
+  reward_functions?: string;
+  reward_weights?: string;
 }
 
 interface ResourceEstimation {
@@ -86,30 +86,30 @@ const EnhancedSetupPage: React.FC = () => {
     [TrainingMethod.GSPO]: {
       name: 'gspo',
       display_name: 'GSPO',
-      description: 'Latest breakthrough in efficient reasoning model training with sparse optimization',
+      description: 'GRPO with importance sampling for improved sample efficiency',
       complexity: '⭐⭐⭐⭐',
-      use_case: 'Efficient reasoning tasks with resource constraints',
-      resource_intensity: 'medium',
-      estimated_speedup: '2x faster training',
-      badge: '🆕 Most Efficient'
+      use_case: 'Policy optimization with better convergence than standard GRPO',
+      resource_intensity: 'high',
+      estimated_speedup: 'Better sample efficiency',
+      badge: '🆕 Efficient'
     },
     [TrainingMethod.DR_GRPO]: {
       name: 'dr_grpo',
       display_name: 'Dr. GRPO',
-      description: 'Domain-specialized reasoning for expert knowledge applications',
+      description: 'Decoupled rewards GRPO for more stable training',
       complexity: '⭐⭐⭐⭐⭐',
-      use_case: 'Medical, scientific, and specialized domain reasoning',
-      resource_intensity: 'high',
-      badge: '🆕 Domain Expert'
+      use_case: 'Stable policy optimization for complex tasks',
+      resource_intensity: 'very high',
+      badge: '🆕 Most Stable'
     },
     [TrainingMethod.GRPO]: {
       name: 'grpo',
       display_name: 'GRPO',
-      description: 'DeepSeek-R1 style multi-step reasoning capabilities',
+      description: 'Group Relative Policy Optimization for reasoning and instruction following',
       complexity: '⭐⭐⭐⭐',
-      use_case: 'Complex multi-step reasoning and problem solving',
+      use_case: 'Improving reasoning quality and response quality',
       resource_intensity: 'high',
-      badge: '🆕 New'
+      badge: '🆕 RL'
     }
   });
 
@@ -120,30 +120,30 @@ const EnhancedSetupPage: React.FC = () => {
   const [isEstimating, setIsEstimating] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{name: string, path: string}>>([]);
   
-  // Form state matching your existing design
+  // Form state matching actual mlx-lm-lora parameters
   const [formData, setFormData] = useState<Partial<EnhancedTrainingConfig>>({
     model_path: '',
     train_data_path: '',
     val_data_path: '',
     learning_rate: 1e-5,
     batch_size: 1,
-    max_seq_length: 32768,
-    iterations: 7329,
-    steps_per_report: 25,
-    steps_per_eval: 200,
-    save_every: 1000,
-    early_stop: true,
-    patience: 3,
+    max_seq_length: 2048,
+    iterations: 100,
+    steps_per_report: 10,
+    steps_per_eval: 25,
+    save_every: 100,
     adapter_name: 'mlx_finetune',
     training_method: TrainingMethod.SFT,
-    sparse_ratio: 0.7,
-    efficiency_threshold: 0.85,
-    sparse_optimization: true,
-    domain: 'general',
-    expertise_level: 'advanced',
-    domain_adaptation_strength: 1.0,
-    reasoning_steps: 8,
-    multi_step_training: true
+    // GRPO parameters with defaults
+    group_size: 4,
+    epsilon: 0.0001,
+    temperature: 0.8,
+    max_completion_length: 512,
+    importance_sampling_level: 'token',
+    grpo_loss_type: 'grpo',
+    epsilon_high: undefined,
+    reward_functions: '',
+    reward_weights: ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -568,20 +568,6 @@ const EnhancedSetupPage: React.FC = () => {
                   className="input-field"
                 />
               </div>
-
-              <div className="md:col-span-3">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.early_stop || false}
-                    onChange={(e) => handleInputChange('early_stop', e.target.checked)}
-                    className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Enable Early Stopping
-                  </span>
-                </label>
-              </div>
             </div>
           </div>
         </div>
@@ -595,61 +581,96 @@ const EnhancedSetupPage: React.FC = () => {
                 GSPO Configuration
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Group Sparse Policy Optimization settings
+                GRPO with importance sampling for improved efficiency
               </p>
             </div>
             <div className="card-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Sparse Ratio
+                    Importance Sampling Level
                   </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    max="0.9"
-                    value={formData.sparse_ratio || ''}
-                    onChange={(e) => handleInputChange('sparse_ratio', parseFloat(e.target.value))}
-                    className="input-field"
-                  />
+                  <select
+                    value={formData.importance_sampling_level || 'token'}
+                    onChange={(e) => handleInputChange('importance_sampling_level', e.target.value)}
+                    className="select-field"
+                  >
+                    <option value="token">Token-level (most fine-grained)</option>
+                    <option value="sequence">Sequence-level</option>
+                    <option value="">None (standard GRPO)</option>
+                  </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Fraction of reasoning steps to optimize (0.1-0.9)
+                    Token-level focuses on individual tokens, sequence-level on full responses
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Efficiency Threshold
+                    Group Size
                   </label>
                   <input
                     type="number"
-                    step="0.05"
-                    min="0.5"
-                    max="1.0"
-                    value={formData.efficiency_threshold || ''}
-                    onChange={(e) => handleInputChange('efficiency_threshold', parseFloat(e.target.value))}
+                    min="2"
+                    max="16"
+                    value={formData.group_size || 4}
+                    onChange={(e) => handleInputChange('group_size', parseInt(e.target.value))}
                     className="input-field"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Minimum efficiency score to maintain (0.5-1.0)
+                    Number of completions to generate per prompt (2-16, default: 4)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Epsilon
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    max="0.01"
+                    value={formData.epsilon || 0.0001}
+                    onChange={(e) => handleInputChange('epsilon', parseFloat(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Clipping parameter for numerical stability (default: 0.0001)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Temperature
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.6"
+                    max="1.2"
+                    value={formData.temperature || 0.8}
+                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Sampling temperature (0.6-1.2, lower=deterministic, higher=creative)
                   </p>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.sparse_optimization || false}
-                      onChange={(e) => handleInputChange('sparse_optimization', e.target.checked)}
-                      className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Enable Sparse Optimization
-                    </span>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Max Completion Length
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
-                    Use sparse attention patterns for efficiency
+                  <input
+                    type="number"
+                    min="128"
+                    max="2048"
+                    value={formData.max_completion_length || 512}
+                    onChange={(e) => handleInputChange('max_completion_length', parseInt(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Maximum tokens for generated completions (default: 512)
                   </p>
                 </div>
               </div>
@@ -665,59 +686,97 @@ const EnhancedSetupPage: React.FC = () => {
                 Dr. GRPO Configuration
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Domain-specialized reasoning settings
+                Decoupled rewards GRPO for more stable training
               </p>
             </div>
             <div className="card-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Domain
+                    Group Size
                   </label>
-                  <select
-                    value={formData.domain || ''}
-                    onChange={(e) => handleInputChange('domain', e.target.value)}
-                    className="select-field"
-                  >
-                    <option value="general">General</option>
-                    <option value="medical">Medical</option>
-                    <option value="scientific">Scientific</option>
-                    <option value="legal">Legal</option>
-                    <option value="technical">Technical</option>
-                  </select>
+                  <input
+                    type="number"
+                    min="2"
+                    max="16"
+                    value={formData.group_size || 4}
+                    onChange={(e) => handleInputChange('group_size', parseInt(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Number of completions to generate per prompt (2-16, default: 4)
+                  </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Expertise Level
+                    Epsilon (Lower Bound)
                   </label>
-                  <select
-                    value={formData.expertise_level || ''}
-                    onChange={(e) => handleInputChange('expertise_level', e.target.value)}
-                    className="select-field"
-                  >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                    <option value="expert">Expert</option>
-                  </select>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    max="0.01"
+                    value={formData.epsilon || 0.0001}
+                    onChange={(e) => handleInputChange('epsilon', parseFloat(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Lower clipping bound for stability (default: 0.0001)
+                  </p>
                 </div>
 
-                <div className="md:col-span-2">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Domain Adaptation Strength
+                    Epsilon High (Upper Bound)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    max="0.1"
+                    value={formData.epsilon_high || ''}
+                    onChange={(e) => handleInputChange('epsilon_high', e.target.value ? parseFloat(e.target.value) : undefined)}
+                    className="input-field"
+                    placeholder="Optional (for DAPO variant)"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Upper clipping bound (optional, for DAPO variant)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Temperature
                   </label>
                   <input
                     type="number"
                     step="0.1"
-                    min="0.1"
-                    max="2.0"
-                    value={formData.domain_adaptation_strength || ''}
-                    onChange={(e) => handleInputChange('domain_adaptation_strength', parseFloat(e.target.value))}
+                    min="0.6"
+                    max="1.2"
+                    value={formData.temperature || 0.8}
+                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
                     className="input-field"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Strength of domain-specific adaptation (0.1-2.0)
+                    Sampling temperature (0.6-1.2, default: 0.8)
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Max Completion Length
+                  </label>
+                  <input
+                    type="number"
+                    min="128"
+                    max="2048"
+                    value={formData.max_completion_length || 512}
+                    onChange={(e) => handleInputChange('max_completion_length', parseInt(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Maximum tokens for generated completions (default: 512)
                   </p>
                 </div>
               </div>
@@ -733,40 +792,79 @@ const EnhancedSetupPage: React.FC = () => {
                 GRPO Configuration
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Multi-step reasoning settings
+                Group Relative Policy Optimization for reasoning tasks
               </p>
             </div>
             <div className="card-body">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Reasoning Steps
+                    Group Size
                   </label>
                   <input
                     type="number"
-                    min="3"
-                    max="15"
-                    value={formData.reasoning_steps || ''}
-                    onChange={(e) => handleInputChange('reasoning_steps', parseInt(e.target.value))}
+                    min="2"
+                    max="16"
+                    value={formData.group_size || 4}
+                    onChange={(e) => handleInputChange('group_size', parseInt(e.target.value))}
                     className="input-field"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Number of reasoning steps to train (3-15)
+                    Number of completions to generate per prompt (2-16, default: 4)
                   </p>
                 </div>
 
-                <div className="flex items-center">
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.multi_step_training || false}
-                      onChange={(e) => handleInputChange('multi_step_training', e.target.checked)}
-                      className="rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Enable Multi-Step Training
-                    </span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Epsilon
                   </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    max="0.01"
+                    value={formData.epsilon || 0.0001}
+                    onChange={(e) => handleInputChange('epsilon', parseFloat(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Clipping parameter for stability (default: 0.0001)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Temperature
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.6"
+                    max="1.2"
+                    value={formData.temperature || 0.8}
+                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Sampling temperature (0.6-1.2, default: 0.8)
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Max Completion Length
+                  </label>
+                  <input
+                    type="number"
+                    min="128"
+                    max="2048"
+                    value={formData.max_completion_length || 512}
+                    onChange={(e) => handleInputChange('max_completion_length', parseInt(e.target.value))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Maximum tokens for generated completions (default: 512)
+                  </p>
                 </div>
               </div>
             </div>

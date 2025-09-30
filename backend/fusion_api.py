@@ -146,6 +146,49 @@ async def list_adapters():
                 base_model = session_info.get('model_name')
                 if '/' in base_model:
                     base_model = base_model.split('/')[-1]
+            else:
+                # Fallback: Try to read adapter_config.json
+                adapter_dir = os.path.join(fusion.base_adapter_dir, adapter_name)
+                adapter_config_path = os.path.join(adapter_dir, 'adapter_config.json')
+                
+                if os.path.exists(adapter_config_path):
+                    try:
+                        with open(adapter_config_path, 'r') as f:
+                            adapter_config = json.load(f)
+                            # Try multiple possible keys for base model path
+                            base_model_path = (
+                                adapter_config.get('base_model_name_or_path') or
+                                adapter_config.get('model') or
+                                adapter_config.get('base_model')
+                            )
+                            if base_model_path:
+                                base_model = base_model_path.rstrip('/').split('/')[-1]
+                    except Exception as e:
+                        logger.warning(f"Could not read adapter_config.json for {adapter_name}: {e}")
+                
+                # If still unknown, try to infer from fusion_report.txt
+                if base_model == 'Unknown Model':
+                    fusion_report_path = os.path.join(adapter_dir, 'fusion_report.txt')
+                    if os.path.exists(fusion_report_path):
+                        try:
+                            with open(fusion_report_path, 'r') as f:
+                                content = f.read()
+                                # Look for source adapters and get their base model
+                                if 'Source Adapters:' in content:
+                                    # Get first source adapter name
+                                    lines = content.split('\n')
+                                    for line in lines:
+                                        if line.strip().startswith('1.'):
+                                            source_adapter = line.split('(')[0].strip().split('.')[1].strip()
+                                            # Recursively get base model of source adapter
+                                            source_session = get_session_info(source_adapter)
+                                            source_config = source_session.get('config', {})
+                                            source_model_path = source_config.get('model_path')
+                                            if source_model_path:
+                                                base_model = source_model_path.rstrip('/').split('/')[-1]
+                                            break
+                        except Exception as e:
+                            logger.warning(f"Could not read fusion_report.txt for {adapter_name}: {e}")
             
             # Get training metadata
             training_date = session_info.get('timestamp')
