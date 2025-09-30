@@ -332,6 +332,8 @@ export const ComparePage: React.FC = () => {
       return;
     }
     
+    // Clear previous evaluation results
+    setEvaluations([]);
     setIsEvaluating(true);
     setEvaluationProgress(0);
     setEvaluationError(null);
