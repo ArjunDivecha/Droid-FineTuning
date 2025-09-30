@@ -15,6 +15,7 @@ import { RootState } from '../store/store';
 import { setShowLogs, addNotification } from '../store/slices/uiSlice';
 import { TrainingChart } from '../components/TrainingChart';
 import { LogViewer } from '../components/LogViewer';
+import TrainingErrorDisplay from '../components/TrainingErrorDisplay';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
