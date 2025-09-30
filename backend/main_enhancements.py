@@ -298,6 +298,7 @@ class EnhancedTrainingManager:
                 with open(log_file, 'a') as f:
                     f.write(f"ERROR: {error_msg}\n")
                 self.base_manager.training_state = "error"
+                self.base_manager.last_error = error_msg
                 return {"success": False, "error": error_msg, "log_file": log_file}
 
             if not os.path.exists(enhanced_config.train_data_path):
@@ -306,6 +307,7 @@ class EnhancedTrainingManager:
                 with open(log_file, 'a') as f:
                     f.write(f"ERROR: {error_msg}\n")
                 self.base_manager.training_state = "error"
+                self.base_manager.last_error = error_msg
                 return {"success": False, "error": error_msg, "log_file": log_file}
 
             # Start training process with better error handling
@@ -508,19 +510,32 @@ def create_enhanced_endpoints(app, training_manager, enhanced_manager):
     
     @app.post("/api/training/validate-data")
     async def validate_training_data(request_data: dict):
-        """Validate training data format"""
+        """Validate training data format and syntax"""
         try:
             method = request_data.get("method")
             data_path = request_data.get("data_path")
             
             if not method or not data_path:
-                return {"success": False, "error": "Missing method or data_path"}
+                return {"valid": False, "error": "Missing method or data_path"}
             
             validation = enhanced_manager.validate_training_data(method, data_path)
-            return {"success": True, "validation": validation}
+            
+            # Return in format expected by frontend
+            if validation.get("valid"):
+                return {
+                    "valid": True,
+                    "num_samples": validation.get("num_samples", 0),
+                    "format": validation.get("format", "unknown"),
+                    "message": validation.get("message", "Data validation passed")
+                }
+            else:
+                return {
+                    "valid": False,
+                    "error": validation.get("error", "Unknown validation error")
+                }
         except Exception as e:
             logger.error(f"Data validation failed: {str(e)}")
-            return {"success": False, "error": str(e)}
+            return {"valid": False, "error": str(e)}
     
     @app.post("/api/training/estimate-resources")
     async def estimate_resources(request_data: dict):

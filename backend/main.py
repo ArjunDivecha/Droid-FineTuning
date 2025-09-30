@@ -66,6 +66,7 @@ class TrainingManager:
         self.current_config: Optional[TrainingConfig] = None
         self.training_metrics: Dict[str, Any] = {}
         self.websocket_clients: List[WebSocket] = []
+        self.last_error: Optional[str] = None  # Store last error message
         # Use the original paths to maintain compatibility with existing MLX setup
         self.output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
         self.log_file = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/logs/gui_training.log"
@@ -457,10 +458,11 @@ class TrainingManager:
             
         except Exception as e:
             self.training_state = "error"
-            logger.error(f"Failed to start training: {e}")
+            self.last_error = f"Failed to start training: {str(e)}"
+            logger.error(self.last_error)
             await self.broadcast({
                 "type": "training_error",
-                "data": {"error": str(e)}
+                "data": {"error": self.last_error}
             })
             return False
     
@@ -713,7 +715,8 @@ async def get_training_status():
     return {
         "state": training_manager.training_state,
         "metrics": training_manager.training_metrics,
-        "config": asdict(training_manager.current_config) if training_manager.current_config else None
+        "config": asdict(training_manager.current_config) if training_manager.current_config else None,
+        "error": getattr(training_manager, 'last_error', None)
     }
 
 @app.post("/training/start")

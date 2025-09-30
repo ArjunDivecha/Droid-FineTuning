@@ -222,27 +222,40 @@ const EnhancedSetupPage: React.FC = () => {
     }
   };
 
-  const generateSampleData = async () => {
-    try {
-      const response = await axios.post(`${BACKEND_URL}/api/training/generate-sample-data`, {
-        method: selectedMethod,
-        output_path: `/tmp/sample_${selectedMethod}_data.jsonl`,
-        num_samples: 20
-      });
-      
-      if (response.data.success) {
-        handleInputChange('train_data_path', response.data.output_path);
-        dispatch(addNotification({
-          type: 'success',
-          title: 'Sample Data Generated',
-          message: `Sample data created: ${response.data.output_path}`
-        }));
-      }
-    } catch (error) {
+  const validateTrainingData = async () => {
+    if (!formData.train_data_path) {
       dispatch(addNotification({
         type: 'error',
-        title: 'Generation Failed',
-        message: 'Failed to generate sample data'
+        title: 'Validation Error',
+        message: 'Please select a training data file first'
+      }));
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${BACKEND_URL}/api/training/validate-data`, {
+        data_path: formData.train_data_path,
+        method: selectedMethod
+      });
+      
+      if (response.data.valid) {
+        dispatch(addNotification({
+          type: 'success',
+          title: 'Data Validation Passed',
+          message: `✓ Found ${response.data.num_samples} valid samples\n✓ Format: ${response.data.format}\n✓ Compatible with ${selectedMethod.toUpperCase()}`
+        }));
+      } else {
+        dispatch(addNotification({
+          type: 'error',
+          title: 'Data Validation Failed',
+          message: response.data.error || 'Invalid data format'
+        }));
+      }
+    } catch (error: any) {
+      dispatch(addNotification({
+        type: 'error',
+        title: 'Validation Failed',
+        message: error.response?.data?.error || 'Failed to validate training data'
       }));
     }
   };
@@ -453,10 +466,13 @@ const EnhancedSetupPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={generateSampleData}
+                    onClick={validateTrainingData}
                     className="btn-primary text-sm px-3"
+                    disabled={!formData.train_data_path}
+                    title="Validate training data format and compatibility"
                   >
-                    Generate Sample
+                    <CheckCircle className="w-4 h-4 mr-1 inline" />
+                    Validate Data
                   </button>
                 </div>
               </div>

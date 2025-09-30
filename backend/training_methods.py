@@ -119,24 +119,57 @@ class TrainingDataValidator:
             if not os.path.exists(data_path):
                 return {"valid": False, "error": f"Data file not found: {data_path}"}
             
-            # Read first line to check format
-            with open(data_path, 'r', encoding='utf-8') as f:
-                first_line = f.readline().strip()
-                if not first_line:
-                    return {"valid": False, "error": "Empty data file"}
-                
-                try:
-                    data_sample = json.loads(first_line)
-                except json.JSONDecodeError as e:
-                    return {"valid": False, "error": f"Invalid JSON format: {str(e)}"}
+            # Read all lines to check format and count samples
+            valid_samples = 0
+            total_lines = 0
+            errors = []
             
-            # Method-specific validation
-            if config.requires_reasoning_chains:
-                return TrainingDataValidator._validate_reasoning_data(data_sample, method)
-            elif config.requires_preferences:
-                return TrainingDataValidator._validate_preference_data(data_sample, method)
-            else:
-                return TrainingDataValidator._validate_instruction_data(data_sample, method)
+            with open(data_path, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    total_lines += 1
+                    
+                    try:
+                        data_sample = json.loads(line)
+                        
+                        # Validate this sample
+                        if config.requires_reasoning_chains:
+                            validation = TrainingDataValidator._validate_reasoning_data(data_sample, method)
+                        elif config.requires_preferences:
+                            validation = TrainingDataValidator._validate_preference_data(data_sample, method)
+                        else:
+                            validation = TrainingDataValidator._validate_instruction_data(data_sample, method)
+                        
+                        if validation.get("valid"):
+                            valid_samples += 1
+                        else:
+                            errors.append(f"Line {line_num}: {validation.get('error')}")
+                            
+                    except json.JSONDecodeError as e:
+                        errors.append(f"Line {line_num}: Invalid JSON - {str(e)}")
+            
+            if total_lines == 0:
+                return {"valid": False, "error": "Empty data file"}
+            
+            if valid_samples == 0:
+                error_summary = ". ".join(errors[:3])  # Show first 3 errors
+                return {"valid": False, "error": f"No valid samples found. {error_summary}"}
+            
+            # Return success with sample count
+            result = {
+                "valid": True,
+                "num_samples": valid_samples,
+                "total_lines": total_lines,
+                "format": "grpo_prompt_answer" if config.requires_reasoning_chains else "instruction_following"
+            }
+            
+            if errors:
+                result["warnings"] = f"{len(errors)} samples had errors"
+            
+            return result
                 
         except Exception as e:
             logger.error(f"Data validation failed for {method}: {str(e)}")
