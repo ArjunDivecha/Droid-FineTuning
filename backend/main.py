@@ -497,9 +497,9 @@ class TrainingManager:
             
             # Patterns to extract metrics from training output
             step_pattern = re.compile(r'Iter (\d+):')
-            loss_pattern = re.compile(r'Train loss ([0-9.]+)|loss=([0-9.]+)')  # Match both formats
+            loss_pattern = re.compile(r'Train loss ([0-9.]+)|loss[=\s]+([0-9.]+)')  # Match "Train loss X", "loss=X", "loss X"
             val_pattern = re.compile(r'Val loss ([0-9.]+)')
-            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)|lr ([0-9.e-]+)')
+            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)|lr[=\s]+([0-9.e-]+)')  # Match "Learning Rate X", "lr=X", "lr X"
 
             # GRPO-specific patterns
             grpo_progress_pattern = re.compile(r'Training:\s+(\d+)%')
