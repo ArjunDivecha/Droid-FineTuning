@@ -1,0 +1,16 @@
+============================================================
+ADAPTER EVALUATION REPORT
+============================================================
+
+Adapter: mlx_finetune
+Evaluated: 2025-09-29T17:09:56.383010
+Test Questions: 3
+
+SCORES:
+  Overall:       25.8/100
+  Faithfulness:  16.7/100
+  Fact Recall:   30.0/100
+  Consistency:   40.0/100
+  Hallucination: 16.7/100
+
+============================================================
