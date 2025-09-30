@@ -10,8 +10,11 @@ import {
   Info,
   Zap,
   GitMerge,
+  Download,
+  X,
 } from 'lucide-react';
 import axios from 'axios';
+import ExportModelModal from '../components/ExportModelModal';
 
 interface AdapterInfo {
   name: string;
@@ -50,6 +53,24 @@ interface FusionResult {
   };
 }
 
+interface ExportFormat {
+  id: string;
+  name: string;
+  description: string;
+  extension: string;
+  size: string;
+  requires?: string;
+}
+
+interface ExportState {
+  isOpen: boolean;
+  adapterName: string | null;
+  progress: number;
+  status: string;
+  currentStep: string;
+  error: string | null;
+}
+
 const FusionPage: React.FC = () => {
   const [adapterGroups, setAdapterGroups] = useState<AdaptersByBaseModel[]>([]);
   const [selectedAdapters, setSelectedAdapters] = useState<string[]>([]);
@@ -61,9 +82,25 @@ const FusionPage: React.FC = () => {
   const [fusionResult, setFusionResult] = useState<FusionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Export state
+  const [exportState, setExportState] = useState<ExportState>({
+    isOpen: false,
+    adapterName: null,
+    progress: 0,
+    status: 'idle',
+    currentStep: '',
+    error: null,
+  });
+  const [exportFormats, setExportFormats] = useState<ExportFormat[]>([]);
+  const [selectedFormat, setSelectedFormat] = useState<string>('gguf_q4');
+  const [importToOllama, setImportToOllama] = useState(false);
+  const [ollamaModelName, setOllamaModelName] = useState('');
+  const [copyToLmStudio, setCopyToLmStudio] = useState(true); // Default to true
+
   // Load available adapters on mount
   useEffect(() => {
     loadAdapters();
+    loadExportFormats();
   }, []);
 
   // Poll fusion status when fusing
@@ -94,6 +131,36 @@ const FusionPage: React.FC = () => {
       return () => clearInterval(interval);
     }
   }, [isFusing]);
+
+  // Poll export status when exporting
+  useEffect(() => {
+    if (exportState.status === 'starting' || exportState.status === 'running') {
+      const interval = setInterval(async () => {
+        try {
+          const response = await axios.get('http://localhost:8000/api/fusion/export-status');
+          const status = response.data;
+          
+          setExportState(prev => ({
+            ...prev,
+            progress: status.progress,
+            currentStep: status.current_step,
+            status: status.status,
+            error: status.error,
+          }));
+          
+          if (status.status === 'completed') {
+            // Fetch result
+            const resultResponse = await axios.get('http://localhost:8000/api/fusion/export-result');
+            console.log('Export completed:', resultResponse.data);
+          }
+        } catch (err) {
+          console.error('Error polling export status:', err);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [exportState.status]);
 
   const loadAdapters = async () => {
     setIsLoading(true);
@@ -161,6 +228,66 @@ const FusionPage: React.FC = () => {
     setError(null);
     setFusionProgress(0);
     setFusionStatus('');
+  };
+
+  // Export functions
+  const loadExportFormats = async () => {
+    try {
+      const response = await axios.get<ExportFormat[]>('http://localhost:8000/api/fusion/export-formats');
+      setExportFormats(response.data);
+    } catch (err) {
+      console.error('Failed to load export formats:', err);
+    }
+  };
+
+  const handleExportModel = (adapterName: string) => {
+    setExportState({
+      isOpen: true,
+      adapterName,
+      progress: 0,
+      status: 'idle',
+      currentStep: '',
+      error: null,
+    });
+    setOllamaModelName(adapterName.toLowerCase().replace(/_/g, '-'));
+  };
+
+  const startExport = async () => {
+    if (!exportState.adapterName) return;
+
+    try {
+      await axios.post('http://localhost:8000/api/fusion/export-model', {
+        adapter_name: exportState.adapterName,
+        format: selectedFormat,
+        use_best: true,
+        import_to_ollama: importToOllama,
+        ollama_model_name: ollamaModelName || undefined,
+        copy_to_lm_studio: copyToLmStudio,
+      });
+
+      setExportState(prev => ({ ...prev, status: 'starting' }));
+    } catch (err: any) {
+      setExportState(prev => ({
+        ...prev,
+        error: err.response?.data?.detail || 'Failed to start export',
+        status: 'error',
+      }));
+    }
+  };
+
+  const closeExportModal = () => {
+    setExportState({
+      isOpen: false,
+      adapterName: null,
+      progress: 0,
+      status: 'idle',
+      currentStep: '',
+      error: null,
+    });
+    setSelectedFormat('gguf_q4');
+    setImportToOllama(false);
+    setOllamaModelName('');
+    setCopyToLmStudio(true);
   };
 
   const getDeltaColor = (delta: number) => {
@@ -553,6 +680,50 @@ const FusionPage: React.FC = () => {
               </table>
             </div>
 
+            {/* Export Actions */}
+            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                Export Models for Ollama / LM Studio
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Base Model Export Button */}
+                <button
+                  onClick={() => handleExportModel(fusionResult.base_model_result.adapter_name)}
+                  className="btn-secondary flex items-center justify-center space-x-2 text-sm"
+                  disabled={exportState.isOpen}
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Base Model</span>
+                </button>
+
+                {/* Individual Adapter Export Buttons */}
+                {fusionResult.individual_results.map((result) => (
+                  <button
+                    key={result.adapter_name}
+                    onClick={() => handleExportModel(result.adapter_name)}
+                    className="btn-secondary flex items-center justify-center space-x-2 text-sm"
+                    disabled={exportState.isOpen}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="truncate">{result.adapter_name}</span>
+                  </button>
+                ))}
+
+                {/* Fused Model Export Button */}
+                <button
+                  onClick={() => handleExportModel(fusionResult.fused_result.adapter_name)}
+                  className="btn-primary flex items-center justify-center space-x-2 text-sm"
+                  disabled={exportState.isOpen}
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Fused Model</span>
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                Export any model as GGUF for use with Ollama or LM Studio
+              </p>
+            </div>
+
             {/* Summary Stats */}
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -585,6 +756,27 @@ const FusionPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Export Modal */}
+      <ExportModelModal
+        isOpen={exportState.isOpen}
+        adapterName={exportState.adapterName}
+        formats={exportFormats}
+        selectedFormat={selectedFormat}
+        setSelectedFormat={setSelectedFormat}
+        importToOllama={importToOllama}
+        setImportToOllama={setImportToOllama}
+        ollamaModelName={ollamaModelName}
+        setOllamaModelName={setOllamaModelName}
+        copyToLmStudio={copyToLmStudio}
+        setCopyToLmStudio={setCopyToLmStudio}
+        onExport={startExport}
+        onClose={closeExportModal}
+        exportStatus={exportState.status}
+        exportProgress={exportState.progress}
+        exportStep={exportState.currentStep}
+        exportError={exportState.error}
+      />
     </div>
   );
 };

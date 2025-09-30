@@ -48,12 +48,25 @@ from fusion_adapters import AdapterFusion
 # Add evaluation path
 sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
 
+# Import model exporter
+from model_export import ModelExporter
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fusion", tags=["fusion"])
 
 # Global state for fusion operations
 fusion_state = {
+    "is_running": False,
+    "progress": 0,
+    "status": "idle",
+    "error": None,
+    "current_step": "",
+    "result": None
+}
+
+# Global state for export operations
+export_state = {
     "is_running": False,
     "progress": 0,
     "status": "idle",
@@ -330,7 +343,7 @@ async def run_fusion_and_evaluation(request: FusionRequest):
         
         output_name = request.output_name or f"fused_{'_'.join(request.adapter_names[:2])}"
         output_dir = os.path.join(fusion.base_adapter_dir, output_name)
-        fusion.save_fused_adapter(fused_weights, output_dir, output_name)
+        fusion.save_fused_adapter(fused_weights, output_dir, output_name, source_adapter_names=request.adapter_names)
         fusion.generate_fusion_report(request.adapter_names, request.weights, request.method, output_dir)
         
         # Step 5: Run evaluations (40-100% progress)
@@ -469,6 +482,179 @@ async def reset_fusion():
     """Reset fusion state."""
     global fusion_state
     fusion_state = {
+        "is_running": False,
+        "progress": 0,
+        "status": "idle",
+        "error": None,
+        "current_step": "",
+        "result": None
+    }
+    return {"success": True}
+
+# ============================================================================
+# MODEL EXPORT ENDPOINTS
+# ============================================================================
+
+class ExportRequest(BaseModel):
+    adapter_name: str
+    format: str  # "merged", "gguf_q4", "gguf_q5", "gguf_q8", "gguf_f16"
+    output_name: Optional[str] = None
+    use_best: bool = True
+    import_to_ollama: bool = False
+    ollama_model_name: Optional[str] = None
+    copy_to_lm_studio: bool = False
+
+class ExportFormat(BaseModel):
+    id: str
+    name: str
+    description: str
+    extension: str
+    size: str
+    requires: Optional[str] = None
+
+@router.get("/export-formats", response_model=List[ExportFormat])
+async def get_export_formats():
+    """Get available export formats."""
+    exporter = ModelExporter()
+    formats = exporter.get_export_formats()
+    return formats
+
+@router.post("/export-model")
+async def export_model(request: ExportRequest, background_tasks: BackgroundTasks):
+    """Export an adapter (merged with base model) in various formats."""
+    global export_state
+    
+    if export_state["is_running"]:
+        raise HTTPException(status_code=400, detail="Export already in progress")
+    
+    # Start export in background
+    background_tasks.add_task(run_model_export, request)
+    
+    export_state["is_running"] = True
+    export_state["progress"] = 0
+    export_state["status"] = "starting"
+    export_state["error"] = None
+    export_state["current_step"] = "Initializing export..."
+    export_state["result"] = None
+    
+    return {"success": True, "message": "Export started"}
+
+async def run_model_export(request: ExportRequest):
+    """Background task to export model."""
+    global export_state
+    
+    def progress_callback(progress: int, message: str):
+        export_state["progress"] = progress
+        export_state["current_step"] = message
+    
+    try:
+        exporter = ModelExporter()
+        
+        # Step 1: Merge adapter with base model
+        export_state["current_step"] = "Merging adapter with base model..."
+        export_state["progress"] = 10
+        
+        merged_dir = exporter.merge_adapter_with_base(
+            adapter_name=request.adapter_name,
+            use_best=request.use_best,
+            progress_callback=progress_callback
+        )
+        
+        result = {
+            "adapter_name": request.adapter_name,
+            "format": request.format,
+            "merged_dir": merged_dir,
+            "files": []
+        }
+        
+        # Step 2: Convert to requested format
+        if request.format.startswith("gguf_"):
+            quantization_map = {
+                "gguf_q4": "Q4_K_M",
+                "gguf_q5": "Q5_K_M",
+                "gguf_q8": "Q8_0",
+                "gguf_f16": "F16"
+            }
+            
+            quantization = quantization_map.get(request.format, "Q4_K_M")
+            
+            export_state["current_step"] = f"Converting to GGUF ({quantization})..."
+            export_state["progress"] = 50
+            
+            gguf_path = exporter.convert_to_gguf(
+                model_path=merged_dir,
+                quantization=quantization,
+                progress_callback=progress_callback
+            )
+            
+            result["gguf_path"] = gguf_path
+            result["files"].append(gguf_path)
+            
+            # Step 3: Generate Ollama Modelfile
+            export_state["current_step"] = "Generating Ollama Modelfile..."
+            export_state["progress"] = 90
+            
+            ollama_name = request.ollama_model_name or f"{request.adapter_name.lower().replace('_', '-')}"
+            
+            modelfile_path = exporter.generate_ollama_modelfile(
+                model_path=gguf_path,
+                model_name=ollama_name
+            )
+            
+            result["modelfile_path"] = modelfile_path
+            result["ollama_model_name"] = ollama_name
+            
+            # Step 4: Copy to LM Studio if requested
+            if request.copy_to_lm_studio:
+                export_state["current_step"] = "Copying to LM Studio..."
+                export_state["progress"] = 93
+                
+                lm_studio_path = exporter.copy_to_lm_studio(gguf_path, request.adapter_name)
+                result["lm_studio_path"] = lm_studio_path
+            
+            # Step 5: Import to Ollama if requested
+            if request.import_to_ollama:
+                export_state["current_step"] = "Importing to Ollama..."
+                export_state["progress"] = 96
+                
+                import_result = exporter.import_to_ollama(modelfile_path, ollama_name)
+                result["ollama_import"] = import_result
+        
+        else:
+            # Just merged format
+            result["files"].append(os.path.join(merged_dir, "model.safetensors"))
+        
+        export_state["result"] = result
+        export_state["status"] = "completed"
+        export_state["progress"] = 100
+        export_state["current_step"] = "Export completed successfully!"
+        
+    except Exception as e:
+        logger.error(f"Export failed: {e}")
+        export_state["status"] = "error"
+        export_state["error"] = str(e)
+        export_state["current_step"] = f"Error: {str(e)}"
+    finally:
+        export_state["is_running"] = False
+
+@router.get("/export-status")
+async def get_export_status():
+    """Get current export operation status."""
+    return export_state
+
+@router.get("/export-result")
+async def get_export_result():
+    """Get the result of the last export operation."""
+    if export_state["result"] is None:
+        raise HTTPException(status_code=404, detail="No export result available")
+    
+    return export_state["result"]
+
+@router.post("/export-reset")
+async def reset_export():
+    """Reset export state."""
+    global export_state
+    export_state = {
         "is_running": False,
         "progress": 0,
         "status": "idle",
