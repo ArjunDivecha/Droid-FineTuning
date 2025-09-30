@@ -113,10 +113,17 @@ class AdapterEvaluator:
     def extract_qa_pairs(self, training_data: List[Dict]) -> List[Dict[str, str]]:
         """Extract Q&A pairs from training data."""
         qa_pairs = []
-        
+
         for item in training_data:
             # Handle different JSONL formats
-            if 'question' in item and 'answer' in item:
+            # GRPO format: prompt/answer
+            if 'prompt' in item and 'answer' in item:
+                qa_pairs.append({
+                    'question': item['prompt'],
+                    'answer': item['answer']
+                })
+            # Standard format: question/answer
+            elif 'question' in item and 'answer' in item:
                 qa_pairs.append({
                     'question': item['question'],
                     'answer': item['answer']
@@ -370,11 +377,14 @@ Provide your evaluation in JSON format:
             })
         
         # Calculate aggregate scores
+        if len(results) == 0:
+            raise ValueError("No evaluation results generated. Check that the training data format is correct and contains Q&A pairs.")
+
         avg_faithfulness = sum(r['evaluation']['faithfulness'] for r in results) / len(results)
         avg_fact_recall = sum(r['evaluation']['fact_recall'] for r in results) / len(results)
         avg_consistency = sum(r['evaluation']['consistency'] for r in results) / len(results)
         avg_hallucination = sum(r['evaluation']['hallucination'] for r in results) / len(results)
-        
+
         overall_score = (avg_faithfulness + avg_fact_recall + avg_consistency + avg_hallucination) / 4
         
         report = {
