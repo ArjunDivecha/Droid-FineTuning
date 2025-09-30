@@ -1,4 +1,4 @@
-# Creating Datasets for GSPO and GRPO Training
+# Creating Datasets for GRPO/GSPO/Dr. GRPO Training
 
 ## 📁 Your Current Data
 
@@ -9,323 +9,365 @@
 - `writing_dataset_valid.jsonl` - validation set
 - Multiple PDF/DOCX documents with your writing
 
-**Current Format:** Messages format (user/assistant pairs)
+**Current Format:** Messages format (user/assistant pairs) - ✅ Works for SFT
 
 ---
 
-## 🎯 Dataset Requirements by Method
+## 🎯 THE CORRECT FORMAT (All GRPO Methods)
 
-### **SFT (Supervised Fine-Tuning)** ✅ You have this!
-**What it needs:** Input-output pairs
+**IMPORTANT:** GSPO, Dr. GRPO, and GRPO all use the **SAME simple format**:
 
-**Your current format works:**
 ```jsonl
-{"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+{"prompt": "Your question or instruction", "answer": "The reference response", "system": "Optional system message"}
 ```
 
-**Use for:** Teaching the model your writing style, tone, and domain knowledge
+**That's it!** No preference pairs, no rankings, no multiple completions needed.
+
+### **Why This Format?**
+
+GRPO-based methods work by:
+1. Taking your prompt
+2. **Generating** multiple completions (done automatically by the training algorithm)
+3. Comparing them to your reference answer
+4. Learning which completions are better
+
+**You only provide:**
+- The prompt (question/instruction)
+- The reference answer (your ideal response)
+- Optional system message (to set behavior)
 
 ---
 
-### **GSPO (Gradient-based Sparse Policy Optimization)**
-**What it needs:** Preference pairs (chosen vs rejected responses)
+## ✅ Converting Your Existing Data
 
-**Format:**
-```jsonl
-{
-  "prompt": "Explain the paradox of growth in emerging markets",
-  "chosen": "The paradox of growth is that you invest in emerging markets for their growth, but you don't make money in the fast-growing places. You make money in the cheapest places. Our data shows that from 2008-2018, the cheapest countries returned 19.9% annually vs 14.9% for the most expensive.",
-  "rejected": "Emerging markets grow fast so you should invest in the fastest growing countries to make the most money."
-}
+### **From Messages Format:**
+
+**Your current format (SFT):**
+```json
+{"messages": [{"role": "user", "content": "Explain the paradox of growth"}, {"role": "assistant", "content": "The paradox is..."}]}
 ```
 
-**Why GSPO:**
-- 2x faster than standard RLHF
-- Better for style/quality preferences
-- Good for your writing: formal vs casual, detailed vs concise
-
----
-
-### **GRPO (Group Relative Policy Optimization)**
-**What it needs:** Multiple ranked responses per prompt
-
-**Format:**
-```jsonl
-{
-  "prompt": "What are the risks of value investing?",
-  "completions": [
-    {"text": "There are two main problems with buying Value: 1) You get caught in value traps, 2) You get in and out too early. Combining value with quality and momentum sets guardrails that help avoid these problems.", "score": 1.0},
-    {"text": "Value investing has risks like value traps and timing issues.", "score": 0.5},
-    {"text": "Value stocks are cheap for a reason and often stay cheap.", "score": 0.2}
-  ]
-}
+**Convert to GRPO format:**
+```json
+{"prompt": "Explain the paradox of growth", "answer": "The paradox is...", "system": "You are an expert on emerging markets investing."}
 ```
 
-**Why GRPO:**
-- Best for reasoning tasks
-- Handles multiple quality levels
-- Good for your writing: nuanced investment analysis
-
----
-
-### **Dr. GRPO (Domain-Refined GRPO)**
-**What it needs:** Same as GRPO but with domain-specific examples
-
-**Format:** Same as GRPO but focused on your domain (emerging markets, value investing)
-
-**Why Dr. GRPO:**
-- Specialized for your investment domain
-- Better retention of domain knowledge
-- Ideal for technical/professional writing
-
----
-
-## 🛠️ How to Create These Datasets
-
-### **Option 1: From Your Existing Writing (Recommended)**
-
-#### **Step 1: Extract Key Insights**
-From your PDFs/DOCX, extract:
-- Main arguments
-- Investment principles
-- Market observations
-- Data-backed conclusions
-
-#### **Step 2: Create Prompt-Response Pairs**
-
-**Good prompts from your writing:**
-```
-- "Explain the paradox of growth in emerging markets"
-- "Why don't fast-growing countries always deliver the best returns?"
-- "How should value and momentum be combined?"
-- "What lessons can we learn from the Asia Crisis?"
-- "Why did we get Russia wrong?"
-```
-
-#### **Step 3: Generate Multiple Responses**
-
-**For each prompt, create 3 versions:**
-1. **Best** (your actual writing style - detailed, data-driven)
-2. **Good** (correct but less detailed)
-3. **Poor** (oversimplified or wrong)
-
----
-
-### **Option 2: Use Claude/GPT to Generate Variations**
-
-**Script to create GSPO dataset:**
+### **Conversion Script:**
 
 ```python
-import anthropic
+#!/usr/bin/env python3
+"""Convert your existing SFT data to GRPO format"""
+
 import json
 
-client = anthropic.Anthropic(api_key="your-key")
+def convert_messages_to_grpo(input_file, output_file):
+    with open(input_file, 'r') as f_in, open(output_file, 'w') as f_out:
+        for line in f_in:
+            data = json.loads(line)
+            messages = data.get('messages', [])
 
-# Your original writing samples
-original_text = """
-The paradox of growth is that you invest in emerging markets 
-for their growth, but you don't make money in the fast-growing 
-places. You make money in the cheapest places. Our data shows...
-"""
+            # Extract user message (prompt) and assistant message (answer)
+            prompt = ""
+            answer = ""
+            system = "You are an expert investment writer specializing in emerging markets."
 
-prompt = f"""
-Given this expert writing sample:
-{original_text}
+            for msg in messages:
+                if msg['role'] == 'system':
+                    system = msg['content']
+                elif msg['role'] == 'user':
+                    prompt = msg['content']
+                elif msg['role'] == 'assistant':
+                    answer = msg['content']
 
-Create 3 versions:
-1. BEST: Keep the original style (detailed, data-driven, nuanced)
-2. GOOD: Correct but less detailed
-3. POOR: Oversimplified or missing key insights
+            if prompt and answer:
+                grpo_data = {
+                    "prompt": prompt,
+                    "answer": answer,
+                    "system": system
+                }
+                f_out.write(json.dumps(grpo_data) + '\n')
 
-Format as JSON with prompt, chosen (best), rejected (poor)
-"""
-
-# Generate variations
-response = client.messages.create(
-    model="claude-sonnet-4-5",
-    max_tokens=2000,
-    messages=[{"role": "user", "content": prompt}]
-)
-
-# Save to JSONL
+# Convert your files
+convert_messages_to_grpo('writing_dataset_train.jsonl', 'grpo_train.jsonl')
+convert_messages_to_grpo('writing_dataset_valid.jsonl', 'grpo_valid.jsonl')
 ```
 
 ---
 
-### **Option 3: Manual Curation (Highest Quality)**
+## 📝 Creating New GRPO Data
 
-**Process:**
-1. Read through your documents
-2. Identify 20-30 key insights
-3. For each insight:
-   - Write the prompt (question)
-   - Write 3 responses (best, good, poor)
-   - Rank them
+### **Template:**
 
-**Example from your "Life Lessons" document:**
-
-```jsonl
+```python
 {
-  "prompt": "What's the key to successful value investing in emerging markets?",
-  "completions": [
-    {
-      "text": "Not everything that is cheap is Value. Some of it is Junk. While you occasionally make money buying Junk (like Q2 2009 when Russell 2000 was up 113%), it doesn't work in the long run. The solution is combining value with quality and momentum to set guardrails that help avoid value traps and prevent getting in and out too early.",
-      "score": 1.0
-    },
-    {
-      "text": "Combine value investing with quality and momentum indicators to avoid value traps.",
-      "score": 0.6
-    },
-    {
-      "text": "Buy cheap stocks and hold them.",
-      "score": 0.2
-    }
-  ]
+    "prompt": "What is the paradox of growth in emerging markets?",
+    "answer": "The paradox of growth is that you invest in emerging markets for their growth, but you don't make money in the fast-growing places. You make money in the cheapest places. Our data from 2008-2018 shows the cheapest countries returned 19.9% annually vs 14.9% for the most expensive countries.",
+    "system": "You are an expert investment writer specializing in emerging markets and value investing."
 }
 ```
+
+### **Best Practices:**
+
+1. **Prompts**: Clear questions or instructions
+   - "Explain the paradox of growth in emerging markets"
+   - "What are the risks of value investing?"
+   - "How should investors combine value and momentum?"
+
+2. **Answers**: Your writing style - detailed, data-driven, nuanced
+   - Include specific examples
+   - Reference data when possible
+   - Maintain your voice and tone
+   - Show nuanced thinking
+
+3. **System**: Optional but helpful for consistency
+   - "You are an expert on emerging markets investing."
+   - "You are a financial writer with 20+ years of experience."
+   - Can be the same across all examples
+
+---
+
+## 🔄 What Each Method Does
+
+### **GRPO (Group Relative Policy Optimization)**
+**Your data:** `{"prompt": "...", "answer": "...", "system": "..."}`
+
+**What happens during training:**
+1. Takes your prompt
+2. Generates 4 completions (default `group_size=4`)
+3. Compares them to your reference answer
+4. Learns to generate responses more like your answer
+
+**Use when:** You want to improve overall writing quality and reasoning
+
+### **GSPO (Group Sparse Policy Optimization)**
+**Your data:** Same format - `{"prompt": "...", "answer": "...", "system": "..."}`
+
+**What happens during training:**
+1. Same as GRPO
+2. **Plus**: Uses importance sampling to focus on more informative tokens/sequences
+
+**Use when:** You want faster convergence or have limited training data
+
+### **Dr. GRPO (Decoupled Rewards GRPO)**
+**Your data:** Same format - `{"prompt": "...", "answer": "...", "system": "..."}`
+
+**What happens during training:**
+1. Same as GRPO
+2. **Plus**: Separates reward computation for more stable training
+
+**Use when:** GRPO training is unstable or you're using larger models
 
 ---
 
 ## 📊 Recommended Dataset Sizes
 
-### **For Your Use Case (Writing Style + Domain Knowledge):**
-
 | Method | Min Examples | Recommended | Ideal |
 |--------|-------------|-------------|-------|
 | **SFT** | 10 | 20-50 | 100+ |
-| **GSPO** | 20 | 50-100 | 200+ |
-| **GRPO** | 30 | 100-200 | 500+ |
+| **GRPO** | 20 | 50-100 | 200+ |
+| **GSPO** | 15 | 40-80 | 150+ |
 | **Dr. GRPO** | 20 | 50-100 | 200+ |
 
-**Your current 17 examples:** Good start for SFT, need more for GSPO/GRPO
+**Your current 17 examples:**
+- ✅ Good for SFT
+- ⚠️ Minimum for GSPO (add 3-5 more recommended)
+- ⚠️ Just short for GRPO/Dr. GRPO (add 3-10 more)
 
 ---
 
-## 🚀 Quick Start: Create Your First GSPO Dataset
+## 🚀 Quick Start: Convert Your Data
 
-### **Script: `create_gspo_dataset.py`**
+### **Step 1: Prepare Directory Structure**
+
+```bash
+mkdir -p my_grpo_data
+cd my_grpo_data
+```
+
+### **Step 2: Create Training Data**
+
+**From your existing writing**, create examples like:
 
 ```python
 #!/usr/bin/env python3
-"""
-Create GSPO dataset from your writing samples.
-"""
-
 import json
-from pathlib import Path
 
-# Your key insights (manually extracted)
-insights = [
+examples = [
     {
         "prompt": "Explain the paradox of growth in emerging markets",
-        "chosen": "The paradox of growth is that you invest in emerging markets for their growth, but you don't make money in the fast-growing places. You make money in the cheapest places. Our data from 2008-2018 shows the cheapest countries returned 19.9% annually vs 14.9% for the most expensive countries.",
-        "rejected": "Emerging markets grow fast, so invest in the fastest growing ones to make the most money."
+        "answer": "The paradox of growth is that you invest in emerging markets for their growth, but you don't make money in the fast-growing places. You make money in the cheapest places. Our data from 2008-2018 shows the cheapest countries returned 19.9% annually vs 14.9% for the most expensive countries.",
+        "system": "You are an expert investment writer specializing in emerging markets."
     },
     {
         "prompt": "What are the main problems with value investing?",
-        "chosen": "There are two main problems with buying Value: 1) You get caught in value traps, and 2) You get in and out too early. Combining value with quality and momentum sets guardrails that help avoid these problems.",
-        "rejected": "Value investing is risky because cheap stocks often stay cheap."
+        "answer": "There are two main problems with buying Value: 1) You get caught in value traps, and 2) You get in and out too early. Combining value with quality and momentum sets guardrails that help avoid these problems.",
+        "system": "You are an expert investment writer specializing in emerging markets."
     },
     {
-        "prompt": "Should you pay up for growth stocks?",
-        "chosen": "It's not always a mistake to pay up for growth - it's only mostly a mistake. When Microsoft went public in 1986, I didn't buy it because it was trading at 20x earnings vs 14x for the S&P500. If I had bought and held till today, it would have delivered 25% annually vs 8.75% for the S&P 500. The key is identifying exceptional growth at reasonable valuations.",
-        "rejected": "Never pay up for growth stocks - they're always overvalued."
+        "prompt": "Should investors pay up for growth stocks?",
+        "answer": "It's not always a mistake to pay up for growth - it's only mostly a mistake. When Microsoft went public in 1986 at 20x earnings vs 14x for the S&P 500, buying and holding would have delivered 25% annually vs 8.75% for the S&P 500. The key is identifying exceptional growth at reasonable valuations.",
+        "system": "You are an expert investment writer specializing in emerging markets."
     },
-    # Add 17-47 more examples...
+    # Add 15-20 more examples from your documents...
 ]
 
-# Save as JSONL
-output_file = "gspo_writing_dataset.jsonl"
-with open(output_file, 'w') as f:
-    for item in insights:
-        f.write(json.dumps(item) + '\n')
+# Save training data
+with open('train.jsonl', 'w') as f:
+    for ex in examples:
+        f.write(json.dumps(ex) + '\n')
 
-print(f"Created {len(insights)} GSPO examples in {output_file}")
+# Create validation data (10-20% of training size)
+validation_examples = [
+    {
+        "prompt": "What lessons came from the Asia Crisis?",
+        "answer": "The Asia Crisis taught us that...",
+        "system": "You are an expert investment writer specializing in emerging markets."
+    },
+    # 2-3 more validation examples
+]
+
+with open('valid.jsonl', 'w') as f:
+    for ex in validation_examples:
+        f.write(json.dumps(ex) + '\n')
+
+print(f"Created {len(examples)} training examples")
+print(f"Created {len(validation_examples)} validation examples")
 ```
 
+### **Step 3: Validate Format**
+
+Use the Enhanced Setup page's validation feature to check your data before training.
+
 ---
 
-## 💡 Pro Tips
+## 💡 Pro Tips for Your Investment Writing
 
-### **1. Quality > Quantity**
-- 20 high-quality examples > 200 mediocre ones
+### **1. Maintain Your Voice**
+- Use your characteristic phrases: "paradox of growth", "value traps", "not always, mostly"
+- Include specific examples: Asia Crisis, Russia, China, Microsoft
+- Reference actual data and time periods
+- Show nuanced thinking
+
+### **2. Topic Coverage**
+From your documents, create prompts about:
+- Value investing principles
+- Emerging markets strategies
+- Momentum and quality factors
+- Specific country/regional insights
+- Historical lessons (Asia Crisis, etc.)
+- Data-driven observations
+
+### **3. Progressive Complexity**
+- Start with foundational concepts (what is value investing?)
+- Build to complex arguments (combining factors)
+- Include nuanced positions (when growth is worth it)
+
+### **4. Quality > Quantity**
+- 20 excellent examples > 100 mediocre ones
 - Each example should teach something specific
-
-### **2. Maintain Your Voice**
-- "Chosen" responses should sound like YOU
-- Include your characteristic phrases
-- Keep your data-driven approach
-
-### **3. Domain Focus**
-- Stick to emerging markets, value investing, momentum
-- Include specific examples (Asia Crisis, Russia, China)
-- Reference actual data when possible
-
-### **4. Progressive Difficulty**
-- Start with simple concepts
-- Build to complex arguments
-- Include nuanced positions
-
-### **5. Test Early**
-- Train on 20 examples
-- Test the output
-- Refine based on results
+- Answers should be detailed and data-driven (like your writing)
 
 ---
 
-## 📝 Next Steps
+## 🔧 Example: Complete Dataset
 
-### **Immediate (This Week):**
-1. ✅ Extract 10 key insights from your documents
-2. ✅ Create chosen/rejected pairs for each
-3. ✅ Save as `gspo_writing_train.jsonl`
-4. ✅ Train with GSPO method in Enhanced Setup
+**File structure:**
+```
+my_grpo_data/
+├── train.jsonl  (20+ examples)
+└── valid.jsonl  (3-5 examples)
+```
 
-### **Short Term (This Month):**
-1. Expand to 50 examples
-2. Create validation set (10 examples)
-3. Test Dr. GRPO for domain specialization
-4. Compare SFT vs GSPO vs Dr. GRPO results
-
-### **Long Term:**
-1. Build to 100-200 examples
-2. Include examples from all your documents
-3. Create topic-specific datasets (China, India, Russia, etc.)
-4. Use evaluation system to measure improvement
+**train.jsonl:**
+```jsonl
+{"prompt": "Explain the paradox of growth in emerging markets", "answer": "The paradox of growth is that you invest in emerging markets for their growth, but you don't make money in the fast-growing places. You make money in the cheapest places. Our data from 2008-2018 shows the cheapest countries returned 19.9% annually vs 14.9% for the most expensive.", "system": "You are an expert investment writer specializing in emerging markets."}
+{"prompt": "What are the risks of value investing?", "answer": "There are two main problems with buying Value: 1) You get caught in value traps, and 2) You get in and out too early. Combining value with quality and momentum sets guardrails that help avoid these problems.", "system": "You are an expert investment writer specializing in emerging markets."}
+{"prompt": "How should investors combine value and momentum?", "answer": "...", "system": "You are an expert investment writer specializing in emerging markets."}
+```
 
 ---
 
 ## 🎯 Success Metrics
 
-**How to know it's working:**
-1. Model uses your phrases ("paradox of growth", "value traps")
-2. Includes data/numbers in responses
-3. Maintains formal but accessible tone
-4. Shows nuanced thinking (not always/mostly)
-5. References specific examples
+**How to know your GRPO training is working:**
+
+1. **Style Preservation:**
+   - Model uses your characteristic phrases
+   - Maintains formal but accessible tone
+   - Shows data-driven approach
+
+2. **Content Quality:**
+   - Includes specific examples and data
+   - Shows nuanced thinking ("not always, mostly")
+   - References actual market events
+
+3. **Structure:**
+   - Clear argumentation
+   - Logical flow
+   - Proper context setting
 
 ---
 
-## 🔧 Tools to Help
+## 📞 Common Questions
 
-### **1. Document Parser**
-Extract text from your PDFs/DOCX:
-```bash
-pip install PyPDF2 python-docx
-python extract_writing.py
+### Q: Do I need preference pairs (chosen/rejected)?
+**A: No!** That's for DPO. GRPO only needs `prompt/answer/system`.
+
+### Q: Do I need to rank multiple responses?
+**A: No!** The algorithm generates and ranks them during training.
+
+### Q: What's the difference between GSPO and GRPO data?
+**A: None!** Same format. GSPO just adds importance sampling during training.
+
+### Q: Can I use my existing SFT data?
+**A: Yes!** Just convert from messages format to prompt/answer/system format.
+
+### Q: How many examples do I really need?
+**A: Start with 20, aim for 50+.** Quality matters more than quantity.
+
+---
+
+## 📝 Next Steps
+
+### **Immediate:**
+1. ✅ Convert your 17 existing examples to GRPO format
+2. ✅ Add 3-10 more examples from your documents
+3. ✅ Create validation set (3-5 examples)
+4. ✅ Use Enhanced Setup to validate and train
+
+### **Short Term:**
+1. Expand to 50 examples
+2. Test GSPO, GRPO, and Dr. GRPO
+3. Compare results with adapter evaluation
+4. Refine based on output quality
+
+### **Long Term:**
+1. Build to 100-200 examples
+2. Create topic-specific datasets
+3. Fine-tune hyperparameters (group_size, temperature)
+4. Use evaluation system to measure improvement
+
+---
+
+## 🎉 Summary
+
+**Simple format for all GRPO methods:**
+```json
+{"prompt": "question", "answer": "your response", "system": "optional context"}
 ```
 
-### **2. Claude Assistant**
-Use Claude to generate variations of your writing
+**That's it!** No preference pairs, no rankings, no complex structures.
 
-### **3. Evaluation System**
-Use the adapter evaluation we just built to measure faithfulness
+The training algorithm handles:
+- Generating multiple completions
+- Computing rewards
+- Policy optimization
+- Learning from comparisons
+
+You just provide good prompt-answer pairs in your writing style!
 
 ---
 
-**Ready to start?** Pick 10 insights from your documents and I'll help you format them for GSPO training!
-
----
-
-**Last Updated:** 2025-01-29
-**Your Data:** 17 SFT examples ready, need 20-50 for GSPO/GRPO
+**Last Updated:** 2025-09-29
+**MLX-LM-LORA Version:** 0.8.1
+**Current Data:** 17 SFT examples → Convert to GRPO format
