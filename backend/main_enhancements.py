@@ -257,31 +257,119 @@ class EnhancedTrainingManager:
             self.base_manager.training_metrics = {
                 "current_step": 0,
                 "total_steps": enhanced_config.iterations,
-                "train_loss": 0.0,
-                "val_loss": 0.0,
+                "train_loss": None,
+                "val_loss": None,
                 "learning_rate": enhanced_config.learning_rate,
                 "start_time": datetime.now().isoformat(),
-                "estimated_time_remaining": "Calculating...",
+                "estimated_time_remaining": None,
                 "method": enhanced_config.training_method,
-                "best_val_loss": float('inf'),
+                "best_val_loss": None,  # Use None instead of float('inf') for JSON compatibility
                 "best_model_step": 0
             }
             
             # Build training command (no config file needed for mlx-lm-lora)
             cmd = self.build_enhanced_training_command(enhanced_config)
-            
-            # Start training process (similar to existing start_training)
+
+            # Create log file FIRST for debugging
+            log_dir = self.base_manager.output_dir
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "training_debug.log")
+
+            # Log command details before execution
             self.logger.info(f"Starting {enhanced_config.training_method.upper()} training...")
-            
-            self.base_manager.current_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-                universal_newlines=True,
-                cwd=os.path.dirname(enhanced_config.train_data_path) if enhanced_config.train_data_path else os.getcwd()
-            )
+            self.logger.info(f"Command: {' '.join(cmd)}")
+
+            with open(log_file, 'w') as f:
+                f.write(f"Training started at {datetime.now().isoformat()}\n")
+                f.write(f"Method: {enhanced_config.training_method}\n")
+                f.write(f"Model: {enhanced_config.model_path}\n")
+                f.write(f"Train data: {enhanced_config.train_data_path}\n")
+                f.write(f"Data directory: {os.path.dirname(enhanced_config.train_data_path)}\n")
+                f.write(f"Adapter path: {os.path.join(self.base_manager.output_dir, enhanced_config.adapter_name)}\n")
+                f.write(f"\nFull command:\n")
+                for i, arg in enumerate(cmd):
+                    f.write(f"  [{i}] {arg}\n")
+                f.write(f"\nCommand as string: {' '.join(cmd)}\n\n")
+
+            # Validate paths exist
+            if not os.path.exists(enhanced_config.model_path):
+                error_msg = f"Model path does not exist: {enhanced_config.model_path}"
+                self.logger.error(error_msg)
+                with open(log_file, 'a') as f:
+                    f.write(f"ERROR: {error_msg}\n")
+                self.base_manager.training_state = "error"
+                return {"success": False, "error": error_msg, "log_file": log_file}
+
+            if not os.path.exists(enhanced_config.train_data_path):
+                error_msg = f"Training data file does not exist: {enhanced_config.train_data_path}"
+                self.logger.error(error_msg)
+                with open(log_file, 'a') as f:
+                    f.write(f"ERROR: {error_msg}\n")
+                self.base_manager.training_state = "error"
+                return {"success": False, "error": error_msg, "log_file": log_file}
+
+            # Start training process with better error handling
+            try:
+                # Force unbuffered output for real-time log streaming
+                env = os.environ.copy()
+                env['PYTHONUNBUFFERED'] = '1'
+
+                self.base_manager.current_process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,  # Merge stderr into stdout
+                    text=True,
+                    bufsize=1,  # Line buffered
+                    universal_newlines=True,
+                    env=env,  # Pass environment with unbuffered flag
+                    cwd=os.path.dirname(enhanced_config.train_data_path) if enhanced_config.train_data_path else os.getcwd()
+                )
+
+                with open(log_file, 'a') as f:
+                    f.write(f"Process started with PID: {self.base_manager.current_process.pid}\n")
+                    f.write(f"Working directory: {os.path.dirname(enhanced_config.train_data_path)}\n\n")
+
+            except Exception as e:
+                error_msg = f"Failed to start training process: {str(e)}"
+                self.logger.error(error_msg)
+                with open(log_file, 'a') as f:
+                    f.write(f"\nERROR starting process:\n{error_msg}\n")
+                    import traceback
+                    f.write(f"\nTraceback:\n{traceback.format_exc()}\n")
+                self.base_manager.training_state = "error"
+                return {"success": False, "error": error_msg, "log_file": log_file}
+
+            # Capture immediate errors
+            import time
+            time.sleep(1.0)  # Give process time to start and potentially fail
+
+            if self.base_manager.current_process.poll() is not None:
+                # Process already exited - capture error
+                try:
+                    stdout, stderr = self.base_manager.current_process.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    stdout = stderr = "Timeout reading output"
+
+                error_msg = f"Process exited immediately with code {self.base_manager.current_process.returncode}"
+                self.logger.error(error_msg)
+                self.logger.error(f"STDERR: {stderr}")
+                self.logger.error(f"STDOUT: {stdout}")
+
+                with open(log_file, 'a') as f:
+                    f.write(f"\n{'='*70}\n")
+                    f.write(f"ERROR: Process exited immediately\n")
+                    f.write(f"Exit code: {self.base_manager.current_process.returncode}\n")
+                    f.write(f"{'='*70}\n\n")
+                    f.write(f"STDERR:\n{stderr}\n\n")
+                    f.write(f"STDOUT:\n{stdout}\n")
+
+                self.base_manager.training_state = "error"
+                return {
+                    "success": False,
+                    "error": f"{error_msg}. Check {log_file} for details.",
+                    "stderr": stderr[:500],  # First 500 chars
+                    "log_file": log_file
+                }
             
             # Start monitoring (reuse existing monitoring with enhancements)
             import asyncio
