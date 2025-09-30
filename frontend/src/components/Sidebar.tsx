@@ -9,7 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { setActiveNavItem, toggleSidebar, type ActivePage } from '../store/slices/uiSlice';
@@ -57,6 +58,13 @@ const navItems: NavItem[] = [
     icon: GitCompare,
     path: '/compare',
     description: 'Compare model outputs'
+  },
+  {
+    id: 'fusion' as ActivePage,
+    label: 'Fusion',
+    icon: Layers,
+    path: '/fusion',
+    description: 'Blend multiple adapters'
   }
 ];
 

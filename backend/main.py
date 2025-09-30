@@ -1184,6 +1184,14 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         training_manager.remove_websocket(websocket)
 
+# Setup evaluation API routes
+try:
+    from evaluation_api import setup_evaluation_routes
+    setup_evaluation_routes(app)
+    logger.info("Evaluation API integrated")
+except Exception as e:
+    logger.warning(f"Evaluation API not available: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
