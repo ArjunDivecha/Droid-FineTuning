@@ -19,10 +19,10 @@ from training_methods import (
 
 logger = logging.getLogger(__name__)
 
-@dataclass 
+@dataclass
 class EnhancedTrainingConfig:
-    """Enhanced training configuration that extends the existing TrainingConfig"""
-    # Existing fields from your TrainingConfig
+    """Enhanced training configuration for mlx-lm-lora training"""
+    # Basic fields
     model_path: str
     train_data_path: str
     val_data_path: Optional[str] = None
@@ -33,26 +33,27 @@ class EnhancedTrainingConfig:
     steps_per_report: int = 10
     steps_per_eval: int = 25
     save_every: int = 100
-    early_stop: bool = False
-    patience: int = 10
     adapter_name: str = "adapter"
-    
-    # NEW: Enhanced fields for different training methods
+
+    # Training method
     training_method: str = "sft"  # sft, gspo, dr_grpo, grpo
-    
-    # GSPO specific parameters
-    sparse_ratio: float = 0.7
-    efficiency_threshold: float = 0.85
-    sparse_optimization: bool = True
-    
-    # Dr. GRPO specific parameters
-    domain: str = "general"
-    expertise_level: str = "advanced"
-    domain_adaptation_strength: float = 1.0
-    
-    # GRPO specific parameters
-    reasoning_steps: int = 8
-    multi_step_training: bool = True
+
+    # GRPO/GSPO/Dr.GRPO parameters (actual mlx-lm-lora flags)
+    group_size: int = 4  # Number of completions to generate per prompt (2-16)
+    epsilon: float = 0.0001  # Epsilon for numerical stability (1e-4 to 1e-2)
+    temperature: float = 0.8  # Sampling temperature (0.6-1.2)
+    max_completion_length: int = 512  # Max tokens for completions
+
+    # GSPO-specific: importance sampling
+    importance_sampling_level: Optional[str] = None  # None, "token", or "sequence"
+
+    # Dr. GRPO-specific: loss type
+    grpo_loss_type: str = "grpo"  # "grpo", "dr_grpo", or "bnpo"
+    epsilon_high: Optional[float] = None  # Upper epsilon for clipping (for DAPO)
+
+    # Optional: reward functions
+    reward_functions: Optional[str] = None  # e.g., "accuracy_reward,format_reward"
+    reward_weights: Optional[str] = None  # e.g., "[0.7, 0.3]"
 
 class EnhancedTrainingManager:
     """Enhanced training manager that extends the existing TrainingManager functionality"""
@@ -150,48 +151,83 @@ class EnhancedTrainingManager:
         
         return config_path
     
-    def build_enhanced_training_command(self, config: EnhancedTrainingConfig, config_path: str) -> List[str]:
-        """Build training command for enhanced methods"""
-        
+    def build_enhanced_training_command(self, config: EnhancedTrainingConfig) -> List[str]:
+        """Build training command for mlx-lm-lora with correct parameters"""
+
         method = TrainingMethod(config.training_method)
-        method_config = TRAINING_METHODS[method]
-        
-        # Use Python from current environment or specify your MLX environment path
-        python_path = "python"  # Will use current environment
-        
-        # Build command based on method
-        if method == TrainingMethod.GSPO:
-            # For now, use standard MLX training with GSPO config
-            # Future: python_path, "-m", "mlx_lm_lora.gspo"
+
+        # Use python3.11 explicitly for mlx-lm-lora
+        python_path = "python3.11"
+
+        # Adapter output path
+        adapter_path = os.path.join(self.base_manager.output_dir, config.adapter_name)
+        os.makedirs(adapter_path, exist_ok=True)
+
+        # Base command for all RL methods (GRPO, GSPO, Dr. GRPO)
+        if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO, TrainingMethod.GRPO]:
             cmd = [
                 python_path,
-                "-m", "mlx_lm.lora",
-                "--config", config_path
+                "-m", "mlx_lm_lora.train",
+                "--model", config.model_path,
+                "--train",
+                "--train-mode", "grpo",  # All use GRPO mode
+                "--data", os.path.dirname(config.train_data_path),  # Directory containing train.jsonl
+                "--adapter-path", adapter_path,
+                "--learning-rate", str(config.learning_rate),
+                "--batch-size", str(config.batch_size),
+                "--iters", str(config.iterations),
+                "--max-seq-length", str(config.max_seq_length),
+                "--steps-per-report", str(config.steps_per_report),
+                "--steps-per-eval", str(config.steps_per_eval),
+                "--save-every", str(config.save_every),
+                # GRPO-specific parameters
+                "--group-size", str(config.group_size),
+                "--epsilon", str(config.epsilon),
+                "--temperature", str(config.temperature),
+                "--max-completion-length", str(config.max_completion_length),
             ]
-        elif method == TrainingMethod.DR_GRPO:
-            # For now, use standard MLX training with Dr. GRPO config
-            # Future: python_path, "-m", "mlx_lm_lora.dr_grpo"
-            cmd = [
-                python_path,
-                "-m", "mlx_lm.lora",
-                "--config", config_path
-            ]
-        elif method == TrainingMethod.GRPO:
-            # For now, use standard MLX training with GRPO config
-            # Future: python_path, "-m", "mlx_lm_lora.grpo"
-            cmd = [
-                python_path,
-                "-m", "mlx_lm.lora",
-                "--config", config_path
-            ]
+
+            # Method-specific additions
+            if method == TrainingMethod.GSPO:
+                # GSPO = GRPO + importance sampling
+                if config.importance_sampling_level:
+                    cmd.extend(["--importance-sampling-level", config.importance_sampling_level])
+                cmd.extend(["--grpo-loss-type", "grpo"])
+
+            elif method == TrainingMethod.DR_GRPO:
+                # Dr. GRPO uses dr_grpo loss type
+                cmd.extend(["--grpo-loss-type", "dr_grpo"])
+                if config.epsilon_high:
+                    cmd.extend(["--epsilon-high", str(config.epsilon_high)])
+
+            elif method == TrainingMethod.GRPO:
+                # Standard GRPO
+                cmd.extend(["--grpo-loss-type", config.grpo_loss_type])
+
+            # Add reward functions if specified
+            if config.reward_functions:
+                cmd.extend(["--reward-functions", config.reward_functions])
+            if config.reward_weights:
+                cmd.extend(["--reward-weights", config.reward_weights])
+
         else:
-            # Default SFT (use existing approach)
+            # SFT method - use standard mlx_lm.lora (keep existing behavior)
+            self.logger.warning("SFT in Enhanced Setup - consider using standard Setup tab instead")
             cmd = [
                 python_path,
                 "-m", "mlx_lm.lora",
-                "--config", config_path
+                "--model", config.model_path,
+                "--data", os.path.dirname(config.train_data_path),
+                "--adapter-path", adapter_path,
+                "--learning-rate", str(config.learning_rate),
+                "--batch-size", str(config.batch_size),
+                "--iters", str(config.iterations),
+                "--max-seq-length", str(config.max_seq_length),
+                "--steps-per-report", str(config.steps_per_report),
+                "--steps-per-eval", str(config.steps_per_eval),
+                "--save-every", str(config.save_every),
             ]
-        
+
         self.logger.info(f"Built {method.value.upper()} command: {' '.join(cmd)}")
         return cmd
     
@@ -231,11 +267,8 @@ class EnhancedTrainingManager:
                 "best_model_step": 0
             }
             
-            # Create enhanced config file
-            config_path = self.create_enhanced_config_file(enhanced_config)
-            
-            # Build training command
-            cmd = self.build_enhanced_training_command(enhanced_config, config_path)
+            # Build training command (no config file needed for mlx-lm-lora)
+            cmd = self.build_enhanced_training_command(enhanced_config)
             
             # Start training process (similar to existing start_training)
             self.logger.info(f"Starting {enhanced_config.training_method.upper()} training...")
@@ -259,7 +292,6 @@ class EnhancedTrainingManager:
                 "success": True,
                 "message": f"Enhanced training started with {enhanced_config.training_method.upper()}",
                 "method": enhanced_config.training_method,
-                "config_path": config_path,
                 "pid": self.base_manager.current_process.pid
             }
             

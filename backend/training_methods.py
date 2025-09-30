@@ -144,40 +144,46 @@ class TrainingDataValidator:
     
     @staticmethod
     def _validate_reasoning_data(data_sample: Dict, method: TrainingMethod) -> Dict[str, Any]:
-        """Validate reasoning chain data format"""
-        base_fields = ["problem", "reasoning_steps", "solution"]
-        required_fields = base_fields.copy()
-        
-        if method == TrainingMethod.GSPO:
-            # GSPO requires sparse reasoning indicators
-            required_fields.extend(["sparse_indicators", "efficiency_markers"])
-        elif method == TrainingMethod.DR_GRPO:
-            # Dr. GRPO requires domain context
-            required_fields.extend(["domain", "expertise_level", "domain_context"])
-        elif method == TrainingMethod.GRPO:
-            # GRPO may have additional reasoning metadata
-            # Base fields are sufficient, but can have optional reasoning_metadata
-            pass
-        
+        """Validate GRPO/GSPO/Dr.GRPO data format (prompt/answer/system)"""
+        # All GRPO-based methods use the same format:
+        # Required: "prompt" and "answer"
+        # Optional: "system"
+
+        required_fields = ["prompt", "answer"]
         missing_fields = [field for field in required_fields if field not in data_sample]
-        
+
         if missing_fields:
             return {
                 "valid": False,
-                "error": f"Missing required fields for {method.value}: {missing_fields}",
+                "error": f"Missing required fields for {method.value}: {missing_fields}. Format: {{\"prompt\": \"...\", \"answer\": \"...\", \"system\": \"...\" (optional)}}",
                 "required_format": required_fields,
                 "sample_format": TrainingDataValidator._get_sample_format(method)
             }
-        
-        # Validate reasoning_steps is a list
-        if not isinstance(data_sample.get("reasoning_steps"), list):
+
+        # Validate types
+        if not isinstance(data_sample.get("prompt"), str):
             return {
                 "valid": False,
-                "error": "reasoning_steps must be a list of strings",
+                "error": "prompt must be a string",
                 "required_format": required_fields
             }
-        
-        return {"valid": True, "format": "reasoning_chains"}
+
+        if not isinstance(data_sample.get("answer"), str):
+            return {
+                "valid": False,
+                "error": "answer must be a string",
+                "required_format": required_fields
+            }
+
+        # System message is optional but should be string if present
+        if "system" in data_sample and not isinstance(data_sample["system"], str):
+            return {
+                "valid": False,
+                "error": "system message must be a string if provided",
+                "required_format": required_fields
+            }
+
+        return {"valid": True, "format": "grpo_prompt_answer"}
     
     @staticmethod
     def _validate_preference_data(data_sample: Dict, method: TrainingMethod) -> Dict[str, Any]:
@@ -225,47 +231,12 @@ class TrainingDataValidator:
     @staticmethod
     def _get_sample_format(method: TrainingMethod) -> Dict[str, Any]:
         """Get sample data format for a method"""
-        if method == TrainingMethod.GSPO:
+        if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO, TrainingMethod.GRPO]:
+            # All GRPO-based methods use the same format
             return {
-                "problem": "What is the most efficient way to solve X?",
-                "reasoning_steps": [
-                    "Step 1: Identify key constraints",
-                    "Step 2: Apply optimization principles",
-                    "Step 3: Verify solution efficiency"
-                ],
-                "solution": "The optimal solution is...",
-                "sparse_indicators": [1, 1, 0],  # Which steps are critical
-                "efficiency_markers": {
-                    "computation_cost": "low",
-                    "optimization_applied": True
-                }
-            }
-        elif method == TrainingMethod.DR_GRPO:
-            return {
-                "problem": "Patient presents with symptoms X, Y, Z",
-                "reasoning_steps": [
-                    "Gather patient history",
-                    "Perform physical examination",
-                    "Consider differential diagnoses",
-                    "Order appropriate tests"
-                ],
-                "solution": "Diagnosis and treatment plan",
-                "domain": "medical",
-                "expertise_level": "advanced",
-                "domain_context": {
-                    "specialty": "internal_medicine",
-                    "complexity": "high"
-                }
-            }
-        elif method == TrainingMethod.GRPO:
-            return {
-                "problem": "Complex reasoning problem",
-                "reasoning_steps": [
-                    "Step 1: Problem analysis",
-                    "Step 2: Strategy formulation",
-                    "Step 3: Solution execution"
-                ],
-                "solution": "Final answer with reasoning"
+                "prompt": "What is the capital of France?",
+                "answer": "The capital of France is Paris, a historic city known for its art, culture, and iconic landmarks like the Eiffel Tower.",
+                "system": "You are a helpful and knowledgeable assistant."  # Optional field
             }
         else:  # SFT
             return {
