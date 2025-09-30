@@ -54,9 +54,9 @@ except ImportError:
     print("Warning: python-dotenv not installed. Install with: pip install python-dotenv")
 
 try:
-    import anthropic
+    import openai
 except ImportError:
-    print("Error: anthropic not installed. Install with: pip install anthropic")
+    print("Error: openai not installed. Install with: pip install openai")
     sys.exit(1)
 
 # Setup logging
@@ -68,16 +68,19 @@ class AdapterEvaluator:
     
     def __init__(self, adapter_base_dir: str = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"):
         self.adapter_base_dir = adapter_base_dir
-        self.anthropic_client = None
-        self._init_anthropic()
+        self.cerebras_client = None
+        self._init_cerebras()
         
-    def _init_anthropic(self):
-        """Initialize Anthropic client."""
-        api_key = os.getenv('ANTHROPIC_API_KEY')
+    def _init_cerebras(self):
+        """Initialize Cerebras client."""
+        api_key = os.getenv('CEREBRAS_API_KEY')
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in environment variables")
-        self.anthropic_client = anthropic.Anthropic(api_key=api_key)
-        logger.info("Anthropic client initialized")
+            raise ValueError("CEREBRAS_API_KEY not found in environment variables")
+        self.cerebras_client = openai.OpenAI(
+            base_url="https://api.cerebras.ai/v1",
+            api_key=api_key
+        )
+        logger.info("Cerebras client initialized")
     
     def load_adapter_config(self, adapter_name: str) -> Dict:
         """Load adapter configuration."""
@@ -131,9 +134,36 @@ class AdapterEvaluator:
                     'answer': answer
                 })
             elif 'text' in item:
-                # Parse "Q: ... A: ..." format
+                # Parse chat format or Q&A format
                 text = item['text']
-                if 'Q:' in text or 'Question:' in text:
+                
+                # Try to extract from chat format (user/assistant)
+                if '<|im_start|>user' in text and '<|im_end|>' in text:
+                    # Extract user message
+                    user_start = text.find('<|im_start|>user') + len('<|im_start|>user')
+                    user_end = text.find('<|im_end|>', user_start)
+                    if user_start > 0 and user_end > user_start:
+                        question = text[user_start:user_end].strip()
+                        
+                        # Extract assistant message if present
+                        assistant_start = text.find('<|im_start|>assistant', user_end)
+                        if assistant_start > 0:
+                            assistant_start += len('<|im_start|>assistant')
+                            assistant_end = text.find('<|im_end|>', assistant_start)
+                            if assistant_end > assistant_start:
+                                answer = text[assistant_start:assistant_end].strip()
+                            else:
+                                answer = "No answer provided in training"
+                        else:
+                            # No assistant response, use question as both
+                            answer = "Training prompt only"
+                        
+                        qa_pairs.append({
+                            'question': question,
+                            'answer': answer
+                        })
+                # Try Q: A: format
+                elif 'Q:' in text or 'Question:' in text:
                     parts = text.split('\n')
                     question = None
                     answer = None
@@ -162,9 +192,12 @@ class AdapterEvaluator:
         logger.info(f"Selected {num_questions} test questions")
         return test_set
     
-    def generate_response(self, adapter_path: str, model_path: str, prompt: str) -> str:
-        """Generate response from adapter using MLX."""
+    def generate_response(self, adapter_path: Optional[str], model_path: str, prompt: str) -> str:
+        """Generate response from adapter or base model using MLX."""
         python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python'
+        
+        # Build adapter_path parameter
+        adapter_param = f'adapter_path="{adapter_path}"' if adapter_path else 'adapter_path=None'
         
         cmd = [
             python_path, '-c', f'''
@@ -172,7 +205,7 @@ import mlx.core as mx
 from mlx_lm import load, generate
 
 try:
-    model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
+    model, tokenizer = load("{model_path}", {adapter_param})
     prompt = """{prompt}"""
     
     response = generate(model, tokenizer, prompt=prompt, max_tokens=300)
@@ -209,7 +242,7 @@ except Exception as e:
             return f"Error: {e}"
     
     def evaluate_response(self, question: str, training_answer: str, model_response: str) -> Dict:
-        """Evaluate response using Claude Sonnet 4.5."""
+        """Evaluate response using Cerebras (ultra-fast)."""
         
         prompt = f"""You are evaluating if a model's response is faithful to its training data.
 
@@ -257,15 +290,17 @@ Provide your evaluation in JSON format:
 }}"""
 
         try:
-            message = self.anthropic_client.messages.create(
-                model="claude-sonnet-4-5",
-                max_tokens=1024,
+            response = self.cerebras_client.chat.completions.create(
+                model="llama-4-scout-17b-16e-instruct",
                 messages=[
+                    {"role": "system", "content": "You are an expert evaluator. Always respond with valid JSON."},
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                temperature=0.3,
+                max_tokens=1024
             )
             
-            response_text = message.content[0].text
+            response_text = response.choices[0].message.content
             
             # Extract JSON from response
             if "```json" in response_text:
@@ -293,14 +328,15 @@ Provide your evaluation in JSON format:
                 "explanation": f"Evaluation error: {str(e)}"
             }
     
-    def evaluate_adapter(self, adapter_name: str, training_data_path: str, num_questions: int = 20) -> Dict:
+    def evaluate_adapter(self, adapter_name: str, training_data_path: str, num_questions: int = 20, progress_callback=None, use_base_model: bool = False) -> Dict:
         """Evaluate an adapter against training data."""
-        logger.info(f"Starting evaluation of adapter: {adapter_name}")
+        eval_type = "base model" if use_base_model else "adapter"
+        logger.info(f"Starting evaluation of {eval_type}: {adapter_name}")
         
         # Load adapter config
         config = self.load_adapter_config(adapter_name)
         model_path = config.get('model', '')
-        adapter_path = os.path.join(self.adapter_base_dir, adapter_name)
+        adapter_path = None if use_base_model else os.path.join(self.adapter_base_dir, adapter_name)
         
         # Load training data
         training_data = self.load_training_data(training_data_path)
@@ -311,6 +347,11 @@ Provide your evaluation in JSON format:
         results = []
         for i, qa in enumerate(test_set, 1):
             logger.info(f"Evaluating question {i}/{len(test_set)}")
+            
+            # Update progress if callback provided
+            if progress_callback:
+                progress = int((i / len(test_set)) * 100)
+                progress_callback(i, len(test_set), progress)
             
             question = qa['question']
             training_answer = qa['answer']
@@ -338,6 +379,7 @@ Provide your evaluation in JSON format:
         
         report = {
             'adapter_name': adapter_name,
+            'is_base_model': use_base_model,
             'adapter_config': config,
             'training_data_path': training_data_path,
             'num_questions': len(test_set),

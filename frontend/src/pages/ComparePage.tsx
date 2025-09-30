@@ -8,6 +8,9 @@ import {
   ArrowRight,
   Star,
   FolderOpen,
+  BarChart3,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { LoadSessionModal } from '../components/LoadSessionModal';
@@ -22,6 +25,20 @@ interface Comparison {
   timestamp: Date;
 }
 
+interface Evaluation {
+  id: string;
+  adapter_name: string;
+  is_base_model: boolean;
+  overall_score: number;
+  faithfulness: number;
+  fact_recall: number;
+  consistency: number;
+  hallucination: number;
+  num_questions: number;
+  timestamp: Date;
+  detailed_results?: any;
+}
+
 export const ComparePage: React.FC = () => {
   const { config } = useSelector((state: RootState) => state.training);
   const [prompt, setPrompt] = useState('');
@@ -31,6 +48,12 @@ export const ComparePage: React.FC = () => {
   const [isLoadSessionOpen, setIsLoadSessionOpen] = useState(false);
   const [loadedSession, setLoadedSession] = useState<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Evaluation state
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluationProgress, setEvaluationProgress] = useState(0);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
 
   // Comprehensive clipboard utilities with multiple fallbacks
   const clipboardUtils = {
@@ -303,6 +326,92 @@ export const ComparePage: React.FC = () => {
     console.log('Loaded session:', session);
   };
 
+  const handleStartEvaluation = async () => {
+    if (!loadedSession) {
+      alert('Please load a training session first');
+      return;
+    }
+    
+    setIsEvaluating(true);
+    setEvaluationProgress(0);
+    setEvaluationError(null);
+    
+    try {
+      const adapterName = loadedSession.adapter_name || 'mlx_finetune';
+      const newEvaluations: Evaluation[] = [];
+      
+      // Evaluate BOTH base model and adapter
+      for (const isBase of [true, false]) {
+        const response = await axios.post('http://localhost:8000/api/evaluation/start', {
+          adapter_name: adapterName,
+          training_data_path: null,
+          num_questions: 20,
+          evaluate_base_model: isBase
+        });
+        
+        if (!response.data.success) {
+          throw new Error(`Failed to start ${isBase ? 'base model' : 'adapter'} evaluation`);
+        }
+        
+        // Poll for this evaluation to complete
+        let hasAddedResult = false;
+        await new Promise<void>((resolve, reject) => {
+          const pollInterval = setInterval(async () => {
+            try {
+              const statusResponse = await axios.get('http://localhost:8000/api/evaluation/status');
+              const status = statusResponse.data;
+              
+              // Update progress (0-50% for base, 50-100% for adapter)
+              const progressOffset = isBase ? 0 : 50;
+              setEvaluationProgress(progressOffset + (status.progress / 2));
+              
+              if (!status.running && !hasAddedResult) {
+                clearInterval(pollInterval);
+                hasAddedResult = true;
+                
+                if (status.error) {
+                  reject(new Error(status.error));
+                } else {
+                  const resultResponse = await axios.get('http://localhost:8000/api/evaluation/result');
+                  const result = resultResponse.data.result;
+                  
+                  newEvaluations.push({
+                    id: `${Date.now()}-${isBase ? 'base' : 'adapter'}`,
+                    adapter_name: result.adapter_name,
+                    is_base_model: result.is_base_model || false,
+                    overall_score: result.scores.overall,
+                    faithfulness: result.scores.faithfulness,
+                    fact_recall: result.scores.fact_recall,
+                    consistency: result.scores.consistency,
+                    hallucination: result.scores.hallucination,
+                    num_questions: result.num_questions,
+                    timestamp: new Date(),
+                    detailed_results: result.detailed_results
+                  });
+                  
+                  resolve();
+                }
+              }
+            } catch (error) {
+              clearInterval(pollInterval);
+              reject(error);
+            }
+          }, 2000);
+        });
+      }
+      
+      // Add both evaluations at once
+      setEvaluations(prev => [...newEvaluations, ...prev]);
+      setIsEvaluating(false);
+      setEvaluationProgress(100);
+      
+    } catch (error: any) {
+      console.error('Failed to complete evaluation:', error);
+      setEvaluationError(error.message || 'Failed to complete evaluation');
+      setIsEvaluating(false);
+    }
+  };
+
   const selectedComp = comparisons.find(comp => comp.id === selectedComparison);
 
   return (
@@ -420,6 +529,26 @@ export const ComparePage: React.FC = () => {
                   </>
                 )}
               </button>
+              
+              <button
+                type="button"
+                onClick={handleStartEvaluation}
+                disabled={!loadedSession || isEvaluating}
+                className="btn-secondary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Evaluate both base model and adapter for comparison"
+              >
+                {isEvaluating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Evaluating Both...</span>
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Evaluate Base vs Adapter</span>
+                  </>
+                )}
+              </button>
             </div>
           </form>
         </div>
@@ -433,48 +562,121 @@ export const ComparePage: React.FC = () => {
             <div className="card-header">
               <h3 className="text-lg font-semibold">Comparison History</h3>
             </div>
-            <div className="overflow-y-auto">
-              {comparisons.length === 0 ? (
+            <div className="overflow-y-auto max-h-80">
+              {evaluations.length === 0 && comparisons.length === 0 ? (
                 <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                  <ArrowRight className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No comparisons yet</p>
                   <p className="text-sm">Generate your first comparison above</p>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {comparisons.map((comparison) => (
-                    <div
-                      key={comparison.id}
-                      onClick={() => setSelectedComparison(comparison.id)}
-                      className={`p-3 cursor-pointer border-l-4 transition-colors ${
-                        selectedComparison === comparison.id
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                          : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
-                        {comparison.prompt}
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {comparison.timestamp.toLocaleDateString()}
-                        </div>
-                        {comparison.rating && (
-                          <div className="flex items-center space-x-1">
-                            {Array.from({ length: 5 }, (_, i) => (
-                              <Star
-                                key={i}
-                                className={`h-3 w-3 ${
-                                  i < comparison.rating!
-                                    ? 'text-yellow-400 fill-current'
-                                    : 'text-gray-300'
-                                }`}
-                              />
-                            ))}
+                <div className="space-y-4">
+                  {/* Evaluations Section */}
+                  {evaluations.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-3 py-2 bg-gray-50 dark:bg-gray-800">
+                        Adapter Evaluations
+                      </h4>
+                      <div className="space-y-2 p-2">
+                        {evaluations.map((evaluation) => (
+                          <div
+                            key={evaluation.id}
+                            className={`p-3 border-l-4 rounded-r ${
+                              evaluation.is_base_model 
+                                ? 'border-gray-500 bg-gray-50 dark:bg-gray-900/20' 
+                                : 'border-success-500 bg-success-50 dark:bg-success-900/20'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {evaluation.adapter_name}
+                                </div>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  evaluation.is_base_model
+                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                    : 'bg-success-200 dark:bg-success-800 text-success-700 dark:text-success-300'
+                                }`}>
+                                  {evaluation.is_base_model ? 'Base' : 'Fine-tuned'}
+                                </span>
+                              </div>
+                              <CheckCircle className={`w-4 h-4 ${
+                                evaluation.is_base_model ? 'text-gray-500' : 'text-success-500'
+                              }`} />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-600 dark:text-gray-400">Overall Score:</span>
+                                <span className="font-semibold text-success-600 dark:text-success-400">
+                                  {evaluation.overall_score}/100
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-600 dark:text-gray-400">Faithfulness:</span>
+                                <span className="text-gray-900 dark:text-gray-100">{evaluation.faithfulness}/100</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-600 dark:text-gray-400">Fact Recall:</span>
+                                <span className="text-gray-900 dark:text-gray-100">{evaluation.fact_recall}/100</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-600 dark:text-gray-400">Consistency:</span>
+                                <span className="text-gray-900 dark:text-gray-100">{evaluation.consistency}/100</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                              {evaluation.num_questions} questions • {evaluation.timestamp.toLocaleDateString()}
+                            </div>
                           </div>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
+                  
+                  {/* Comparisons Section */}
+                  {comparisons.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-3 py-2 bg-gray-50 dark:bg-gray-800">
+                        Response Comparisons
+                      </h4>
+                      <div className="space-y-1">
+                        {comparisons.map((comparison) => (
+                          <div
+                            key={comparison.id}
+                            onClick={() => setSelectedComparison(comparison.id)}
+                            className={`p-3 cursor-pointer border-l-4 transition-colors ${
+                              selectedComparison === comparison.id
+                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
+                                : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
+                              {comparison.prompt}
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {comparison.timestamp.toLocaleDateString()}
+                              </div>
+                              {comparison.rating && (
+                                <div className="flex items-center space-x-1">
+                                  {Array.from({ length: 5 }, (_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`h-3 w-3 ${
+                                        i < comparison.rating!
+                                          ? 'text-yellow-400 fill-current'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -604,6 +806,60 @@ export const ComparePage: React.FC = () => {
         onClose={() => setIsLoadSessionOpen(false)}
         onSessionLoaded={handleSessionLoaded}
       />
+      
+      {/* Evaluation Progress Modal */}
+      {isEvaluating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Evaluating Base Model vs Adapter...
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  <span>Progress</span>
+                  <span>{Math.round(evaluationProgress)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${evaluationProgress}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Evaluating both base model and fine-tuned adapter using Cerebras AI...
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                This should take 2-3 minutes for 40 questions total.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Evaluation Error Modal */}
+      {evaluationError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-error-500" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Evaluation Failed
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {evaluationError}
+            </p>
+            <button
+              onClick={() => setEvaluationError(null)}
+              className="btn-primary w-full"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

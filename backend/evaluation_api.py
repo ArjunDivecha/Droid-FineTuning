@@ -11,9 +11,13 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 # Import the evaluator
 from evaluate_adapters import AdapterEvaluator
+
+# Thread pool for running blocking evaluation
+executor = ThreadPoolExecutor(max_workers=1)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,7 @@ class EvaluationRequest(BaseModel):
     adapter_name: str
     training_data_path: Optional[str] = None
     num_questions: int = 20
+    evaluate_base_model: bool = False
 
 @router.post("/api/evaluation/start")
 async def start_evaluation(request: EvaluationRequest):
@@ -59,7 +64,8 @@ async def start_evaluation(request: EvaluationRequest):
         asyncio.create_task(run_evaluation(
             request.adapter_name,
             request.training_data_path,
-            request.num_questions
+            request.num_questions,
+            request.evaluate_base_model
         ))
         
         return {
@@ -97,8 +103,8 @@ async def get_evaluation_result():
         "result": evaluation_status["result"]
     }
 
-async def run_evaluation(adapter_name: str, training_data_path: Optional[str], num_questions: int):
-    """Run evaluation in background."""
+def run_evaluation_sync(adapter_name: str, training_data_path: Optional[str], num_questions: int, evaluate_base_model: bool = False):
+    """Synchronous evaluation function to run in thread pool."""
     global evaluation_status
     
     try:
@@ -106,22 +112,34 @@ async def run_evaluation(adapter_name: str, training_data_path: Optional[str], n
         
         # Get training data path if not provided
         if not training_data_path:
-            config = evaluator.load_adapter_config(adapter_name)
-            training_data_path = config.get('data', '')
-            
-            # If it's a directory, look for JSONL files
-            if os.path.isdir(training_data_path):
-                import glob
-                jsonl_files = glob.glob(os.path.join(training_data_path, "*.jsonl"))
-                if jsonl_files:
-                    training_data_path = jsonl_files[0]
+            try:
+                config = evaluator.load_adapter_config(adapter_name)
+                training_data_path = config.get('data', '')
+                
+                # If it's a directory, look for JSONL files
+                if training_data_path and os.path.isdir(training_data_path):
+                    import glob
+                    jsonl_files = glob.glob(os.path.join(training_data_path, "*.jsonl"))
+                    if jsonl_files:
+                        training_data_path = jsonl_files[0]
+            except Exception as e:
+                logger.error(f"Failed to load adapter config: {e}")
+                raise ValueError(f"Could not load adapter config: {e}")
         
         if not training_data_path or not os.path.exists(training_data_path):
-            raise ValueError("Training data path not found")
+            raise ValueError(f"Training data path not found: {training_data_path}")
+        
+        # Progress callback
+        def update_progress(current, total, progress):
+            evaluation_status["current_question"] = current
+            evaluation_status["total_questions"] = total
+            evaluation_status["progress"] = progress
+            logger.info(f"Progress update: {current}/{total} ({progress}%)")
         
         # Run evaluation
-        logger.info(f"Starting evaluation: {adapter_name}")
-        result = evaluator.evaluate_adapter(adapter_name, training_data_path, num_questions)
+        eval_type = "base model" if evaluate_base_model else "adapter"
+        logger.info(f"Starting evaluation: {adapter_name} ({eval_type})")
+        result = evaluator.evaluate_adapter(adapter_name, training_data_path, num_questions, progress_callback=update_progress, use_base_model=evaluate_base_model)
         
         # Update status
         evaluation_status["running"] = False
@@ -134,6 +152,11 @@ async def run_evaluation(adapter_name: str, training_data_path: Optional[str], n
         logger.error(f"Evaluation failed: {e}")
         evaluation_status["running"] = False
         evaluation_status["error"] = str(e)
+
+async def run_evaluation(adapter_name: str, training_data_path: Optional[str], num_questions: int, evaluate_base_model: bool = False):
+    """Run evaluation in background thread."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(executor, run_evaluation_sync, adapter_name, training_data_path, num_questions, evaluate_base_model)
 
 def setup_evaluation_routes(app):
     """Setup evaluation routes on FastAPI app."""
