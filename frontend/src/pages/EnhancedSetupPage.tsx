@@ -261,18 +261,18 @@ const EnhancedSetupPage: React.FC = () => {
         return;
       }
 
-      // Start training via backend API
-      const response = await axios.post(`${BACKEND_URL}/training/start`, formData);
-      
-      if (response.data.status === 'started') {
+      // Start training via enhanced backend API
+      const response = await axios.post(`${BACKEND_URL}/api/training/start-enhanced`, formData);
+
+      if (response.data.success) {
         dispatch(setTrainingConfig(formData as any));
         dispatch(addNotification({
           type: 'success',
           title: 'Training Started',
-          message: `${selectedMethod.toUpperCase()} training has been initiated successfully`
+          message: response.data.message || `${selectedMethod.toUpperCase()} training has been initiated successfully`
         }));
       } else {
-        throw new Error('Training failed to start');
+        throw new Error(response.data.error || 'Training failed to start');
       }
     } catch (error: any) {
       console.error('Training start error:', error);

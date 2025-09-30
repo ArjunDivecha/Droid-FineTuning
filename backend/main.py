@@ -198,10 +198,14 @@ class TrainingManager:
                 success = self.load_session(session_id)
                 if success:
                     logger.info(f"Restored previous training session: {session_id}")
-                    # Only restore if training was completed
-                    if self.training_state not in ["completed", "error", "stopped"]:
+                    # Reset error/stopped states to idle (no active training)
+                    if self.training_state in ["error", "stopped"]:
                         self.training_state = "idle"
-                        logger.info("Previous session was not completed, reset to idle state")
+                        logger.info(f"Previous session was in {self.training_state} state, reset to idle")
+                    # Keep completed state to show last successful training
+                    elif self.training_state not in ["completed", "idle"]:
+                        self.training_state = "idle"
+                        logger.info("Previous session was interrupted, reset to idle state")
                 else:
                     logger.warning("Failed to restore previous session")
             
@@ -493,44 +497,62 @@ class TrainingManager:
             
             # Patterns to extract metrics from training output
             step_pattern = re.compile(r'Iter (\d+):')
-            loss_pattern = re.compile(r'Train loss ([0-9.]+)')
+            loss_pattern = re.compile(r'Train loss ([0-9.]+)|loss=([0-9.]+)')  # Match both formats
             val_pattern = re.compile(r'Val loss ([0-9.]+)')
-            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)')
+            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)|lr ([0-9.e-]+)')
+
+            # GRPO-specific patterns
+            grpo_progress_pattern = re.compile(r'Training:\s+(\d+)%')
+            grpo_iter_pattern = re.compile(r'(\d+)/(\d+)\s+\[')  # e.g., "1/2 ["
             
             while self.current_process and self.current_process.poll() is None:
                 try:
                     output = self.current_process.stdout.readline()
                     if output:
+                        output_stripped = output.strip()
+
                         # Parse metrics from output
                         step_match = step_pattern.search(output)
                         loss_match = loss_pattern.search(output)
                         val_match = val_pattern.search(output)
                         lr_match = lr_pattern.search(output)
-                        
+                        grpo_progress_match = grpo_progress_pattern.search(output)
+                        grpo_iter_match = grpo_iter_pattern.search(output)
+
                         # Extract metrics
                         if step_match:
                             current_step = int(step_match.group(1))
                             self.training_metrics["current_step"] = current_step
-                            
+
+                        # Extract GRPO iteration from progress bar
+                        if grpo_iter_match and not step_match:
+                            current_iter = int(grpo_iter_match.group(1))
+                            total_iters = int(grpo_iter_match.group(2))
+                            self.training_metrics["current_step"] = current_iter
+                            if "total_steps" not in self.training_metrics or self.training_metrics["total_steps"] == 0:
+                                self.training_metrics["total_steps"] = total_iters
+
                         if loss_match:
-                            train_loss = float(loss_match.group(1))
+                            # Handle both "Train loss X" and "loss=X" formats
+                            train_loss = float(loss_match.group(1) or loss_match.group(2))
                             self.training_metrics["train_loss"] = train_loss
-                            
+
                         if val_match:
                             val_loss = float(val_match.group(1))
                             self.training_metrics["val_loss"] = val_loss
-                            
+
                             # Track best model based on validation loss
                             if self.best_val_loss is None or val_loss < self.best_val_loss:
                                 self.best_val_loss = val_loss
                                 self.best_model_step = current_step
                                 # Copy current checkpoint as best model
                                 await self._save_best_model(current_step)
-                            
+
                         if lr_match:
-                            learning_rate = float(lr_match.group(1))
+                            # Handle both "Learning Rate X" and "lr X" formats
+                            learning_rate = float(lr_match.group(1) or lr_match.group(2))
                             self.training_metrics["learning_rate"] = learning_rate
-                        
+
                         # Calculate progress and ETA
                         if "current_step" in self.training_metrics and "total_steps" in self.training_metrics:
                             progress = self.training_metrics["current_step"] / self.training_metrics["total_steps"]
@@ -540,17 +562,18 @@ class TrainingManager:
                                 estimated_total = elapsed / progress
                                 remaining = estimated_total - elapsed
                                 self.training_metrics["estimated_time_remaining"] = remaining
-                        
-                        # Broadcast update
-                        await self.broadcast({
-                            "type": "training_progress",
-                            "data": {
-                                "metrics": self.training_metrics,
-                                "log_line": output.strip()
-                            }
-                        })
-                
-                    await asyncio.sleep(0.1)
+
+                        # Broadcast ALL non-empty lines (including progress bars, loading messages, etc.)
+                        if output_stripped:  # Only broadcast non-empty lines
+                            await self.broadcast({
+                                "type": "training_progress",
+                                "data": {
+                                    "metrics": self.training_metrics,
+                                    "log_line": output_stripped
+                                }
+                            })
+
+                    await asyncio.sleep(0.05)  # Faster polling for more responsive logs
                     
                 except Exception as e:
                     logger.error(f"Error monitoring training: {e}")
