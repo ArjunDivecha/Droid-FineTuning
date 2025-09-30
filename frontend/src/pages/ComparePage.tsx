@@ -572,66 +572,101 @@ export const ComparePage: React.FC = () => {
               ) : (
                 <div className="space-y-4">
                   {/* Evaluations Section */}
-                  {evaluations.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-3 py-2 bg-gray-50 dark:bg-gray-800">
-                        Adapter Evaluations
-                      </h4>
-                      <div className="space-y-2 p-2">
-                        {evaluations.map((evaluation) => (
-                          <div
-                            key={evaluation.id}
-                            className={`p-3 border-l-4 rounded-r ${
-                              evaluation.is_base_model 
-                                ? 'border-gray-500 bg-gray-50 dark:bg-gray-900/20' 
-                                : 'border-success-500 bg-success-50 dark:bg-success-900/20'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center space-x-2">
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  {evaluation.adapter_name}
+                  {evaluations.length > 0 && (() => {
+                    // Group evaluations by adapter name, find pairs within 5 minutes
+                    const pairs: Array<{base: Evaluation, adapter: Evaluation}> = [];
+                    const baseEvals = evaluations.filter(e => e.is_base_model);
+                    const adapterEvals = evaluations.filter(e => !e.is_base_model);
+                    
+                    for (const base of baseEvals) {
+                      const matchingAdapter = adapterEvals.find(a => 
+                        a.adapter_name === base.adapter_name &&
+                        Math.abs(a.timestamp.getTime() - base.timestamp.getTime()) < 5 * 60 * 1000
+                      );
+                      if (matchingAdapter) {
+                        pairs.push({ base, adapter: matchingAdapter });
+                      }
+                    }
+                    
+                    return (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-3 py-2 bg-gray-50 dark:bg-gray-800">
+                          Evaluation Results
+                        </h4>
+                        <div className="p-3 space-y-4">
+                          {pairs.map((pair, idx) => {
+                            const baseEval = pair.base;
+                            const adapterEval = pair.adapter;
+                            
+                            const improvement = adapterEval.overall_score - baseEval.overall_score;
+                            
+                            return (
+                              <div key={idx} className="card">
+                                <div className="card-header flex items-center justify-between">
+                                  <div>
+                                    <h5 className="font-semibold text-gray-900 dark:text-gray-100">
+                                      {adapterEval.adapter_name}
+                                    </h5>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      {adapterEval.num_questions} questions • {adapterEval.timestamp.toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div className={`text-right ${improvement > 0 ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
+                                    <div className="text-2xl font-bold">
+                                      {improvement > 0 ? '+' : ''}{improvement.toFixed(1)}
+                                    </div>
+                                    <div className="text-xs">Improvement</div>
+                                  </div>
                                 </div>
-                                <span className={`text-xs px-2 py-0.5 rounded ${
-                                  evaluation.is_base_model
-                                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                    : 'bg-success-200 dark:bg-success-800 text-success-700 dark:text-success-300'
-                                }`}>
-                                  {evaluation.is_base_model ? 'Base' : 'Fine-tuned'}
-                                </span>
+                                <div className="card-body p-0">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 dark:bg-gray-800">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Metric</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Base Model</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fine-tuned</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Δ</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                      {[
+                                        { label: 'Overall Score', base: baseEval.overall_score, adapter: adapterEval.overall_score },
+                                        { label: 'Faithfulness', base: baseEval.faithfulness, adapter: adapterEval.faithfulness },
+                                        { label: 'Fact Recall', base: baseEval.fact_recall, adapter: adapterEval.fact_recall },
+                                        { label: 'Consistency', base: baseEval.consistency, adapter: adapterEval.consistency },
+                                      ].map((row, i) => {
+                                        const delta = row.adapter - row.base;
+                                        return (
+                                          <tr key={i} className={i === 0 ? 'bg-primary-50 dark:bg-primary-900/10' : ''}>
+                                            <td className={`px-4 py-3 ${i === 0 ? 'font-semibold' : ''} text-gray-900 dark:text-gray-100`}>
+                                              {row.label}
+                                            </td>
+                                            <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
+                                              {row.base}/100
+                                            </td>
+                                            <td className="px-4 py-3 text-center font-medium text-gray-900 dark:text-gray-100">
+                                              {row.adapter}/100
+                                            </td>
+                                            <td className={`px-4 py-3 text-center font-semibold ${
+                                              delta > 0 ? 'text-success-600 dark:text-success-400' : 
+                                              delta < 0 ? 'text-error-600 dark:text-error-400' : 
+                                              'text-gray-500 dark:text-gray-400'
+                                            }`}>
+                                              {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
-                              <CheckCircle className={`w-4 h-4 ${
-                                evaluation.is_base_model ? 'text-gray-500' : 'text-success-500'
-                              }`} />
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">Overall Score:</span>
-                                <span className="font-semibold text-success-600 dark:text-success-400">
-                                  {evaluation.overall_score}/100
-                                </span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">Faithfulness:</span>
-                                <span className="text-gray-900 dark:text-gray-100">{evaluation.faithfulness}/100</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">Fact Recall:</span>
-                                <span className="text-gray-900 dark:text-gray-100">{evaluation.fact_recall}/100</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">Consistency:</span>
-                                <span className="text-gray-900 dark:text-gray-100">{evaluation.consistency}/100</span>
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                              {evaluation.num_questions} questions • {evaluation.timestamp.toLocaleDateString()}
-                            </div>
-                          </div>
-                        ))}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   
                   {/* Comparisons Section */}
                   {comparisons.length > 0 && (
