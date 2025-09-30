@@ -162,22 +162,32 @@ class TrainingManager:
             if not os.path.exists(session_file):
                 logger.warning(f"Session file not found: {session_file}")
                 return False
-            
+
             with open(session_file, 'r') as f:
                 session_data = json.load(f)
-            
+
             # Restore training configuration
             config_data = session_data["config"]
-            self.current_config = TrainingConfig(**config_data)
-            
+
+            # Filter config_data to only include fields that TrainingConfig expects
+            # This allows loading both SFT and GRPO sessions
+            valid_fields = {
+                'model_path', 'train_data_path', 'val_data_path', 'learning_rate',
+                'batch_size', 'max_seq_length', 'iterations', 'steps_per_report',
+                'steps_per_eval', 'save_every', 'early_stop', 'patience', 'adapter_name'
+            }
+            filtered_config = {k: v for k, v in config_data.items() if k in valid_fields}
+
+            self.current_config = TrainingConfig(**filtered_config)
+
             # Restore metrics and state
             self.training_metrics = session_data["metrics"]
             self.training_state = session_data["training_state"]
             self.current_session_id = session_data["session_id"]
-            
+
             logger.info(f"Loaded training session: {session_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to load session {session_id}: {e}")
             return False
