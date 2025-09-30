@@ -206,8 +206,8 @@ class AdapterFusion:
         
         return fused
     
-    def save_fused_adapter(self, fused_weights: Dict[str, np.ndarray], output_dir: str, adapter_name: str = "fused_adapter"):
-        """Save fused adapter weights."""
+    def save_fused_adapter(self, fused_weights: Dict[str, np.ndarray], output_dir: str, adapter_name: str = "fused_adapter", source_adapter_names: List[str] = None):
+        """Save fused adapter weights and create adapter_config.json."""
         os.makedirs(output_dir, exist_ok=True)
         
         # Save as safetensors
@@ -217,6 +217,25 @@ class AdapterFusion:
         # Also save as 'adapters.safetensors' for MLX compatibility
         mlx_file = os.path.join(output_dir, "adapters.safetensors")
         save_file(fused_weights, mlx_file)
+        
+        # Create adapter_config.json by copying from first source adapter
+        if source_adapter_names and len(source_adapter_names) > 0:
+            source_adapter_dir = os.path.join(self.base_adapter_dir, source_adapter_names[0])
+            source_config_path = os.path.join(source_adapter_dir, "adapter_config.json")
+            
+            if os.path.exists(source_config_path):
+                try:
+                    with open(source_config_path, 'r') as f:
+                        config = json.load(f)
+                    
+                    # Save to fused adapter directory
+                    dest_config_path = os.path.join(output_dir, "adapter_config.json")
+                    with open(dest_config_path, 'w') as f:
+                        json.dump(config, f, indent=2)
+                    
+                    logger.info(f"Copied adapter_config.json from {source_adapter_names[0]}")
+                except Exception as e:
+                    logger.warning(f"Failed to copy adapter_config.json: {e}")
         
         logger.info(f"Saved fused adapter to: {output_file}")
         logger.info(f"MLX-compatible file saved to: {mlx_file}")
@@ -312,7 +331,7 @@ def main():
         return
     
     # Save fused adapter
-    output_file = fusion.save_fused_adapter(fused_weights, args.output_dir, args.output_name)
+    output_file = fusion.save_fused_adapter(fused_weights, args.output_dir, args.output_name, source_adapter_names=args.adapters)
     
     # Generate report
     fusion.generate_fusion_report(args.adapters, args.weights, args.method, args.output_dir)
