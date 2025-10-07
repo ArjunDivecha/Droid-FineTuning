@@ -225,7 +225,7 @@ export const useWebSocket = () => {
               dispatch(trainingStarted());
             }
 
-            // Only log when step changes - show iter, train loss, val loss
+            // Only log when step changes - show iter, train/val loss and RL metrics when available
             let logLine = '';
             if (currentStep !== lastLoggedStep.current) {
               // GRPO doesn't report train loss in early iterations - show "Calculating..." instead of "0.0000"
@@ -233,7 +233,14 @@ export const useWebSocket = () => {
                                 (currentStep < 20 ? 'Calculating...' : 'N/A');
               const valLoss = (metrics.val_loss != null && metrics.val_loss !== 0) ? Number(metrics.val_loss).toFixed(4) : 
                               (currentStep < 20 ? 'Calculating...' : 'N/A');
-              logLine = `Iter ${currentStep}: Train loss ${trainLoss}, Val loss ${valLoss}`;
+              // RL metrics (optional)
+              const reward = (metrics.avg_reward != null) ? `, Reward ${Number(metrics.avg_reward).toFixed(4)}` : '';
+              const sr = (metrics.success_rate != null)
+                ? `, Success ${(Number(metrics.success_rate > 1 ? metrics.success_rate : metrics.success_rate * 100)).toFixed(1)}%`
+                : '';
+              const kl = (metrics.kl != null) ? `, KL ${Number(metrics.kl).toFixed(4)}` : '';
+              const ent = (metrics.entropy != null) ? `, Entropy ${Number(metrics.entropy).toFixed(4)}` : '';
+              logLine = `Iter ${currentStep}: Train loss ${trainLoss}, Val loss ${valLoss}${reward}${sr}${kl}${ent}`;
               lastLoggedStep.current = currentStep;
             }
 

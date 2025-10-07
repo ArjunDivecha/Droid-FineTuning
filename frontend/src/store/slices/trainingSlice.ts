@@ -8,6 +8,11 @@ export interface TrainingMetrics {
   learning_rate: number;
   start_time: string;
   estimated_time_remaining: number | null;
+  // Optional RL metrics (GSPO/GRPO)
+  avg_reward?: number | null;
+  success_rate?: number | null; // percentage (0-100) or fraction (0-1) depending on trainer
+  kl?: number | null;
+  entropy?: number | null;
 }
 
 export interface TrainingConfig {
