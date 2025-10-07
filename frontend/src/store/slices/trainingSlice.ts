@@ -29,6 +29,14 @@ export interface TrainingConfig {
   early_stop: boolean;
   patience: number;
   adapter_name: string;
+  // Enhanced/GSPO-GRPO fields (optional)
+  training_method?: string;
+  group_size?: number;
+  epsilon?: number;
+  temperature?: number;
+  max_completion_length?: number;
+  importance_sampling_level?: string | null;
+  grpo_loss_type?: string;
 }
 
 export type TrainingState = 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'stopped';
