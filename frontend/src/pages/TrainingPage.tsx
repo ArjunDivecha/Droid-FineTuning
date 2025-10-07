@@ -215,6 +215,44 @@ export const TrainingPage: React.FC = () => {
         </div>
       </div>
 
+      {/* RL Metrics (GSPO/GRPO) */}
+      {(metrics?.avg_reward != null || metrics?.success_rate != null || metrics?.kl != null || metrics?.entropy != null) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Avg Reward */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Avg Reward</p>
+              <p className="text-lg font-semibold">{metrics?.avg_reward != null ? Number(metrics.avg_reward).toFixed(4) : '--'}</p>
+            </div>
+          </div>
+          {/* Success Rate */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Success Rate</p>
+              <p className="text-lg font-semibold">
+                {metrics?.success_rate != null
+                  ? `${Number(metrics.success_rate > 1 ? metrics.success_rate : metrics.success_rate * 100).toFixed(1)}%`
+                  : '--'}
+              </p>
+            </div>
+          </div>
+          {/* KL */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">KL</p>
+              <p className="text-lg font-semibold">{metrics?.kl != null ? Number(metrics.kl).toFixed(4) : '--'}</p>
+            </div>
+          </div>
+          {/* Entropy */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Entropy</p>
+              <p className="text-lg font-semibold">{metrics?.entropy != null ? Number(metrics.entropy).toFixed(4) : '--'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Training Configuration */}
       {config && (
         <div className="card">

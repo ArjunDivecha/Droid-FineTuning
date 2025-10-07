@@ -516,6 +516,20 @@ class TrainingManager:
             # GRPO-specific patterns
             grpo_progress_pattern = re.compile(r'Training:\s+(\d+)%')
             grpo_iter_pattern = re.compile(r'(\d+)/(\d+)\s+\[')  # e.g., "1/2 ["
+            # RL metric patterns (robust to different trainers)
+            # avg reward / mean reward
+            reward_pattern = re.compile(
+                r'(?:avg(?:erage)?\s*reward|mean\s*reward|reward(?:\s*avg)?|avg_reward|reward_mean)[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
+                re.IGNORECASE,
+            )
+            # success rate / pass@1 / accuracy / EM
+            success_rate_pattern = re.compile(
+                r'(?:success\s*rate|pass@1|accuracy|exact\s*match|\bEM\b)[^\d\-+]*([\-+]?\d+(?:\.\d+)?)%?',
+                re.IGNORECASE,
+            )
+            # KL divergence and entropy
+            kl_pattern = re.compile(r'\bKL(?:-?divergence)?[^\d\-+]*([\-+]?\d+(?:\.\d+)?)', re.IGNORECASE)
+            entropy_pattern = re.compile(r'\bentropy[^\d\-+]*([\-+]?\d+(?:\.\d+)?)', re.IGNORECASE)
             
             while self.current_process and self.current_process.poll() is None:
                 try:
@@ -530,6 +544,10 @@ class TrainingManager:
                         lr_match = lr_pattern.search(output)
                         grpo_progress_match = grpo_progress_pattern.search(output)
                         grpo_iter_match = grpo_iter_pattern.search(output)
+                        reward_match = reward_pattern.search(output)
+                        success_match = success_rate_pattern.search(output)
+                        kl_match = kl_pattern.search(output)
+                        entropy_match = entropy_pattern.search(output)
 
                         # Extract metrics
                         if step_match:
@@ -564,6 +582,28 @@ class TrainingManager:
                             # Handle both "Learning Rate X" and "lr X" formats
                             learning_rate = float(lr_match.group(1) or lr_match.group(2))
                             self.training_metrics["learning_rate"] = learning_rate
+
+                        # RL metrics (optional)
+                        if reward_match:
+                            try:
+                                self.training_metrics["avg_reward"] = float(reward_match.group(1))
+                            except Exception:
+                                pass
+                        if success_match:
+                            try:
+                                self.training_metrics["success_rate"] = float(success_match.group(1))
+                            except Exception:
+                                pass
+                        if kl_match:
+                            try:
+                                self.training_metrics["kl"] = float(kl_match.group(1))
+                            except Exception:
+                                pass
+                        if entropy_match:
+                            try:
+                                self.training_metrics["entropy"] = float(entropy_match.group(1))
+                            except Exception:
+                                pass
 
                         # Calculate progress and ETA
                         if "current_step" in self.training_metrics and "total_steps" in self.training_metrics:
