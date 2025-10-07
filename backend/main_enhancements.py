@@ -8,6 +8,9 @@ import json
 import os
 import yaml
 import logging
+import asyncio
+import tempfile
+import uuid
 from datetime import datetime
 
 from training_methods import (
@@ -62,7 +65,11 @@ class EnhancedTrainingManager:
         """Initialize with reference to existing TrainingManager"""
         self.base_manager = base_training_manager
         self.logger = logging.getLogger(__name__)
-    
+        self.wrapper_python = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python"
+        self.wrapper_script = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/run_finetune.py"
+        self.prepared_data_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/data"
+        self.sft_config_path = os.path.join(tempfile.gettempdir(), "gui_training_config_enhanced.yaml")
+
     def get_available_methods(self) -> Dict[str, Any]:
         """Get available training methods with their configurations"""
         methods = {}
@@ -231,11 +238,157 @@ class EnhancedTrainingManager:
         self.logger.info(f"Built {method.value.upper()} command: {' '.join(cmd)}")
         return cmd
     
-    def start_enhanced_training(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _start_sft_training(self, config: EnhancedTrainingConfig) -> Dict[str, Any]:
+        """Handle SFT runs using the existing wrapper script pipeline"""
+        try:
+            self.logger.info("SFT method detected - using wrapper script approach")
+
+            # Update base manager state before starting process
+            self.base_manager.current_config = config
+            self.base_manager.training_state = "running"
+            self.base_manager.current_session_id = str(uuid.uuid4())
+            self.base_manager.best_val_loss = None
+            self.base_manager.best_model_step = None
+            self.base_manager.best_model_path = None
+
+            self.base_manager.training_metrics = {
+                "current_step": 0,
+                "total_steps": config.iterations,
+                "train_loss": None,
+                "val_loss": None,
+                "learning_rate": config.learning_rate,
+                "start_time": datetime.now().isoformat(),
+                "estimated_time_remaining": None,
+                "method": config.training_method,
+                "best_val_loss": None,
+                "best_model_step": 0
+            }
+
+            # Prepare data using existing helper (ensures train/valid jsonl are materialised)
+            await self.base_manager._prepare_training_data(
+                config.model_path,
+                config.train_data_path,
+                config.val_data_path
+            )
+
+            # Mirror the config emitted by the original training manager
+            config_dict = {
+                "venv_python": self.wrapper_python,
+                "base_model_dir": config.model_path,
+                "prepared_data_dir": self.prepared_data_dir,
+                "prepare_from_chat": False,
+                "adapter_output_dir": self.base_manager.output_dir,
+                "adapter_name": config.adapter_name,
+                "optimizer": "adamw",
+                "learning_rate": config.learning_rate,
+                "batch_size": config.batch_size,
+                "iters": config.iterations,
+                "steps_per_report": config.steps_per_report,
+                "steps_per_eval": config.steps_per_eval,
+                "val_batches": -1,
+                "max_seq_length": config.max_seq_length,
+                "grad_checkpoint": True,
+                "mask_prompt": False,
+                "save_every": config.save_every,
+                "resume_adapter_file": None,
+                "train_log": self.base_manager.log_file,
+                "enable_early_stop": True,
+                "no_improve_patience_evals": 3
+            }
+
+            # Write enhanced config file used by the wrapper script
+            with open(self.sft_config_path, 'w') as f:
+                yaml.dump(config_dict, f, default_flow_style=False)
+
+            cmd = [
+                self.wrapper_python,
+                self.wrapper_script,
+                "--config",
+                self.sft_config_path
+            ]
+            self.logger.info(f"Using wrapper script for SFT: {' '.join(cmd)}")
+
+            log_dir = self.base_manager.output_dir
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "training_debug.log")
+
+            # Persist command details for debugging
+            with open(log_file, 'w') as f:
+                f.write(f"Training started at {datetime.now().isoformat()}\n")
+                f.write("Method: sft\n")
+                f.write(f"Model: {config.model_path}\n")
+                f.write(f"Train data: {config.train_data_path}\n")
+                f.write(f"Validation data: {config.val_data_path}\n")
+                f.write(f"Prepared data dir: {self.prepared_data_dir}\n")
+                f.write(f"Adapter path: {os.path.join(self.base_manager.output_dir, config.adapter_name)}\n")
+                f.write(f"Config path: {self.sft_config_path}\n\n")
+                f.write("Wrapper command:\n")
+                for i, arg in enumerate(cmd):
+                    f.write(f"  [{i}] {arg}\n")
+
+            # Launch wrapper script
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'
+
+            self.base_manager.current_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+                env=env,
+                preexec_fn=os.setsid
+            )
+
+            # Give the process a moment to surface early failures
+            await asyncio.sleep(1.0)
+
+            if self.base_manager.current_process.poll() is not None:
+                try:
+                    stdout, stderr = self.base_manager.current_process.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    stdout = stderr = "Timeout reading output"
+
+                error_msg = f"SFT wrapper exited immediately with code {self.base_manager.current_process.returncode}"
+                self.logger.error(error_msg)
+                with open(log_file, 'a') as f:
+                    f.write(f"\n{'='*70}\n")
+                    f.write(f"ERROR: {error_msg}\n")
+                    f.write(f"{'='*70}\n\nSTDERR:\n{stderr}\n\nSTDOUT:\n{stdout}\n")
+
+                self.base_manager.training_state = "error"
+                self.base_manager.last_error = error_msg
+                self.base_manager.current_process = None
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "log_file": log_file,
+                    "stderr": stderr[:500] if isinstance(stderr, str) else None
+                }
+
+            return {
+                "success": True,
+                "message": "Enhanced training started with SFT",
+                "method": "sft",
+                "pid": self.base_manager.current_process.pid,
+                "needs_monitoring": True,
+                "log_file": log_file
+            }
+
+        except Exception as e:
+            error_msg = f"SFT setup failed: {e}"
+            self.logger.error(error_msg)
+            self.base_manager.training_state = "error"
+            self.base_manager.last_error = error_msg
+            return {"success": False, "error": error_msg}
+
+    async def start_enhanced_training(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """Start training with enhanced method support"""
         try:
             # Convert to enhanced config
             enhanced_config = EnhancedTrainingConfig(**config_data)
+            method_enum = TrainingMethod(enhanced_config.training_method)
             
             # Validate data format if specified
             if enhanced_config.train_data_path:
@@ -248,7 +401,10 @@ class EnhancedTrainingManager:
                         "success": False,
                         "error": f"Data validation failed: {validation.get('error', 'Unknown error')}"
                     }
-            
+
+            if method_enum == TrainingMethod.SFT:
+                return await self._start_sft_training(enhanced_config)
+
             # Update base manager's configuration
             self.base_manager.current_config = enhanced_config
             self.base_manager.training_state = "running"
@@ -342,8 +498,7 @@ class EnhancedTrainingManager:
                 return {"success": False, "error": error_msg, "log_file": log_file}
 
             # Capture immediate errors
-            import time
-            time.sleep(1.0)  # Give process time to start and potentially fail
+            await asyncio.sleep(1.0)  # Give process time to start and potentially fail
 
             if self.base_manager.current_process.poll() is not None:
                 # Process already exited - capture error
@@ -373,16 +528,13 @@ class EnhancedTrainingManager:
                     "log_file": log_file
                 }
             
-            # Start monitoring (reuse existing monitoring with enhancements)
-            import asyncio
-            if hasattr(self.base_manager, '_monitor_training'):
-                asyncio.create_task(self.base_manager._monitor_training())
-            
+            # Return success - monitoring will be started by the async endpoint wrapper
             return {
                 "success": True,
                 "message": f"Enhanced training started with {enhanced_config.training_method.upper()}",
                 "method": enhanced_config.training_method,
-                "pid": self.base_manager.current_process.pid
+                "pid": self.base_manager.current_process.pid,
+                "needs_monitoring": True  # Signal that monitoring should be started
             }
             
         except Exception as e:
@@ -560,9 +712,14 @@ def create_enhanced_endpoints(app, training_manager, enhanced_manager):
         try:
             # Stop any existing training first
             if training_manager.current_process and training_manager.current_process.poll() is None:
-                training_manager.stop_training()
+                await training_manager.stop_training()
             
-            result = enhanced_manager.start_enhanced_training(config)
+            result = await enhanced_manager.start_enhanced_training(config)
+            
+            # Start monitoring task if training started successfully
+            if result.get("success") and result.get("needs_monitoring"):
+                asyncio.create_task(training_manager._monitor_training())
+                logger.info("Started monitoring task for enhanced training")
             
             # Broadcast status update
             if result.get("success"):

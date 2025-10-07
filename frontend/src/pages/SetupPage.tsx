@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Upload, Settings, Play, Database, Cpu } from 'lucide-react';
 import { RootState } from '../store/store';
@@ -8,12 +8,14 @@ import { addNotification } from '../store/slices/uiSlice';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
+const MAX_MODEL_FETCH_RETRIES = 5;
 
 export const SetupPage: React.FC = () => {
   const dispatch = useDispatch();
   const { models, selectedModel, isLoading, error } = useSelector((state: RootState) => state.models);
   const { state: trainingState, config } = useSelector((state: RootState) => state.training);
   
+  const retryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [formData, setFormData] = useState<Partial<TrainingConfig>>({
     model_path: '',
     train_data_path: '',
@@ -30,9 +32,62 @@ export const SetupPage: React.FC = () => {
     adapter_name: 'mlx_finetune'
   });
 
+  const fetchModels = useCallback(async (attempt = 0) => {
+    if (retryTimeout.current) {
+      clearTimeout(retryTimeout.current);
+      retryTimeout.current = null;
+    }
+
+    let scheduledRetry = false;
+
+    if (attempt === 0) {
+      dispatch(setError(null));
+    }
+
+    dispatch(setLoading(true));
+
+    try {
+      await axios.get(`${BACKEND_URL}/health`, { timeout: 2000 });
+      const response = await axios.get(`${BACKEND_URL}/models`, { timeout: 5000 });
+
+      const availableModels = response.data.models || [];
+      dispatch(setModels(availableModels));
+
+      if (availableModels.length > 0) {
+        dispatch(setSelectedModel(availableModels[0]));
+      }
+    } catch (err) {
+      console.error(`Model fetch attempt ${attempt + 1} failed:`, err);
+      const nextAttempt = attempt + 1;
+      if (nextAttempt <= MAX_MODEL_FETCH_RETRIES) {
+        scheduledRetry = true;
+        const delay = Math.min(4000, 750 * nextAttempt);
+        retryTimeout.current = setTimeout(() => {
+          fetchModels(nextAttempt);
+        }, delay);
+      } else {
+        dispatch(setError('Failed to fetch models'));
+        dispatch(addNotification({
+          type: 'error',
+          title: 'Model Loading Error',
+          message: 'Failed to load available models. Check backend connection.',
+        }));
+      }
+    } finally {
+      if (!scheduledRetry) {
+        dispatch(setLoading(false));
+      }
+    }
+  }, [dispatch]);
+
   useEffect(() => {
     fetchModels();
-  }, []);
+    return () => {
+      if (retryTimeout.current) {
+        clearTimeout(retryTimeout.current);
+      }
+    };
+  }, [fetchModels]);
 
   useEffect(() => {
     if (selectedModel) {
@@ -43,22 +98,8 @@ export const SetupPage: React.FC = () => {
     }
   }, [selectedModel]);
 
-  const fetchModels = async () => {
-    dispatch(setLoading(true));
-    try {
-      const response = await axios.get(`${BACKEND_URL}/models`);
-      dispatch(setModels(response.data.models));
-      if (response.data.models.length > 0) {
-        dispatch(setSelectedModel(response.data.models[0]));
-      }
-    } catch (error) {
-      dispatch(setError('Failed to fetch models'));
-      dispatch(addNotification({
-        type: 'error',
-        title: 'Model Loading Error',
-        message: 'Failed to load available models. Check backend connection.',
-      }));
-    }
+  const manualRetry = () => {
+    fetchModels();
   };
 
   const handleModelChange = (modelPath: string) => {
@@ -185,7 +226,7 @@ export const SetupPage: React.FC = () => {
                 {error}
                 <button
                   type="button"
-                  onClick={fetchModels}
+                  onClick={manualRetry}
                   className="ml-4 btn-secondary text-sm"
                 >
                   Retry

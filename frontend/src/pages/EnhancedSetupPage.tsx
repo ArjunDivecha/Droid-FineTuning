@@ -1,7 +1,7 @@
 // frontend/src/pages/EnhancedSetupPageNew.tsx
 // Enhanced setup page with GSPO and Dr. GRPO - matching your beautiful dark theme design
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Upload, Settings, Play, Database, Cpu, Zap, Brain, Target, Sparkles, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { RootState } from '../store/store';
@@ -10,6 +10,7 @@ import { setTrainingConfig } from '../store/slices/trainingSlice';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
+const MAX_MODEL_FETCH_RETRIES = 5;
 
 // Training method types
 enum TrainingMethod {
@@ -118,6 +119,9 @@ const EnhancedSetupPage: React.FC = () => {
   const [dataValidation, setDataValidation] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isEstimating, setIsEstimating] = useState(false);
+  const retryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
+  const [modelError, setModelError] = useState<string | null>(null);
   const [availableModels, setAvailableModels] = useState<Array<{name: string, path: string}>>([]);
   
   // Form state matching actual mlx-lm-lora parameters
@@ -148,23 +152,72 @@ const EnhancedSetupPage: React.FC = () => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Fetch available models on mount
+  const fetchModels = useCallback(async (attempt = 0) => {
+    if (retryTimeout.current) {
+      clearTimeout(retryTimeout.current);
+      retryTimeout.current = null;
+    }
+
+    let scheduledRetry = false;
+
+    if (attempt === 0) {
+      setModelError(null);
+    }
+
+    setIsLoadingModels(true);
+
+    try {
+      await axios.get(`${BACKEND_URL}/health`, { timeout: 2000 });
+      const response = await axios.get(`${BACKEND_URL}/models`, { timeout: 5000 });
+      const models = (response.data.models || []).map((m: any) => ({
+        name: m.name,
+        path: m.path
+      }));
+
+      setAvailableModels(models);
+      if (models.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          model_path: prev.model_path || models[0].path
+        }));
+      }
+    } catch (error) {
+      console.error(`Failed to fetch models (attempt ${attempt + 1}):`, error);
+      const nextAttempt = attempt + 1;
+      if (nextAttempt <= MAX_MODEL_FETCH_RETRIES) {
+        scheduledRetry = true;
+        const delay = Math.min(4000, 750 * nextAttempt);
+        retryTimeout.current = setTimeout(() => {
+          fetchModels(nextAttempt);
+        }, delay);
+      } else {
+        setModelError('Failed to load available models. Check backend connection.');
+        setAvailableModels([]);
+        dispatch(addNotification({
+          type: 'error',
+          title: 'Model Loading Error',
+          message: 'Failed to load available models. Check backend connection.',
+        }));
+      }
+    } finally {
+      if (!scheduledRetry) {
+        setIsLoadingModels(false);
+      }
+    }
+  }, [dispatch]);
+
   useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const response = await axios.get(`${BACKEND_URL}/models`);
-        if (response.data.models) {
-          setAvailableModels(response.data.models.map((m: any) => ({
-            name: m.name,
-            path: m.path
-          })));
-        }
-      } catch (error) {
-        console.error('Failed to fetch models:', error);
+    fetchModels();
+    return () => {
+      if (retryTimeout.current) {
+        clearTimeout(retryTimeout.current);
       }
     };
+  }, [fetchModels]);
+
+  const manualRetry = useCallback(() => {
     fetchModels();
-  }, []);
+  }, [fetchModels]);
 
   // Update form data when method changes
   useEffect(() => {
@@ -408,7 +461,24 @@ const EnhancedSetupPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Model Path
                 </label>
-                {availableModels.length > 0 ? (
+                {modelError && (
+                  <div className="text-error-600 bg-error-50 dark:bg-error-900/30 p-3 rounded-lg flex items-center justify-between mb-3">
+                    <span>{modelError}</span>
+                    <button
+                      type="button"
+                      onClick={manualRetry}
+                      className="btn-secondary text-sm"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {isLoadingModels ? (
+                  <div className="flex items-center space-x-3 text-gray-600 dark:text-gray-300">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-600" />
+                    <span>Loading available models...</span>
+                  </div>
+                ) : availableModels.length > 0 ? (
                   <select
                     value={formData.model_path || ''}
                     onChange={(e) => handleInputChange('model_path', e.target.value)}

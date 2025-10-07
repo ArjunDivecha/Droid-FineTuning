@@ -104,7 +104,8 @@ const startBackendServer = async (): Promise<void> => {
 
     backendProcess = spawn(pythonPath, ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', BACKEND_PORT.toString()], {
       cwd: backendPath,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],  // ignore stdin, pipe stdout/stderr
+      detached: false
     });
 
     backendProcess.stdout?.on('data', (data) => {
@@ -123,26 +124,29 @@ const startBackendServer = async (): Promise<void> => {
     // Wait for server to be ready
     const checkServer = async (attempts = 0): Promise<void> => {
       if (attempts > 60) {
+        console.error('Backend server failed to start within 60 seconds');
         reject(new Error('Backend server failed to start within 60 seconds'));
         return;
       }
 
       try {
         // Use IPv4 explicitly to match backend binding
-        const response = await axios.get(`http://127.0.0.1:${BACKEND_PORT}/training/status`, { timeout: 5000 });
+        const response = await axios.get(`http://127.0.0.1:${BACKEND_PORT}/health`, { timeout: 3000 });
         if (response.status === 200) {
-          console.log(`Backend health check passed after ${attempts + 1} attempts`);
+          console.log(`✅ Backend health check passed after ${attempts + 1} attempts`);
           resolve();
           return;
         }
         throw new Error(`Unexpected status: ${response.status}`);
-      } catch (error) {
-        console.log(`Backend health check attempt ${attempts + 1} failed:`, error.message);
+      } catch (error: any) {
+        if (attempts % 10 === 0) {
+          console.log(`Backend health check attempt ${attempts + 1} failed: ${error.message || error}`);
+        }
         setTimeout(() => checkServer(attempts + 1), 1000);
       }
     };
 
-    setTimeout(() => checkServer(), 2000);
+    setTimeout(() => checkServer(), 3000);  // Give Python more time to start
   });
 };
 
@@ -155,27 +159,30 @@ const stopBackendServer = (): void => {
 
 // App event handlers
 app.whenReady().then(async () => {
+  // Create window IMMEDIATELY - don't wait for backend
+  createWindow();
+  
+  // Start backend in background
   try {
     console.log('Starting backend server...');
     await startBackendServer();
     console.log('Backend server started successfully');
-    
-    createWindow();
-    
-    // macOS specific behavior
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-      }
-    });
   } catch (error) {
-    console.error('Failed to start application:', error);
-    dialog.showErrorBox(
-      'Startup Error', 
-      `Failed to start backend server: ${error}`
-    );
-    app.quit();
+    console.error('Backend failed to start:', error);
+    // Show error but don't quit - let user see the UI
+    if (mainWindow) {
+      mainWindow.webContents.executeJavaScript(`
+        alert('Backend server failed to start. Some features may not work.\\n\\nError: ${String(error).replace(/'/g, "\\'")}');
+      `);
+    }
   }
+  
+  // macOS specific behavior
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
 });
 
 app.on('window-all-closed', () => {
