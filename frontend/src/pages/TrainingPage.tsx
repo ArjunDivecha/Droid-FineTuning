@@ -261,6 +261,12 @@ export const TrainingPage: React.FC = () => {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+              {config.training_method && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Method:</span>
+                  <p className="font-medium">{config.training_method.toUpperCase()}</p>
+                </div>
+              )}
               <div>
                 <span className="text-gray-500 dark:text-gray-400">Learning Rate:</span>
                 <p className="font-medium">{config.learning_rate}</p>
@@ -277,6 +283,43 @@ export const TrainingPage: React.FC = () => {
                 <span className="text-gray-500 dark:text-gray-400">Adapter Name:</span>
                 <p className="font-medium">{config.adapter_name}</p>
               </div>
+              {/* RL Params */}
+              {config.group_size != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Group Size:</span>
+                  <p className="font-medium">{config.group_size}</p>
+                </div>
+              )}
+              {config.temperature != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Temperature:</span>
+                  <p className="font-medium">{config.temperature}</p>
+                </div>
+              )}
+              {config.epsilon != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Epsilon:</span>
+                  <p className="font-medium">{config.epsilon}</p>
+                </div>
+              )}
+              {config.max_completion_length != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Max Completion Len:</span>
+                  <p className="font-medium">{config.max_completion_length}</p>
+                </div>
+              )}
+              {config.importance_sampling_level && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Importance Sampling:</span>
+                  <p className="font-medium">{config.importance_sampling_level}</p>
+                </div>
+              )}
+              {config.grpo_loss_type && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">GRPO Loss Type:</span>
+                  <p className="font-medium">{config.grpo_loss_type}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

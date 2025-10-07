@@ -447,6 +447,27 @@ class EnhancedTrainingManager:
                     f.write(f"  [{i}] {arg}\n")
                 f.write(f"\nCommand as string: {' '.join(cmd)}\n\n")
 
+            # Mirror a succinct parameter summary into the primary GUI log so users can see settings immediately
+            try:
+                with open(self.base_manager.log_file, 'a') as lf:
+                    lf.write("\n=== Enhanced Training Start ===\n")
+                    lf.write(f"Time: {datetime.now().isoformat()}\n")
+                    lf.write(f"Method: {enhanced_config.training_method}\n")
+                    lf.write("Parameters:\n")
+                    lf.write(f"  group_size: {enhanced_config.group_size}\n")
+                    lf.write(f"  epsilon: {enhanced_config.epsilon}\n")
+                    lf.write(f"  temperature: {enhanced_config.temperature}\n")
+                    lf.write(f"  max_completion_length: {enhanced_config.max_completion_length}\n")
+                    lf.write(f"  importance_sampling_level: {enhanced_config.importance_sampling_level}\n")
+                    lf.write(f"  grpo_loss_type: {enhanced_config.grpo_loss_type}\n")
+                    lf.write(f"  learning_rate: {enhanced_config.learning_rate}\n")
+                    lf.write(f"  batch_size: {enhanced_config.batch_size}\n")
+                    lf.write(f"  max_seq_length: {enhanced_config.max_seq_length}\n")
+                    lf.write(f"  iterations: {enhanced_config.iterations}\n")
+                    lf.write("===============================\n\n")
+            except Exception:
+                pass
+
             # Validate paths exist
             if not os.path.exists(enhanced_config.model_path):
                 error_msg = f"Model path does not exist: {enhanced_config.model_path}"
