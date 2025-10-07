@@ -15,24 +15,44 @@ import {
 import { addNotification } from '../store/slices/uiSlice';
 
 const WEBSOCKET_URL = 'ws://localhost:8000/ws';
+const RECONNECT_NOTIFY_THRESHOLD = 2;
 
 export const useWebSocket = () => {
   const dispatch = useDispatch();
   const { isConnected } = useSelector((state: RootState) => state.training);
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectAttempts = useRef(0);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualDisconnect = useRef(false);
+  const hasEverConnected = useRef(false);
   const lastLoggedStep = useRef<number>(-1);
   const lastRunStartTime = useRef<string | null>(null);
 
   const connect = useCallback(() => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      return; // Already connected
+    manualDisconnect.current = false;
+
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
     }
 
-    
+    if (socketRef.current) {
+      const readyState = socketRef.current.readyState;
+      if (readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING) {
+        return; // Already connected or in progress
+      }
+    }
+
     const socket = new WebSocket(WEBSOCKET_URL);
     socketRef.current = socket;
 
     socket.onopen = () => {
+      reconnectAttempts.current = 0;
+      hasEverConnected.current = true;
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
       dispatch(setConnectionStatus(true));
       dispatch(addNotification({
         type: 'success',
@@ -42,12 +62,28 @@ export const useWebSocket = () => {
     };
 
     socket.onclose = () => {
+      socketRef.current = null;
       dispatch(setConnectionStatus(false));
-      dispatch(addNotification({
-        type: 'warning',
-        title: 'Disconnected',
-        message: 'WebSocket connection lost'
-      }));
+
+      if (!manualDisconnect.current) {
+        const notifyDueToAttempts = reconnectAttempts.current >= RECONNECT_NOTIFY_THRESHOLD;
+        const shouldNotify = hasEverConnected.current || notifyDueToAttempts;
+        if (shouldNotify) {
+          dispatch(addNotification({
+            type: 'warning',
+            title: 'Disconnected',
+            message: 'WebSocket connection lost'
+          }));
+        }
+
+        const nextAttempt = reconnectAttempts.current + 1;
+        const delay = Math.min(5000, Math.round(750 * nextAttempt));
+        reconnectTimer.current = setTimeout(() => {
+          reconnectAttempts.current = nextAttempt;
+          connect();
+          reconnectTimer.current = null;
+        }, delay);
+      }
     };
 
     socket.onmessage = (event) => {
@@ -81,21 +117,36 @@ export const useWebSocket = () => {
 
     socket.onerror = (error) => {
       console.error('WebSocket error:', error);
-      dispatch(addNotification({
-        type: 'error',
-        title: 'Connection Error',
-        message: 'WebSocket connection failed'
-      }));
+      const notifyDueToAttempts = reconnectAttempts.current >= RECONNECT_NOTIFY_THRESHOLD;
+      const shouldNotify = !manualDisconnect.current && (hasEverConnected.current || notifyDueToAttempts);
+      if (shouldNotify) {
+        dispatch(addNotification({
+          type: 'error',
+          title: 'Connection Error',
+          message: 'WebSocket connection failed'
+        }));
+      }
     };
 
   }, [dispatch]);
 
   const disconnect = useCallback(() => {
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
-      dispatch(setConnectionStatus(false));
+    manualDisconnect.current = true;
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
     }
+
+    if (socketRef.current) {
+      try {
+        socketRef.current.close();
+      } catch (error) {
+        console.error('Error closing WebSocket:', error);
+      }
+      socketRef.current = null;
+    }
+
+    dispatch(setConnectionStatus(false));
   }, [dispatch]);
 
   const send = useCallback((event: string, data: any) => {
@@ -177,8 +228,11 @@ export const useWebSocket = () => {
             // Only log when step changes - show iter, train loss, val loss
             let logLine = '';
             if (currentStep !== lastLoggedStep.current) {
-              const trainLoss = metrics.train_loss != null ? Number(metrics.train_loss).toFixed(4) : 'N/A';
-              const valLoss = metrics.val_loss != null ? Number(metrics.val_loss).toFixed(4) : 'N/A';
+              // GRPO doesn't report train loss in early iterations - show "Calculating..." instead of "0.0000"
+              const trainLoss = (metrics.train_loss != null && metrics.train_loss !== 0) ? Number(metrics.train_loss).toFixed(4) : 
+                                (currentStep < 20 ? 'Calculating...' : 'N/A');
+              const valLoss = (metrics.val_loss != null && metrics.val_loss !== 0) ? Number(metrics.val_loss).toFixed(4) : 
+                              (currentStep < 20 ? 'Calculating...' : 'N/A');
               logLine = `Iter ${currentStep}: Train loss ${trainLoss}, Val loss ${valLoss}`;
               lastLoggedStep.current = currentStep;
             }

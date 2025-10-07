@@ -124,6 +124,8 @@ class TrainingDataValidator:
             total_lines = 0
             errors = []
             
+            detected_format = None
+
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
@@ -145,6 +147,8 @@ class TrainingDataValidator:
                         
                         if validation.get("valid"):
                             valid_samples += 1
+                            if not detected_format and validation.get("format"):
+                                detected_format = validation["format"]
                         else:
                             errors.append(f"Line {line_num}: {validation.get('error')}")
                             
@@ -163,7 +167,7 @@ class TrainingDataValidator:
                 "valid": True,
                 "num_samples": valid_samples,
                 "total_lines": total_lines,
-                "format": "grpo_prompt_answer" if config.requires_reasoning_chains else "instruction_following"
+                "format": detected_format or ("grpo_prompt_answer" if config.requires_reasoning_chains else "instruction_following")
             }
             
             if errors:
@@ -188,12 +192,14 @@ class TrainingDataValidator:
         if missing_fields:
             return {
                 "valid": False,
-                "error": f"Missing required fields for {method.value}: {missing_fields}. Format: {{\"prompt\": \"...\", \"answer\": \"...\", \"system\": \"...\" (optional)}}",
+                "error": (
+                    f"Missing required fields for {method.value}: {missing_fields}. "
+                    "Format: {\"prompt\": \"...\", \"answer\": \"...\", \"system\": \"...\" (optional)}"
+                ),
                 "required_format": required_fields,
                 "sample_format": TrainingDataValidator._get_sample_format(method)
             }
 
-        # Validate types
         if not isinstance(data_sample.get("prompt"), str):
             return {
                 "valid": False,
@@ -208,13 +214,50 @@ class TrainingDataValidator:
                 "required_format": required_fields
             }
 
-        # System message is optional but should be string if present
         if "system" in data_sample and not isinstance(data_sample["system"], str):
             return {
                 "valid": False,
                 "error": "system message must be a string if provided",
                 "required_format": required_fields
             }
+
+        if "completions" in data_sample:
+            completions = data_sample["completions"]
+            if not isinstance(completions, list) or len(completions) == 0:
+                return {
+                    "valid": False,
+                    "error": "completions must be a non-empty list when provided",
+                    "required_format": required_fields,
+                    "sample_format": TrainingDataValidator._get_sample_format(method)
+                }
+
+            for completion in completions:
+                if not isinstance(completion, dict):
+                    return {
+                        "valid": False,
+                        "error": "each completion must include text and score",
+                        "required_format": required_fields,
+                        "sample_format": TrainingDataValidator._get_sample_format(method)
+                    }
+
+                if "text" not in completion or not isinstance(completion.get("text"), str):
+                    return {
+                        "valid": False,
+                        "error": "each completion entry requires a text string",
+                        "required_format": required_fields,
+                        "sample_format": TrainingDataValidator._get_sample_format(method)
+                    }
+
+                score = completion.get("score")
+                if score is not None and not isinstance(score, (int, float)):
+                    return {
+                        "valid": False,
+                        "error": "completion scores must be numeric",
+                        "required_format": required_fields,
+                        "sample_format": TrainingDataValidator._get_sample_format(method)
+                    }
+
+            return {"valid": True, "format": "grpo_prompt_answer_with_completions"}
 
         return {"valid": True, "format": "grpo_prompt_answer"}
     
@@ -269,7 +312,11 @@ class TrainingDataValidator:
             return {
                 "prompt": "What is the capital of France?",
                 "answer": "The capital of France is Paris, a historic city known for its art, culture, and iconic landmarks like the Eiffel Tower.",
-                "system": "You are a helpful and knowledgeable assistant."  # Optional field
+                "completions": [
+                    {"text": "Paris is the capital of France.", "score": 1.0},
+                    {"text": "France's capital is Lyon.", "score": 0.0}
+                ],
+                "system": "You are a helpful and knowledgeable assistant."
             }
         else:  # SFT
             return {
