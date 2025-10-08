@@ -615,7 +615,7 @@ class TrainingManager:
                                 remaining = estimated_total - elapsed
                                 self.training_metrics["estimated_time_remaining"] = remaining
 
-                        # Broadcast ALL non-empty lines (including progress bars, loading messages, etc.)
+                        # Broadcast and persist ALL non-empty lines (including progress bars, loading messages, etc.)
                         if output_stripped:  # Only broadcast non-empty lines
                             await self.broadcast({
                                 "type": "training_progress",
@@ -624,6 +624,12 @@ class TrainingManager:
                                     "log_line": output_stripped
                                 }
                             })
+                            # Append to GUI log file for full trace
+                            try:
+                                with open(self.log_file, 'a') as lf:
+                                    lf.write(output_stripped + "\n")
+                            except Exception:
+                                pass
 
                     await asyncio.sleep(0.05)  # Faster polling for more responsive logs
                     
@@ -641,7 +647,7 @@ class TrainingManager:
                     remaining_output = self.current_process.stdout.readline()
                     if not remaining_output:
                         break
-                    
+
                     # Check for early stopping message
                     if "Early stop:" in remaining_output:
                         early_stop_detected = True
@@ -659,9 +665,25 @@ class TrainingManager:
                     val_match = val_pattern.search(remaining_output)
                     if val_match:
                         self.training_metrics["val_loss"] = float(val_match.group(1))
+                    
+                    # Persist remaining output lines to GUI log for full traceback visibility
+                    try:
+                        ro = remaining_output.strip()
+                        if ro:
+                            with open(self.log_file, 'a') as lf:
+                                lf.write(ro + "\n")
+                    except Exception:
+                        pass
             except:
                 pass  # Ignore errors when reading final output
             
+            # Write final status to GUI log
+            try:
+                with open(self.log_file, 'a') as lf:
+                    lf.write(f"\n[TRAINING EXIT] return_code={return_code}\n")
+            except Exception:
+                pass
+
             if return_code == 0:
                 self.training_state = "completed"
                 # Save completed session
@@ -687,6 +709,12 @@ class TrainingManager:
                 self.training_state = "error"
                 # Save error session
                 self.save_session()
+                # Persist error to log
+                try:
+                    with open(self.log_file, 'a') as lf:
+                        lf.write(f"[TRAINING ERROR] Process exited with code {return_code}\n")
+                except Exception:
+                    pass
                 await self.broadcast({
                     "type": "training_error",
                     "data": {"error": f"Training process exited with code {return_code}"}
