@@ -492,6 +492,7 @@ class EnhancedTrainingManager:
                 # Force unbuffered output for real-time log streaming
                 env = os.environ.copy()
                 env['PYTHONUNBUFFERED'] = '1'
+                env['PYTHONFAULTHANDLER'] = '1'
 
                 self.base_manager.current_process = subprocess.Popen(
                     cmd,
