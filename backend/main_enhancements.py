@@ -26,11 +26,13 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EnhancedTrainingConfig:
     """Enhanced training configuration for modern mlx-lm training"""
-    # Core parameters
+    # Core parameters (required fields first)
     model_path: str
     train_data_path: str
-    val_data_path: Optional[str] = None
     training_method: str  # dpo, orpo, lora
+    
+    # Optional core parameters
+    val_data_path: Optional[str] = None
     adapter_name: str = "adapter"
 
     # LoRA parameters (for all methods)

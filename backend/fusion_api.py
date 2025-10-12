@@ -93,6 +93,7 @@ class FusionRequest(BaseModel):
     method: str = "slerp"  # "slerp" or "weighted"
     weights: Optional[List[float]] = None
     output_name: Optional[str] = None
+    evaluation_dataset: Optional[str] = None  # Optional: specific dataset for all evaluations
 
 class EvaluationResult(BaseModel):
     adapter_name: str
@@ -139,10 +140,13 @@ async def list_adapters():
         fusion = AdapterFusion()
         adapter_names = fusion.list_available_adapters()
         
+        logger.info(f"Found {len(adapter_names)} adapters")
+        
         # Group adapters by base model
         adapters_by_model: Dict[str, List[AdapterInfo]] = {}
         
         for adapter_name in adapter_names:
+            logger.info(f"Processing adapter: {adapter_name}")
             session_info = get_session_info(adapter_name)
             
             # Extract base model name from model_path or model_name
@@ -179,29 +183,12 @@ async def list_adapters():
                     except Exception as e:
                         logger.warning(f"Could not read adapter_config.json for {adapter_name}: {e}")
                 
-                # If still unknown, try to infer from fusion_report.txt
+                # Skip fusion_report.txt lookup to avoid recursion/hanging
+                # Just use "Fused Model" for fused adapters
                 if base_model == 'Unknown Model':
                     fusion_report_path = os.path.join(adapter_dir, 'fusion_report.txt')
                     if os.path.exists(fusion_report_path):
-                        try:
-                            with open(fusion_report_path, 'r') as f:
-                                content = f.read()
-                                # Look for source adapters and get their base model
-                                if 'Source Adapters:' in content:
-                                    # Get first source adapter name
-                                    lines = content.split('\n')
-                                    for line in lines:
-                                        if line.strip().startswith('1.'):
-                                            source_adapter = line.split('(')[0].strip().split('.')[1].strip()
-                                            # Recursively get base model of source adapter
-                                            source_session = get_session_info(source_adapter)
-                                            source_config = source_session.get('config', {})
-                                            source_model_path = source_config.get('model_path')
-                                            if source_model_path:
-                                                base_model = source_model_path.rstrip('/').split('/')[-1]
-                                            break
-                        except Exception as e:
-                            logger.warning(f"Could not read fusion_report.txt for {adapter_name}: {e}")
+                        base_model = 'Fused Model'
             
             # Get training metadata
             training_date = session_info.get('timestamp')
@@ -257,11 +244,18 @@ async def validate_adapters(adapter_names: List[str]):
                 return {"compatible": False, "error": f"Failed to load {adapter_name}: {str(e)}"}
         
         # Validate compatibility
-        is_compatible, layer_info = fusion.validate_adapter_compatibility(loaded_adapters)
+        is_compatible = fusion.validate_adapter_compatibility(loaded_adapters)
         
         if is_compatible:
-            all_keys = layer_info.get('all_keys', set())
-            common_keys = layer_info.get('common_keys', set())
+            # Calculate layer statistics
+            all_keys = set()
+            for adapter in loaded_adapters:
+                all_keys.update(adapter.keys())
+            
+            common_keys = set(loaded_adapters[0].keys())
+            for adapter in loaded_adapters[1:]:
+                common_keys &= set(adapter.keys())
+            
             return {
                 "compatible": True,
                 "num_adapters": len(adapter_names),
@@ -339,9 +333,14 @@ async def run_fusion_and_evaluation(request: FusionRequest):
         fusion_state["current_step"] = "Validating compatibility..."
         fusion_state["progress"] = 20
         
-        is_compatible, layer_info = fusion.validate_adapter_compatibility(loaded_adapters)
+        is_compatible = fusion.validate_adapter_compatibility(loaded_adapters)
         if not is_compatible:
             raise Exception("Adapters are not compatible")
+        
+        # Calculate all_keys for fusion
+        all_keys = set()
+        for adapter in loaded_adapters:
+            all_keys.update(adapter.keys())
         
         # Step 3: Perform fusion (30% progress)
         fusion_state["current_step"] = f"Fusing adapters using {request.method}..."
@@ -352,7 +351,6 @@ async def run_fusion_and_evaluation(request: FusionRequest):
             request.weights = [1.0 / len(loaded_adapters)] * len(loaded_adapters)
         
         # Perform fusion
-        all_keys = layer_info.get('all_keys')
         if request.method == "slerp" and len(loaded_adapters) == 2:
             t = request.weights[1]
             fused_weights = fusion.slerp_fusion(loaded_adapters[0], loaded_adapters[1], t)
@@ -377,7 +375,7 @@ async def run_fusion_and_evaluation(request: FusionRequest):
         # Evaluate base model
         fusion_state["current_step"] = "Evaluating base model..."
         fusion_state["progress"] = 45
-        base_result = await run_evaluation(request.adapter_names[0], is_base=True)
+        base_result = await run_evaluation(request.adapter_names[0], is_base=True, evaluation_dataset=request.evaluation_dataset)
         
         # Evaluate each individual adapter
         for i, adapter_name in enumerate(request.adapter_names):
@@ -385,13 +383,13 @@ async def run_fusion_and_evaluation(request: FusionRequest):
             fusion_state["current_step"] = f"Evaluating {adapter_name}..."
             fusion_state["progress"] = int(progress)
             
-            result = await run_evaluation(adapter_name, is_base=False)
+            result = await run_evaluation(adapter_name, is_base=False, evaluation_dataset=request.evaluation_dataset)
             evaluation_results.append(result)
         
         # Evaluate fused adapter
         fusion_state["current_step"] = "Evaluating fused adapter..."
         fusion_state["progress"] = 90
-        fused_result = await run_evaluation(output_name, is_base=False)
+        fused_result = await run_evaluation(output_name, is_base=False, evaluation_dataset=request.evaluation_dataset)
         
         # Compile results
         fusion_state["result"] = {
@@ -420,12 +418,34 @@ async def run_fusion_and_evaluation(request: FusionRequest):
     finally:
         fusion_state["is_running"] = False
 
-async def run_evaluation(adapter_name: str, is_base: bool) -> Dict[str, Any]:
+async def run_evaluation(adapter_name: str, is_base: bool, evaluation_dataset: Optional[str] = None) -> Dict[str, Any]:
     """Run evaluation for a single adapter using the existing evaluation API."""
     import aiohttp
     import asyncio
     
     try:
+        # If evaluation_dataset is just a filename, try to resolve it to full path
+        resolved_dataset = None
+        if evaluation_dataset:
+            if os.path.isabs(evaluation_dataset) and os.path.exists(evaluation_dataset):
+                # Already a full path
+                resolved_dataset = evaluation_dataset
+            else:
+                # Try to find the file in common locations
+                session_info = get_session_info(adapter_name)
+                config = session_info.get('config', {})
+                train_data_path = config.get('train_data_path') or session_info.get('train_data_path')
+                
+                if train_data_path:
+                    # Get directory and try to find the dataset file
+                    data_dir = os.path.dirname(train_data_path)
+                    potential_path = os.path.join(data_dir, evaluation_dataset)
+                    if os.path.exists(potential_path):
+                        resolved_dataset = potential_path
+                    else:
+                        logger.warning(f"Could not resolve dataset '{evaluation_dataset}' to full path, using as-is")
+                        resolved_dataset = evaluation_dataset
+        
         # Start evaluation via existing API
         async with aiohttp.ClientSession() as session:
             # Start the evaluation
@@ -433,7 +453,7 @@ async def run_evaluation(adapter_name: str, is_base: bool) -> Dict[str, Any]:
                 'http://localhost:8000/api/evaluation/start',
                 json={
                     "adapter_name": adapter_name,
-                    "training_data_path": None,  # Will use session default
+                    "training_data_path": resolved_dataset,  # Use resolved dataset or None for default
                     "num_questions": 20,
                     "evaluate_base_model": is_base
                 }

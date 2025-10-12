@@ -81,6 +81,8 @@ const FusionPage: React.FC = () => {
   const [fusionStatus, setFusionStatus] = useState('');
   const [fusionResult, setFusionResult] = useState<FusionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [evaluationDataset, setEvaluationDataset] = useState<string>(''); // Optional: specific dataset for all evaluations
+  const [availableDatasets, setAvailableDatasets] = useState<{name: string, path: string}[]>([]);
 
   // Export state
   const [exportState, setExportState] = useState<ExportState>({
@@ -168,6 +170,23 @@ const FusionPage: React.FC = () => {
     try {
       const response = await axios.get<AdaptersByBaseModel[]>('http://localhost:8000/api/fusion/list-adapters');
       setAdapterGroups(response.data);
+      
+      // Extract unique datasets from adapters with their full paths
+      const datasetMap = new Map<string, string>();
+      response.data.forEach(group => {
+        group.adapters.forEach(adapter => {
+          // Get the full training data path from session info
+          // For now, we'll use the dataset name as both key and value
+          // The backend will need to resolve the full path
+          if (adapter.dataset) {
+            datasetMap.set(adapter.dataset, adapter.dataset);
+          }
+        });
+      });
+      const datasetList = Array.from(datasetMap.entries())
+        .map(([name, path]) => ({ name, path }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setAvailableDatasets(datasetList);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to load adapters');
     } finally {
@@ -213,7 +232,8 @@ const FusionPage: React.FC = () => {
         adapter_names: selectedAdapters,
         method: method,
         weights: null, // Use default equal weights
-        output_name: null // Auto-generate name
+        output_name: null, // Auto-generate name
+        evaluation_dataset: evaluationDataset || null // Optional: use specific dataset for all evaluations
       });
     } catch (err: any) {
       setIsFusing(false);
@@ -480,6 +500,55 @@ const FusionPage: React.FC = () => {
                     Method: {selectedAdapters.length === 2 ? 'SLERP (Spherical Interpolation)' : 'Weighted Average'}
                   </div>
                 </div>
+                
+                {/* Optional: Evaluation Dataset Selector */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Evaluation Dataset (Optional)
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={evaluationDataset}
+                      onChange={(e) => setEvaluationDataset(e.target.value)}
+                      placeholder="No dataset selected - will use each adapter's training data"
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                      disabled={isFusing}
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const result = await (window as any).electronAPI.showOpenDialog({
+                          title: 'Select Evaluation Dataset',
+                          filters: [{ name: 'JSONL Files', extensions: ['jsonl'] }],
+                          properties: ['openFile']
+                        });
+                        if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+                          setEvaluationDataset(result.filePaths[0]);
+                        }
+                      }}
+                      disabled={isFusing}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      Browse...
+                    </button>
+                    {evaluationDataset && (
+                      <button
+                        type="button"
+                        onClick={() => setEvaluationDataset('')}
+                        disabled={isFusing}
+                        className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Browse to select a .jsonl file to use for all adapter evaluations. If none selected, each adapter uses its own training data.
+                  </div>
+                </div>
+                
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={handleReset}
