@@ -108,38 +108,58 @@ class AdapterFusion:
         return weights
     
     def validate_adapter_compatibility(self, adapters: List[Dict[str, np.ndarray]]) -> bool:
-        """Validate that adapters have compatible dimensions."""
+        """Validate that adapters have compatible dimensions for overlapping keys.
+        
+        Smart validation: Allows adapters with different layer coverage.
+        Only checks that overlapping keys have matching dimensions.
+        """
         if len(adapters) < 2:
             return True
         
-        reference = adapters[0]
-        reference_keys = set(reference.keys())
+        # Collect all keys and their shapes across all adapters
+        key_shapes = {}
+        for i, adapter in enumerate(adapters):
+            for key, weight in adapter.items():
+                if key not in key_shapes:
+                    key_shapes[key] = []
+                key_shapes[key].append((i, weight.shape))
         
-        for i, adapter in enumerate(adapters[1:], 1):
+        # Check that overlapping keys have consistent shapes
+        incompatible_keys = []
+        for key, shapes in key_shapes.items():
+            if len(shapes) > 1:
+                # Multiple adapters have this key - check shapes match
+                reference_shape = shapes[0][1]
+                for adapter_idx, shape in shapes[1:]:
+                    if shape != reference_shape:
+                        incompatible_keys.append(
+                            f"Key '{key}': adapter 0 has shape {reference_shape}, "
+                            f"adapter {adapter_idx} has shape {shape}"
+                        )
+        
+        if incompatible_keys:
+            logger.error("Incompatible adapter dimensions:")
+            for error in incompatible_keys:
+                logger.error(f"  {error}")
+            return False
+        
+        # Log coverage information
+        all_keys = set(key_shapes.keys())
+        for i, adapter in enumerate(adapters):
             adapter_keys = set(adapter.keys())
-            
-            # Check if keys match
-            if reference_keys != adapter_keys:
-                missing_in_ref = adapter_keys - reference_keys
-                missing_in_adapter = reference_keys - adapter_keys
-                
-                if missing_in_ref:
-                    logger.error(f"Adapter {i} has extra keys: {missing_in_ref}")
-                if missing_in_adapter:
-                    logger.error(f"Adapter {i} missing keys: {missing_in_adapter}")
-                return False
-            
-            # Check dimensions
-            for key in reference_keys:
-                if reference[key].shape != adapter[key].shape:
-                    logger.error(f"Shape mismatch for key '{key}': {reference[key].shape} vs {adapter[key].shape}")
-                    return False
+            coverage = len(adapter_keys) / len(all_keys) * 100
+            logger.info(f"Adapter {i}: {len(adapter_keys)} keys ({coverage:.1f}% coverage)")
         
-        logger.info("All adapters are compatible for fusion")
+        logger.info("All adapters are compatible for fusion (smart validation)")
         return True
     
     def weighted_average_fusion(self, adapters: List[Dict[str, np.ndarray]], weights: List[float]) -> Dict[str, np.ndarray]:
-        """Fuse adapters using weighted averaging."""
+        """Fuse adapters using weighted averaging.
+        
+        Smart fusion: Handles adapters with different layer coverage.
+        For keys present in multiple adapters, blends them with normalized weights.
+        For keys present in only one adapter, uses that adapter's weights.
+        """
         if len(adapters) != len(weights):
             raise ValueError("Number of adapters must match number of weights")
         
@@ -151,30 +171,61 @@ class AdapterFusion:
         
         logger.info(f"Fusing {len(adapters)} adapters with weights: {weights}")
         
-        # Initialize result with zeros
+        # Collect all unique keys across all adapters
+        all_keys = set()
+        for adapter in adapters:
+            all_keys.update(adapter.keys())
+        
         fused = {}
-        reference = adapters[0]
+        for key in all_keys:
+            # Find which adapters have this key
+            adapters_with_key = [(i, adapter[key]) for i, adapter in enumerate(adapters) if key in adapter]
+            
+            if len(adapters_with_key) == 1:
+                # Only one adapter has this key - use it directly
+                fused[key] = adapters_with_key[0][1]
+            else:
+                # Multiple adapters have this key - blend with normalized weights
+                active_indices = [i for i, _ in adapters_with_key]
+                active_weights = np.array([weights[i] for i in active_indices])
+                active_weights = active_weights / active_weights.sum()  # Renormalize
+                
+                weighted_sum = np.zeros_like(adapters_with_key[0][1])
+                for w, (_, weight) in zip(active_weights, adapters_with_key):
+                    weighted_sum += w * weight
+                fused[key] = weighted_sum
         
-        for key in reference.keys():
-            fused[key] = np.zeros_like(reference[key])
-        
-        # Weighted sum
-        for adapter, weight in zip(adapters, weights):
-            for key in adapter.keys():
-                fused[key] += weight * adapter[key]
-        
+        logger.info(f"Fused {len(fused)} keys from {len(adapters)} adapters (smart fusion)")
         return fused
     
     def slerp_fusion(self, adapter1: Dict[str, np.ndarray], adapter2: Dict[str, np.ndarray], t: float = 0.5) -> Dict[str, np.ndarray]:
-        """Spherical Linear Interpolation fusion for two adapters."""
+        """Spherical Linear Interpolation fusion for two adapters.
+        
+        Smart fusion: Handles adapters with different layer coverage.
+        For keys in both adapters, uses SLERP. For keys in only one, uses that adapter's weights.
+        """
         if torch is None:
             logger.warning("PyTorch not available, falling back to linear interpolation")
             return self.weighted_average_fusion([adapter1, adapter2], [1-t, t])
         
         logger.info(f"SLERP fusion with interpolation factor t={t}")
         
+        # Collect all unique keys
+        all_keys = set(adapter1.keys()) | set(adapter2.keys())
+        
         fused = {}
-        for key in adapter1.keys():
+        for key in all_keys:
+            # Check if key exists in both adapters
+            if key not in adapter1:
+                # Only in adapter2 - use it directly
+                fused[key] = adapter2[key]
+                continue
+            elif key not in adapter2:
+                # Only in adapter1 - use it directly
+                fused[key] = adapter1[key]
+                continue
+            
+            # Key in both - apply SLERP
             w1 = torch.from_numpy(adapter1[key]).float()
             w2 = torch.from_numpy(adapter2[key]).float()
             

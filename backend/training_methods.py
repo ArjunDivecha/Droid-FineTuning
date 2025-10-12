@@ -13,10 +13,8 @@ logger = logging.getLogger(__name__)
 
 class TrainingMethod(str, Enum):
     """Available training methods"""
-    SFT = "sft"
-    GSPO = "gspo"  # Group Sparse Policy Optimization
-    DR_GRPO = "dr_grpo"  # Doctor GRPO
-    GRPO = "grpo"  # Group Relative Policy Optimization
+    DPO = "dpo"  # Direct Preference Optimization
+    ORPO = "orpo"  # Odds Ratio Preference Optimization
 
 @dataclass
 class TrainingMethodConfig:
@@ -40,68 +38,36 @@ class TrainingMethodConfig:
         if self.additional_params is None:
             self.additional_params = []
 
-# Enhanced training methods with GSPO and Dr. GRPO
+# Official MLX-LM Alignment Methods
 TRAINING_METHODS = {
-    TrainingMethod.SFT: TrainingMethodConfig(
-        name="sft",
-        display_name="Supervised Fine-Tuning",
-        description="Standard instruction following fine-tuning with LoRA adapters",
-        complexity="⭐⭐",
-        use_case="General instruction following and task adaptation",
-        data_format="instruction_response",
-        requires_preferences=False,
-        requires_reasoning_chains=False,
-        supports_batch=True,
-        resource_intensity="medium",
-        module_name="mlx_lm.lora"
-    ),
-    
-    TrainingMethod.GSPO: TrainingMethodConfig(
-        name="gspo",
-        display_name="Group Sparse Policy Optimization",
-        description="Latest breakthrough in efficient reasoning model training with sparse optimization",
-        complexity="⭐⭐⭐⭐",
-        use_case="Efficient reasoning tasks with resource constraints",
-        data_format="reasoning_chains",
-        requires_preferences=False,
-        requires_reasoning_chains=True,
-        supports_batch=True,
-        resource_intensity="medium",  # More efficient than GRPO
-        estimated_speedup="2x faster than GRPO",
-        badge="🆕 Most Efficient",
-        module_name="mlx_lm_lora.gspo",
-        additional_params=["sparse_ratio", "efficiency_threshold", "sparse_optimization"]
-    ),
-    
-    TrainingMethod.DR_GRPO: TrainingMethodConfig(
-        name="dr_grpo",
-        display_name="Doctor GRPO",
-        description="Domain-specialized reasoning for expert knowledge applications",
-        complexity="⭐⭐⭐⭐⭐",
-        use_case="Medical, scientific, and specialized domain reasoning",
-        data_format="domain_reasoning_chains",
-        requires_preferences=False,
-        requires_reasoning_chains=True,
+    TrainingMethod.DPO: TrainingMethodConfig(
+        name="dpo",
+        display_name="Direct Preference Optimization (DPO)",
+        description="A stable and efficient method for aligning models with human or AI preferences.",
+        complexity="⭐⭐⭐",
+        use_case="Improving model behavior, style, and safety based on preference pairs.",
+        data_format="preference",
+        requires_preferences=True,
         supports_batch=True,
         resource_intensity="high",
-        badge="🆕 Domain Expert",
-        module_name="mlx_lm_lora.dr_grpo",
-        additional_params=["domain", "expertise_level", "domain_adaptation_strength"]
+        badge="Industry Standard",
+        module_name="mlx_lm.dpo",
+        additional_params=["beta"]
     ),
     
-    TrainingMethod.GRPO: TrainingMethodConfig(
-        name="grpo",
-        display_name="Group Relative Policy Optimization",
-        description="DeepSeek-R1 style multi-step reasoning capabilities",
-        complexity="⭐⭐⭐⭐",
-        use_case="Complex multi-step reasoning and problem solving",
-        data_format="reasoning_chains",
-        requires_preferences=False,
-        requires_reasoning_chains=True,
+    TrainingMethod.ORPO: TrainingMethodConfig(
+        name="orpo",
+        display_name="Odds Ratio Preference Optimization (ORPO)",
+        description="A newer, simpler, and often more effective alignment method than DPO.",
+        complexity="⭐⭐⭐",
+        use_case="Simultaneously fine-tuning and aligning a model, improving both instruction-following and preference alignment.",
+        data_format="preference",
+        requires_preferences=True,
         supports_batch=True,
         resource_intensity="high",
-        module_name="mlx_lm_lora.grpo",
-        additional_params=["reasoning_steps", "multi_step_training"]
+        badge="🆕 State-of-the-Art",
+        module_name="mlx_lm.orpo",
+        additional_params=["beta", "alpha"]
     )
 }
 
@@ -138,11 +104,10 @@ class TrainingDataValidator:
                         data_sample = json.loads(line)
                         
                         # Validate this sample
-                        if config.requires_reasoning_chains:
-                            validation = TrainingDataValidator._validate_reasoning_data(data_sample, method)
-                        elif config.requires_preferences:
+                        if config.requires_preferences:
                             validation = TrainingDataValidator._validate_preference_data(data_sample, method)
                         else:
+                            # Fallback for any non-preference formats if added in the future
                             validation = TrainingDataValidator._validate_instruction_data(data_sample, method)
                         
                         if validation.get("valid"):
@@ -167,7 +132,7 @@ class TrainingDataValidator:
                 "valid": True,
                 "num_samples": valid_samples,
                 "total_lines": total_lines,
-                "format": detected_format or ("grpo_prompt_answer" if config.requires_reasoning_chains else "instruction_following")
+                "format": detected_format or ("preference" if config.requires_preferences else "instruction_following")
             }
             
             if errors:
@@ -179,87 +144,7 @@ class TrainingDataValidator:
             logger.error(f"Data validation failed for {method}: {str(e)}")
             return {"valid": False, "error": f"Data validation failed: {str(e)}"}
     
-    @staticmethod
-    def _validate_reasoning_data(data_sample: Dict, method: TrainingMethod) -> Dict[str, Any]:
-        """Validate GRPO/GSPO/Dr.GRPO data format (prompt/answer/system)"""
-        # All GRPO-based methods use the same format:
-        # Required: "prompt" and "answer"
-        # Optional: "system"
 
-        required_fields = ["prompt", "answer"]
-        missing_fields = [field for field in required_fields if field not in data_sample]
-
-        if missing_fields:
-            return {
-                "valid": False,
-                "error": (
-                    f"Missing required fields for {method.value}: {missing_fields}. "
-                    "Format: {\"prompt\": \"...\", \"answer\": \"...\", \"system\": \"...\" (optional)}"
-                ),
-                "required_format": required_fields,
-                "sample_format": TrainingDataValidator._get_sample_format(method)
-            }
-
-        if not isinstance(data_sample.get("prompt"), str):
-            return {
-                "valid": False,
-                "error": "prompt must be a string",
-                "required_format": required_fields
-            }
-
-        if not isinstance(data_sample.get("answer"), str):
-            return {
-                "valid": False,
-                "error": "answer must be a string",
-                "required_format": required_fields
-            }
-
-        if "system" in data_sample and not isinstance(data_sample["system"], str):
-            return {
-                "valid": False,
-                "error": "system message must be a string if provided",
-                "required_format": required_fields
-            }
-
-        if "completions" in data_sample:
-            completions = data_sample["completions"]
-            if not isinstance(completions, list) or len(completions) == 0:
-                return {
-                    "valid": False,
-                    "error": "completions must be a non-empty list when provided",
-                    "required_format": required_fields,
-                    "sample_format": TrainingDataValidator._get_sample_format(method)
-                }
-
-            for completion in completions:
-                if not isinstance(completion, dict):
-                    return {
-                        "valid": False,
-                        "error": "each completion must include text and score",
-                        "required_format": required_fields,
-                        "sample_format": TrainingDataValidator._get_sample_format(method)
-                    }
-
-                if "text" not in completion or not isinstance(completion.get("text"), str):
-                    return {
-                        "valid": False,
-                        "error": "each completion entry requires a text string",
-                        "required_format": required_fields,
-                        "sample_format": TrainingDataValidator._get_sample_format(method)
-                    }
-
-                score = completion.get("score")
-                if score is not None and not isinstance(score, (int, float)):
-                    return {
-                        "valid": False,
-                        "error": "completion scores must be numeric",
-                        "required_format": required_fields,
-                        "sample_format": TrainingDataValidator._get_sample_format(method)
-                    }
-
-            return {"valid": True, "format": "grpo_prompt_answer_with_completions"}
-
-        return {"valid": True, "format": "grpo_prompt_answer"}
     
     @staticmethod
     def _validate_preference_data(data_sample: Dict, method: TrainingMethod) -> Dict[str, Any]:
@@ -307,18 +192,13 @@ class TrainingDataValidator:
     @staticmethod
     def _get_sample_format(method: TrainingMethod) -> Dict[str, Any]:
         """Get sample data format for a method"""
-        if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO, TrainingMethod.GRPO]:
-            # All GRPO-based methods use the same format
+        if method in [TrainingMethod.DPO, TrainingMethod.ORPO]:
             return {
-                "prompt": "What is the capital of France?",
-                "answer": "The capital of France is Paris, a historic city known for its art, culture, and iconic landmarks like the Eiffel Tower.",
-                "completions": [
-                    {"text": "Paris is the capital of France.", "score": 1.0},
-                    {"text": "France's capital is Lyon.", "score": 0.0}
-                ],
-                "system": "You are a helpful and knowledgeable assistant."
+                "prompt": "What are the main benefits of using MLX for machine learning on Apple silicon?",
+                "chosen": "MLX offers several key advantages: 1) Unified Memory, which avoids data copies between CPU and GPU, 2) Lazy Computation, which only materializes arrays when needed, optimizing performance, and 3) a familiar NumPy-like API, making it easy to adopt.",
+                "rejected": "MLX is just another framework, it doesn't do much."
             }
-        else:  # SFT
+        else: # Fallback for future methods
             return {
                 "instruction": "Your instruction here",
                 "response": "Expected response here"
@@ -382,40 +262,14 @@ class ResourceEstimator:
         if memory_gb > 32:
             recommendations.append("Consider using a quantized model (4-bit) to reduce memory usage")
         
-        if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO]:
-            recommendations.append("Enable batch processing for optimal efficiency")
-        
-        if method == TrainingMethod.DR_GRPO:
-            recommendations.append("Ensure high-quality domain-specific training data")
-            recommendations.append("Consider domain-specific model initialization")
-        
-        if method == TrainingMethod.GSPO:
-            recommendations.append("Enable sparse optimization for best performance")
-            recommendations.append("Monitor efficiency metrics during training")
+        if method in [TrainingMethod.DPO, TrainingMethod.ORPO]:
+            recommendations.append("Ensure your dataset contains high-quality preference pairs.")
+            recommendations.append("Start with the default beta value (0.1) and tune if needed.")
         
         if memory_gb > 16:
             recommendations.append("Close other applications to free up memory")
         
         return recommendations
-
-# Utility functions for data format conversion
-def convert_to_reasoning_format(instruction_data: Dict[str, Any], method: TrainingMethod) -> Dict[str, Any]:
-    """Convert instruction/response data to reasoning format"""
-    if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO, TrainingMethod.GRPO]:
-        return {
-            "problem": instruction_data.get("instruction", ""),
-            "reasoning_steps": [
-                "Analyze the problem",
-                "Develop solution strategy", 
-                "Execute solution"
-            ],
-            "solution": instruction_data.get("response", ""),
-            **({"sparse_indicators": [1, 1, 0], "efficiency_markers": {"optimization_applied": True}} 
-               if method == TrainingMethod.GSPO else {}),
-            **({"domain": "general", "expertise_level": "intermediate", "domain_context": {"specialty": "general"}} 
-               if method == TrainingMethod.DR_GRPO else {})
-        }
-    return instruction_data
 
 # Export main components
 __all__ = [
@@ -423,6 +277,5 @@ __all__ = [
     "TrainingMethodConfig", 
     "TRAINING_METHODS",
     "TrainingDataValidator",
-    "ResourceEstimator",
-    "convert_to_reasoning_format"
+    "ResourceEstimator"
 ]
