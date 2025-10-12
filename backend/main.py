@@ -46,7 +46,7 @@ class TrainingConfig:
     model_path: str
     train_data_path: str
     val_data_path: str
-    learning_rate: float = 1e-5
+    learning_rate: float = 1e-4  # Updated: 10x increase for LoRA (research-backed)
     batch_size: int = 1
     max_seq_length: int = 32768
     iterations: int = 7329
@@ -56,6 +56,12 @@ class TrainingConfig:
     early_stop: bool = True
     patience: int = 3
     adapter_name: str = "mlx_finetune"
+    # Full-Layer LoRA Configuration
+    fine_tune_type: str = "lora"
+    lora_rank: int = 32
+    lora_alpha: float = 32.0
+    lora_dropout: float = 0.0
+    lora_num_layers: int = -1  # -1 means all layers
 
 class TrainingManager:
     """Manages training processes and state"""
@@ -397,6 +403,89 @@ class TrainingManager:
         # Automatically prepare training data with the correct tokenizer for the selected model
         await self._prepare_training_data(config.model_path, config.train_data_path, config.val_data_path)
         
+        # ============================================================
+        # LoRA Parameter Generation for Full-Layer Training
+        # ============================================================
+        
+        # Extract and validate LoRA parameters
+        lora_rank = max(1, int(getattr(config, "lora_rank", 32) or 32))
+        lora_alpha = float(getattr(config, "lora_alpha", 32.0) or 32.0)
+        lora_dropout = float(getattr(config, "lora_dropout", 0.0) or 0.0)
+        lora_num_layers = getattr(config, "lora_num_layers", -1)
+        
+        # Normalize num_layers (0 → -1, ensure int)
+        try:
+            lora_num_layers = int(lora_num_layers)
+        except (TypeError, ValueError):
+            lora_num_layers = -1
+        if lora_num_layers == 0:
+            lora_num_layers = -1
+        
+        # Detect model architecture
+        model_config_path = os.path.join(config.model_path, "config.json")
+        model_type = "qwen2"  # Default fallback
+        
+        try:
+            if os.path.exists(model_config_path):
+                with open(model_config_path, 'r') as f:
+                    model_config = json.load(f)
+                    model_type = model_config.get("model_type", "qwen2")
+                    logger.info(f"Detected model architecture: {model_type}")
+        except Exception as e:
+            logger.warning(f"Could not read model config: {e}")
+        
+        # Define 7 base matrices for full-layer training
+        lora_keys = [
+            "self_attn.q_proj",
+            "self_attn.k_proj",
+            "self_attn.v_proj",
+            "self_attn.o_proj",
+            "mlp.gate_proj",
+            "mlp.up_proj",
+            "mlp.down_proj",
+        ]
+        
+        # Add architecture-specific keys
+        if model_type in ["mixtral", "phimoe"]:
+            lora_keys.append("block_sparse_moe.gate")
+            logger.info(f"Detected {model_type} - adding MoE routing gate")
+        elif model_type == "qwen2_moe":
+            lora_keys.append("mlp.shared_expert_gate")
+            logger.info(f"Detected {model_type} - adding shared expert gate")
+        elif model_type == "qwen3_next":
+            lora_keys.extend([
+                "mlp.shared_expert_gate",
+                "linear_attn.in_proj_qkvz",
+                "linear_attn.out_proj",
+                "linear_attn.in_proj_ba",
+                "linear_attn.dt_bias"
+            ])
+            logger.info(f"Detected {model_type} - adding shared expert gate and linear attention")
+        elif model_type in ["olmoe", "qwen3_moe"]:
+            logger.info(f"Detected {model_type} - using standard MoE keys")
+        
+        # Create lora_parameters dict for MLX-LM
+        lora_parameters = {
+            "rank": lora_rank,
+            "scale": lora_alpha,
+            "dropout": lora_dropout,
+            "keys": lora_keys,
+        }
+        
+        # Log the complete LoRA configuration
+        logger.info("=" * 60)
+        logger.info("LoRA Configuration:")
+        logger.info(f"  Rank: {lora_rank}")
+        logger.info(f"  Alpha (scale): {lora_alpha}")
+        logger.info(f"  Dropout: {lora_dropout}")
+        logger.info(f"  Layer coverage: {'all transformer layers' if lora_num_layers == -1 else f'last {lora_num_layers} layers'}")
+        logger.info(f"  Target matrices ({len(lora_keys)}): {', '.join(lora_keys)}")
+        logger.info("=" * 60)
+        
+        # ============================================================
+        # END LoRA Parameter Generation
+        # ============================================================
+        
         # Create config file for the training script
         config_data = {
             "venv_python": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python",
@@ -419,7 +508,14 @@ class TrainingManager:
             "resume_adapter_file": None,
             "train_log": self.log_file,
             "enable_early_stop": config.early_stop,
-            "no_improve_patience_evals": config.patience
+            "no_improve_patience_evals": config.patience,
+            # Full-layer LoRA configuration
+            "fine_tune_type": getattr(config, "fine_tune_type", "lora") or "lora",
+            "num_layers": lora_num_layers,
+            "lora_parameters": lora_parameters,
+            "lora_rank": lora_rank,
+            "lora_alpha": lora_alpha,
+            "lora_dropout": lora_dropout
         }
         
         # Write config file
@@ -509,9 +605,15 @@ class TrainingManager:
             
             # Patterns to extract metrics from training output
             step_pattern = re.compile(r'Iter (\d+):')
-            loss_pattern = re.compile(r'Train loss ([0-9.]+)|loss[=\s]+([0-9.]+)')  # Match "Train loss X", "loss=X", "loss X"
-            val_pattern = re.compile(r'Val loss ([0-9.]+)')
-            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)|lr[=\s]+([0-9.e-]+)')  # Match "Learning Rate X", "lr=X", "lr X"
+            # Support signed/float/scientific notation losses appearing as "loss -0.018" or "Train loss 0.002"
+            float_capture = r'([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)'
+            loss_pattern = re.compile(
+                rf'Train\s+loss\s+{float_capture}|loss[=\s]+{float_capture}'
+            )
+            val_pattern = re.compile(rf'Val\s+loss\s+{float_capture}')
+            lr_pattern = re.compile(
+                rf'Learning\s+Rate\s+{float_capture}|lr[=\s]+{float_capture}'
+            )
 
             # GRPO-specific patterns
             grpo_progress_pattern = re.compile(r'Training:\s+(\d+)%')
@@ -795,7 +897,7 @@ async def start_training(config_data: Dict[str, Any], background_tasks: Backgrou
             model_path=config_data["model_path"],
             train_data_path=config_data["train_data_path"],
             val_data_path=config_data.get("val_data_path", ""),
-            learning_rate=config_data.get("learning_rate", 1e-5),
+            learning_rate=config_data.get("learning_rate", 1e-4),  # Updated default
             batch_size=config_data.get("batch_size", 1),
             max_seq_length=config_data.get("max_seq_length", 32768),
             iterations=config_data.get("iterations", 7329),
@@ -804,7 +906,13 @@ async def start_training(config_data: Dict[str, Any], background_tasks: Backgrou
             save_every=25,  # Force save every 25 steps regardless of frontend input
             early_stop=config_data.get("early_stop", True),
             patience=config_data.get("patience", 3),
-            adapter_name=config_data.get("adapter_name", "mlx_finetune")
+            adapter_name=config_data.get("adapter_name", "mlx_finetune"),
+            # Full-layer LoRA parameters
+            fine_tune_type=config_data.get("fine_tune_type", "lora") or "lora",
+            lora_rank=int(config_data.get("lora_rank", 32) or 32),
+            lora_alpha=float(config_data.get("lora_alpha", 32.0) or 32.0),
+            lora_dropout=float(config_data.get("lora_dropout", 0.0) or 0.0),
+            lora_num_layers=int(config_data.get("lora_num_layers", -1) or -1)
         )
         
         success = await training_manager.start_training(config)
@@ -916,36 +1024,46 @@ async def test_base_model(request_data: dict):
         cmd = [
             python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load, generate
+from mlx_lm import load
+from mlx_lm.generate import generate_step
+from mlx_lm.sample_utils import make_sampler
+from mlx_lm.tokenizer_utils import TokenizerWrapper
 
-# Load the base model WITHOUT adapter
-model, tokenizer = load("{model_path}")
-
-# Generate text
-prompt = """{prompt}"""
-
-# Try different parameter combinations based on MLX version
-response = None
 try:
-    # Try with temp parameter
-    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
-except TypeError:
-    try:
-        # Try with temperature parameter  
-        response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
-    except TypeError:
-        try:
-            # Try with just basic parameters
-            response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
-        except Exception as e:
-            print("RESPONSE_START")
-            print(f"Error: Could not generate response - {{str(e)}}")
-            print("RESPONSE_END")
-            exit(1)
-
-print("RESPONSE_START")
-print(response)
-print("RESPONSE_END")
+    # Load the base model WITHOUT adapter
+    model, tokenizer = load("{model_path}")
+    
+    if not isinstance(tokenizer, TokenizerWrapper):
+        tokenizer = TokenizerWrapper(tokenizer)
+    
+    prompt = """{prompt}"""
+    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
+    
+    # Create sampler with anti-repetition parameters
+    sampler = make_sampler(
+        temp=0.7,
+        top_p=0.9,
+        min_p=0.05,
+        top_k=40
+    )
+    
+    # Generate tokens
+    detokenizer = tokenizer.detokenizer
+    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
+        token_id = token.item() if hasattr(token, 'item') else token
+        detokenizer.add_token(token_id)
+    detokenizer.finalize()
+    
+    response = detokenizer.text
+    print("RESPONSE_START")
+    print(response)
+    print("RESPONSE_END")
+except Exception as e:
+    print("RESPONSE_START")
+    print(f"Error: {{str(e)}}")
+    print("RESPONSE_END")
+    import traceback
+    traceback.print_exc()
 '''
         ]
         
@@ -1034,36 +1152,46 @@ async def test_model(request_data: dict):
         cmd = [
             python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load, generate
+from mlx_lm import load
+from mlx_lm.generate import generate_step
+from mlx_lm.sample_utils import make_sampler
+from mlx_lm.tokenizer_utils import TokenizerWrapper
 
-# Load the base model and adapter
-model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
-
-# Generate text
-prompt = """{prompt}"""
-
-# Try different parameter combinations based on MLX version
-response = None
 try:
-    # Try with temp parameter
-    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
-except TypeError:
-    try:
-        # Try with temperature parameter  
-        response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
-    except TypeError:
-        try:
-            # Try with just basic parameters
-            response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
-        except Exception as e:
-            print("RESPONSE_START")
-            print(f"Error: Could not generate response - {{str(e)}}")
-            print("RESPONSE_END")
-            exit(1)
-
-print("RESPONSE_START")
-print(response)
-print("RESPONSE_END")
+    # Load the base model and adapter
+    model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
+    
+    if not isinstance(tokenizer, TokenizerWrapper):
+        tokenizer = TokenizerWrapper(tokenizer)
+    
+    prompt = """{prompt}"""
+    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
+    
+    # Create sampler with anti-repetition parameters
+    sampler = make_sampler(
+        temp=0.7,
+        top_p=0.9,
+        min_p=0.05,
+        top_k=40
+    )
+    
+    # Generate tokens
+    detokenizer = tokenizer.detokenizer
+    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
+        token_id = token.item() if hasattr(token, 'item') else token
+        detokenizer.add_token(token_id)
+    detokenizer.finalize()
+    
+    response = detokenizer.text
+    print("RESPONSE_START")
+    print(response)
+    print("RESPONSE_END")
+except Exception as e:
+    print("RESPONSE_START")
+    print(f"Error: {{str(e)}}")
+    print("RESPONSE_END")
+    import traceback
+    traceback.print_exc()
 '''
         ]
         
@@ -1201,13 +1329,36 @@ async def model_inference(request_data: dict):
             cmd = [
                 python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load, generate
+from mlx_lm import load
+from mlx_lm.generate import generate_step
+from mlx_lm.sample_utils import make_sampler
+from mlx_lm.tokenizer_utils import TokenizerWrapper
 
 try:
     model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
-    prompt = """{prompt}"""
     
-    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+    if not isinstance(tokenizer, TokenizerWrapper):
+        tokenizer = TokenizerWrapper(tokenizer)
+    
+    prompt = """{prompt}"""
+    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
+    
+    # Create sampler with anti-repetition parameters
+    sampler = make_sampler(
+        temp=0.7,
+        top_p=0.9,
+        min_p=0.05,
+        top_k=40
+    )
+    
+    # Generate tokens
+    detokenizer = tokenizer.detokenizer
+    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
+        token_id = token.item() if hasattr(token, 'item') else token
+        detokenizer.add_token(token_id)
+    detokenizer.finalize()
+    
+    response = detokenizer.text
     print("RESPONSE_START")
     print(response)
     print("RESPONSE_END")
@@ -1222,13 +1373,36 @@ except Exception as e:
             cmd = [
                 python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load, generate
+from mlx_lm import load
+from mlx_lm.generate import generate_step
+from mlx_lm.sample_utils import make_sampler
+from mlx_lm.tokenizer_utils import TokenizerWrapper
 
 try:
     model, tokenizer = load("{model_path}")
-    prompt = """{prompt}"""
     
-    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+    if not isinstance(tokenizer, TokenizerWrapper):
+        tokenizer = TokenizerWrapper(tokenizer)
+    
+    prompt = """{prompt}"""
+    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
+    
+    # Create sampler with anti-repetition parameters
+    sampler = make_sampler(
+        temp=0.7,
+        top_p=0.9,
+        min_p=0.05,
+        top_k=40
+    )
+    
+    # Generate tokens
+    detokenizer = tokenizer.detokenizer
+    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
+        token_id = token.item() if hasattr(token, 'item') else token
+        detokenizer.add_token(token_id)
+    detokenizer.finalize()
+    
+    response = detokenizer.text
     print("RESPONSE_START")
     print(response)
     print("RESPONSE_END")

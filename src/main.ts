@@ -4,6 +4,9 @@ import * as fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import axios from 'axios';
 
+// Enable remote debugging
+app.commandLine.appendSwitch('remote-debugging-port', '9222');
+
 // Keep a global reference of the window object
 let mainWindow: BrowserWindow | null = null;
 let backendProcess: ChildProcess | null = null;

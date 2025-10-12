@@ -29,6 +29,12 @@ export interface TrainingConfig {
   early_stop: boolean;
   patience: number;
   adapter_name: string;
+  // Full-Layer LoRA Configuration
+  fine_tune_type?: string;
+  lora_rank?: number;
+  lora_alpha?: number;
+  lora_dropout?: number;
+  lora_num_layers?: number;
   // Enhanced/GSPO-GRPO fields (optional)
   training_method?: string;
   group_size?: number;
