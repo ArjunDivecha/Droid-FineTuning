@@ -20,7 +20,7 @@ export const SetupPage: React.FC = () => {
     model_path: '',
     train_data_path: '',
     val_data_path: '',
-    learning_rate: 1e-5,
+    learning_rate: 1e-4,  // Updated: 10x increase for LoRA
     batch_size: 1,
     max_seq_length: 32768,
     iterations: 7329,
@@ -29,7 +29,13 @@ export const SetupPage: React.FC = () => {
     save_every: 1000,
     early_stop: true,
     patience: 3,
-    adapter_name: 'mlx_finetune'
+    adapter_name: 'mlx_finetune',
+    // Full-Layer LoRA Configuration
+    fine_tune_type: 'lora',
+    lora_rank: 32,
+    lora_alpha: 32,
+    lora_dropout: 0.0,
+    lora_num_layers: -1
   });
 
   const fetchModels = useCallback(async (attempt = 0) => {
@@ -172,7 +178,13 @@ export const SetupPage: React.FC = () => {
       save_every: formData.save_every!,
       early_stop: formData.early_stop!,
       patience: formData.patience!,
-      adapter_name: formData.adapter_name!
+      adapter_name: formData.adapter_name!,
+      // Include LoRA configuration
+      fine_tune_type: formData.fine_tune_type,
+      lora_rank: formData.lora_rank,
+      lora_alpha: formData.lora_alpha,
+      lora_dropout: formData.lora_dropout,
+      lora_num_layers: formData.lora_num_layers
     };
 
     dispatch(setTrainingConfig(trainingConfig));
@@ -431,6 +443,156 @@ export const SetupPage: React.FC = () => {
                   className="rounded border-gray-300"
                 />
                 <label htmlFor="early_stop" className="text-sm font-medium">Enable Early Stopping</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Full-Layer LoRA Configuration */}
+        <div className="card">
+          <div className="card-header">
+            <div className="flex items-center space-x-2">
+              <Cpu className="h-5 w-5 text-primary-600" />
+              <h2 className="text-xl font-semibold">Full-Layer LoRA Configuration</h2>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+              Applies LoRA adapters to all 7 weight matrices (Q, K, V, O + gate, up, down) across all transformer layers.
+              Research shows this significantly outperforms attention-only training.
+            </p>
+          </div>
+          <div className="card-body">
+            {/* Info Banner */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+              <p className="text-sm text-blue-900 dark:text-blue-100">
+                <strong>Full-Layer LoRA Training</strong> - Trains attention (Q, K, V, O) + MLP (gate, up, down) layers
+                for comprehensive fine-tuning. Based on{' '}
+                <a
+                  href="https://thinkingmachines.ai/blog/lora/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-blue-700 dark:hover:text-blue-300"
+                >
+                  "LoRA Without Regret" research
+                </a>
+                .
+              </p>
+            </div>
+
+            {/* LoRA Parameters Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* LoRA Rank */}
+              <div>
+                <label className="block text-sm font-medium mb-2">LoRA Rank</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={256}
+                  className="input-field"
+                  value={formData.lora_rank}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setFormData(prev => ({ ...prev, lora_rank: isNaN(val) || val < 1 ? 32 : val }));
+                  }}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Recommended: 32 for most datasets (1-256 range)
+                </p>
+              </div>
+
+              {/* LoRA Alpha */}
+              <div>
+                <label className="block text-sm font-medium mb-2">LoRA Alpha (Scale)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={256}
+                  step="1"
+                  className="input-field"
+                  value={formData.lora_alpha}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setFormData(prev => ({ ...prev, lora_alpha: isNaN(val) || val < 1 ? 32 : val }));
+                  }}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Typically equals rank (scaling factor)
+                </p>
+              </div>
+
+              {/* LoRA Dropout */}
+              <div>
+                <label className="block text-sm font-medium mb-2">LoRA Dropout</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step="0.01"
+                  className="input-field"
+                  value={formData.lora_dropout}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    const clamped = isNaN(val) ? 0 : Math.min(1, Math.max(0, val));
+                    setFormData(prev => ({ ...prev, lora_dropout: clamped }));
+                  }}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  0.0 recommended (0.0-0.1 for regularization)
+                </p>
+              </div>
+
+              {/* Layer Coverage */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Layer Coverage</label>
+                <select
+                  className="select-field"
+                  value={formData.lora_num_layers}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setFormData(prev => ({ ...prev, lora_num_layers: isNaN(val) ? -1 : val }));
+                  }}
+                >
+                  <option value={-1}>All Layers (Recommended)</option>
+                  <option value={24}>Top 24 Layers</option>
+                  <option value={16}>Top 16 Layers</option>
+                  <option value={8}>Top 8 Layers</option>
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  -1 applies LoRA to all transformer blocks
+                </p>
+              </div>
+            </div>
+
+            {/* Matrix Coverage Visualization */}
+            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                Matrix Coverage
+              </h4>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-2">Attention Layers (4):</p>
+                  <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                    <li>✓ Query projection (q_proj)</li>
+                    <li>✓ Key projection (k_proj)</li>
+                    <li>✓ Value projection (v_proj)</li>
+                    <li>✓ Output projection (o_proj)</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-2">MLP Layers (3):</p>
+                  <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1">
+                    <li>✓ Gate projection (gate_proj)</li>
+                    <li>✓ Up projection (up_proj)</li>
+                    <li>✓ Down projection (down_proj)</li>
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <strong>Total Coverage:</strong> 7 matrices × {formData.lora_num_layers === -1 ? 'all' : formData.lora_num_layers} transformer layers
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  Expected trainable parameters: ~3.5-4% of total model parameters
+                </p>
               </div>
             </div>
           </div>

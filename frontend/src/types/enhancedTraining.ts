@@ -43,19 +43,31 @@ export interface EnhancedTrainingConfig {
   // Enhanced training method selection
   training_method: TrainingMethod;
   
+  // Shared GRPO parameters
+  group_size: number;
+  epsilon: number;
+  temperature: number;
+  max_completion_length: number;
+  importance_sampling_level?: string;
+  grpo_loss_type?: string;
+  epsilon_high?: number;
+  reward_functions?: string;
+  reward_weights?: string;
+  reward_functions_file?: string;
+
   // GSPO specific parameters
-  sparse_ratio: number;
-  efficiency_threshold: number;
-  sparse_optimization: boolean;
+  sparse_ratio?: number;
+  efficiency_threshold?: number;
+  sparse_optimization?: boolean;
   
   // Dr. GRPO specific parameters
-  domain: 'general' | 'medical' | 'scientific' | 'legal' | 'technical';
-  expertise_level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-  domain_adaptation_strength: number;
+  domain?: 'general' | 'medical' | 'scientific' | 'legal' | 'technical';
+  expertise_level?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  domain_adaptation_strength?: number;
   
   // GRPO specific parameters
-  reasoning_steps: number;
-  multi_step_training: boolean;
+  reasoning_steps?: number;
+  multi_step_training?: boolean;
 }
 
 export interface ResourceEstimation {

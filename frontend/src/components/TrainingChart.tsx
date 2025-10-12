@@ -30,6 +30,8 @@ interface DataPoint {
   trainLoss: number | null;
   valLoss: number | null;
   learningRate: number;
+  avgReward: number | null;
+  kl: number | null;
 }
 
 export const TrainingChart: React.FC = () => {
@@ -39,12 +41,14 @@ export const TrainingChart: React.FC = () => {
   useEffect(() => {
     if (metrics && (trainingState === 'running' || trainingState === 'completed')) {
       // Only add data points when we have actual loss values (not null)
-      if (metrics.train_loss != null || metrics.val_loss != null) {
+      if (metrics.train_loss != null || metrics.val_loss != null || metrics.avg_reward != null || metrics.kl != null) {
         const newPoint: DataPoint = {
           step: metrics.current_step,
           trainLoss: metrics.train_loss,
           valLoss: metrics.val_loss,
-          learningRate: metrics.learning_rate
+          learningRate: metrics.learning_rate,
+          avgReward: (metrics as any).avg_reward ?? null,
+          kl: (metrics as any).kl ?? null,
         };
 
         // Avoid duplicate points
@@ -67,7 +71,9 @@ export const TrainingChart: React.FC = () => {
         step: metrics.current_step,
         trainLoss: metrics.train_loss,
         valLoss: metrics.val_loss,
-        learningRate: metrics.learning_rate
+        learningRate: metrics.learning_rate,
+        avgReward: metrics.avg_reward || null,
+        kl: metrics.kl || null
       };
       dataPointsRef.current = [finalPoint];
     }
@@ -108,6 +114,20 @@ export const TrainingChart: React.FC = () => {
         pointHoverRadius: 4,
         borderWidth: 2,
         spanGaps: false,  // Don't connect null values
+      }] : []),
+      // Avg Reward on secondary axis
+      ...(dataPointsRef.current.some(point => point.avgReward != null) ? [{
+        label: 'Avg Reward',
+        data: dataPointsRef.current.map(point => point.avgReward),
+        borderColor: 'rgb(245, 158, 11)', // amber-500
+        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+        fill: true,
+        tension: 0.1,
+        pointRadius: 0,
+        pointHoverRadius: 3,
+        borderWidth: 2,
+        yAxisID: 'y2',
+        spanGaps: false,
       }] : []),
     ],
   };
@@ -150,6 +170,25 @@ export const TrainingChart: React.FC = () => {
         ticks: {
           color: 'rgb(107, 114, 128)',
         },
+      },
+      // Secondary axis for reward
+      y2: {
+        type: 'linear' as const,
+        position: 'right' as const,
+        display: true,
+        title: {
+          display: true,
+          text: 'Reward',
+          color: 'rgb(107, 114, 128)',
+        },
+        grid: {
+          drawOnChartArea: false, // keep grids from overlapping
+        },
+        ticks: {
+          color: 'rgb(107, 114, 128)',
+        },
+        suggestedMin: 0,
+        suggestedMax: 1,
       },
     },
     plugins: {

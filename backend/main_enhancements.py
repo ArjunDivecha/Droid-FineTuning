@@ -11,6 +11,7 @@ import logging
 import asyncio
 import tempfile
 import uuid
+import traceback
 from datetime import datetime
 
 from training_methods import (
@@ -57,6 +58,7 @@ class EnhancedTrainingConfig:
     # Optional: reward functions
     reward_functions: Optional[str] = None  # e.g., "accuracy_reward,format_reward"
     reward_weights: Optional[str] = None  # e.g., "[0.7, 0.3]"
+    reward_functions_file: Optional[str] = None  # Path to custom reward definitions
 
 class EnhancedTrainingManager:
     """Enhanced training manager that extends the existing TrainingManager functionality"""
@@ -170,15 +172,39 @@ class EnhancedTrainingManager:
         adapter_path = os.path.join(self.base_manager.output_dir, config.adapter_name)
         os.makedirs(adapter_path, exist_ok=True)
 
+        # Detect if installed mlx_lm_lora exposes a literal `gspo` mode
+        def _supports_gspo_mode() -> bool:
+            try:
+                from mlx_lm_lora.train import build_parser as _bp  # type: ignore
+                parser = _bp()
+                for a in parser._actions:
+                    if any(opt in ("--train-mode", "--train_mode") for opt in a.option_strings):
+                        choices = getattr(a, "choices", []) or []
+                        return "gspo" in choices
+            except Exception:
+                return False
+            return False
+
         # Base command for all RL methods (GRPO, GSPO, Dr. GRPO)
         if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO, TrainingMethod.GRPO]:
+            # Resolve the --data argument allowing for dataset aliases, JSONL files, or directories
+            data_source = config.train_data_path
+            if data_source and os.path.isfile(data_source):
+                data_source = os.path.dirname(data_source)
+            # if it's neither a file nor a directory we treat it as a dataset identifier
+
+            # Choose train-mode: prefer native `gspo` if available
+            train_mode = "grpo"
+            if method == TrainingMethod.GSPO and _supports_gspo_mode():
+                train_mode = "gspo"
+
             cmd = [
                 python_path,
                 "-m", "mlx_lm_lora.train",
                 "--model", config.model_path,
                 "--train",
-                "--train-mode", "grpo",  # All use GRPO mode
-                "--data", os.path.dirname(config.train_data_path),  # Directory containing train.jsonl
+                "--train-mode", train_mode,
+                "--data", data_source,
                 "--adapter-path", adapter_path,
                 "--learning-rate", str(config.learning_rate),
                 "--batch-size", str(config.batch_size),
@@ -196,10 +222,12 @@ class EnhancedTrainingManager:
 
             # Method-specific additions
             if method == TrainingMethod.GSPO:
-                # GSPO = GRPO + importance sampling
-                if config.importance_sampling_level:
-                    cmd.extend(["--importance-sampling-level", config.importance_sampling_level])
-                cmd.extend(["--grpo-loss-type", "grpo"])
+                # GSPO = GRPO + importance sampling. Prefer sequence-level by default.
+                level = (config.importance_sampling_level or "sequence").strip() or "sequence"
+                cmd.extend(["--importance-sampling-level", level])
+                # Retain GRPO loss unless a future build changes default GSPO loss type
+                if train_mode == "grpo":
+                    cmd.extend(["--grpo-loss-type", "grpo"])
 
             elif method == TrainingMethod.DR_GRPO:
                 # Dr. GRPO uses dr_grpo loss type
@@ -212,10 +240,24 @@ class EnhancedTrainingManager:
                 cmd.extend(["--grpo-loss-type", config.grpo_loss_type])
 
             # Add reward functions if specified
-            if config.reward_functions:
-                cmd.extend(["--reward-functions", config.reward_functions])
-            if config.reward_weights:
-                cmd.extend(["--reward-weights", config.reward_weights])
+            reward_functions = config.reward_functions
+            reward_weights = config.reward_weights
+
+            if method == TrainingMethod.GSPO:
+                # Provide sensible defaults that mirror the CLI tuning workflow
+                reward_functions = reward_functions or "lexical_f1_reward,length_window_reward,keyword_coverage_reward"
+                reward_weights = reward_weights or "[0.7,0.2,0.1]"
+
+            if reward_functions:
+                cmd.extend(["--reward-functions", reward_functions])
+            if reward_weights:
+                cmd.extend(["--reward-weights", reward_weights])
+
+            reward_functions_file = config.reward_functions_file
+            if reward_functions and not reward_functions_file:
+                reward_functions_file = "rewards/style_rewards.py"
+            if reward_functions_file:
+                cmd.extend(["--reward-functions-file", reward_functions_file])
 
         else:
             # SFT method - use standard mlx_lm.lora (keep existing behavior)
@@ -234,6 +276,21 @@ class EnhancedTrainingManager:
                 "--steps-per-eval", str(config.steps_per_eval),
                 "--save-every", str(config.save_every),
             ]
+
+        # Prefer debug trainer for RL methods to add guards and logging
+        if method in [TrainingMethod.GSPO, TrainingMethod.DR_GRPO, TrainingMethod.GRPO]:
+            # Replace module entry to debug.debug_trainer (keeps all args intact)
+            cmd[2] = "debug.debug_trainer"
+            # Add a debug log root next to adapter path for easy access
+            try:
+                adapter_dir = os.path.join(self.base_manager.output_dir, config.adapter_name)
+                debug_dir = os.path.join(self.base_manager.output_dir, "debug_runs", config.adapter_name)
+                os.makedirs(debug_dir, exist_ok=True)
+                cmd.extend(["--debug-log-root", debug_dir])
+                # Enforce minimum generated tokens to avoid empty token pairs
+                cmd.extend(["--debug-min-new-tokens", "2"])
+            except Exception:
+                pass
 
         self.logger.info(f"Built {method.value.upper()} command: {' '.join(cmd)}")
         return cmd
@@ -386,6 +443,20 @@ class EnhancedTrainingManager:
     async def start_enhanced_training(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """Start training with enhanced method support"""
         try:
+            # Normalize and validate required fields early to avoid NoneType errors
+            if not isinstance(config_data, dict):
+                return {"success": False, "error": "Invalid payload: expected JSON object"}
+
+            if not config_data.get("adapter_name"):
+                # Generate a simple default
+                config_data["adapter_name"] = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            if not config_data.get("training_method"):
+                return {"success": False, "error": "Missing training_method (gspo/grpo/dr_grpo/sft)"}
+            if not config_data.get("model_path"):
+                return {"success": False, "error": "Missing model_path"}
+            if not config_data.get("train_data_path"):
+                return {"success": False, "error": "Missing train_data_path"}
+
             # Convert to enhanced config
             enhanced_config = EnhancedTrainingConfig(**config_data)
             method_enum = TrainingMethod(enhanced_config.training_method)
@@ -425,7 +496,7 @@ class EnhancedTrainingManager:
             
             # Build training command (no config file needed for mlx-lm-lora)
             cmd = self.build_enhanced_training_command(enhanced_config)
-
+            
             # Create log file FIRST for debugging
             log_dir = self.base_manager.output_dir
             os.makedirs(log_dir, exist_ok=True)
@@ -489,11 +560,16 @@ class EnhancedTrainingManager:
 
             # Start training process with better error handling
             try:
-                # Force unbuffered output for real-time log streaming
+                # Force unbuffered output for real-time log streaming and ensure repo root is importable
                 env = os.environ.copy()
                 env['PYTHONUNBUFFERED'] = '1'
                 env['PYTHONFAULTHANDLER'] = '1'
 
+                # Ensure the project root is on PYTHONPATH so `-m debug.debug_trainer` can import
+                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                env['PYTHONPATH'] = repo_root + os.pathsep + env.get('PYTHONPATH', '')
+
+                # Run from the repo root so local modules are discoverable
                 self.base_manager.current_process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
@@ -501,8 +577,8 @@ class EnhancedTrainingManager:
                     text=True,
                     bufsize=1,  # Line buffered
                     universal_newlines=True,
-                    env=env,  # Pass environment with unbuffered flag
-                    cwd=os.path.dirname(enhanced_config.train_data_path) if enhanced_config.train_data_path else os.getcwd()
+                    env=env,
+                    cwd=repo_root,
                 )
 
                 with open(log_file, 'a') as f:
@@ -514,7 +590,6 @@ class EnhancedTrainingManager:
                 self.logger.error(error_msg)
                 with open(log_file, 'a') as f:
                     f.write(f"\nERROR starting process:\n{error_msg}\n")
-                    import traceback
                     f.write(f"\nTraceback:\n{traceback.format_exc()}\n")
                 self.base_manager.training_state = "error"
                 return {"success": False, "error": error_msg, "log_file": log_file}
@@ -753,7 +828,14 @@ def create_enhanced_endpoints(app, training_manager, enhanced_manager):
             
             return result
         except Exception as e:
+            tb = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
             logger.error(f"Enhanced training start failed: {str(e)}")
+            # Also append to GUI log if possible
+            try:
+                with open(training_manager.log_file, 'a') as f:
+                    f.write(f"\n[ENHANCED START ERROR] {e}\n{tb}\n")
+            except Exception:
+                pass
             return {"success": False, "error": str(e)}
     
     @app.post("/api/training/generate-sample-data")

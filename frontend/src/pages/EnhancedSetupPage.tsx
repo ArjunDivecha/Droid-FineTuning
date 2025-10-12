@@ -54,6 +54,7 @@ interface EnhancedTrainingConfig {
   epsilon_high?: number;
   reward_functions?: string;
   reward_weights?: string;
+  reward_functions_file?: string;
 }
 
 interface ResourceEstimation {
@@ -143,11 +144,12 @@ const EnhancedSetupPage: React.FC = () => {
     epsilon: 0.0001,
     temperature: 0.8,
     max_completion_length: 512,
-    importance_sampling_level: 'token',
+    importance_sampling_level: 'sequence',
     grpo_loss_type: 'grpo',
     epsilon_high: undefined,
-    reward_functions: '',
-    reward_weights: ''
+    reward_functions: 'lexical_f1_reward,length_window_reward,keyword_coverage_reward',
+    reward_weights: '[0.7,0.2,0.1]',
+    reward_functions_file: 'rewards/style_rewards.py'
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -950,6 +952,71 @@ const EnhancedSetupPage: React.FC = () => {
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Maximum tokens for generated completions (default: 512)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedMethod !== TrainingMethod.SFT && (
+          <div className="card">
+            <div className="card-header">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+                <Settings className="w-5 h-5 mr-2" />
+                Reward Configuration
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Configure custom reward functions used during RL fine-tuning
+              </p>
+            </div>
+            <div className="card-body">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Reward Functions (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.reward_functions || ''}
+                    onChange={(e) => handleInputChange('reward_functions', e.target.value)}
+                    className="input-field"
+                    placeholder="lexical_f1_reward,length_window_reward,keyword_coverage_reward"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Provide reward function names defined in your reward file.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Reward Weights (JSON array)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.reward_weights || ''}
+                    onChange={(e) => handleInputChange('reward_weights', e.target.value)}
+                    className="input-field"
+                    placeholder="[0.7,0.2,0.1]"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Must sum to 1.0. Use JSON list syntax.
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Reward Functions File
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.reward_functions_file || ''}
+                    onChange={(e) => handleInputChange('reward_functions_file', e.target.value)}
+                    className="input-field"
+                    placeholder="rewards/style_rewards.py"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Path (relative or absolute) to the Python module that defines your reward helpers.
                   </p>
                 </div>
               </div>
