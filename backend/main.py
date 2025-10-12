@@ -619,9 +619,9 @@ class TrainingManager:
             grpo_progress_pattern = re.compile(r'Training:\s+(\d+)%')
             grpo_iter_pattern = re.compile(r'(\d+)/(\d+)\s+\[')  # e.g., "1/2 ["
             # RL metric patterns (robust to different trainers)
-            # avg reward / mean reward
+            # avg reward / mean reward / total_r_mean (GRPO)
             reward_pattern = re.compile(
-                r'(?:avg(?:erage)?\s*reward|mean\s*reward|reward(?:\s*avg)?|avg_reward|reward_mean)[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
+                r'(?:total_r_mean|avg(?:erage)?\s*reward|mean\s*reward|reward(?:\s*avg)?|avg_reward|reward_mean)[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
                 re.IGNORECASE,
             )
             # success rate / pass@1 / accuracy / EM

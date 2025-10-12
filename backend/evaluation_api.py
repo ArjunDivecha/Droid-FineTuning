@@ -139,16 +139,35 @@ def run_evaluation_sync(adapter_name: str, training_data_path: Optional[str], nu
                     
                     # If it's a directory, look for JSONL files
                     if training_data_path and os.path.isdir(training_data_path):
-                        jsonl_files = glob.glob(os.path.join(training_data_path, "*.jsonl"))
+                        jsonl_files = sorted(glob.glob(os.path.join(training_data_path, "*.jsonl")))  # Sort for determinism
                         if jsonl_files:
                             training_data_path = jsonl_files[0]
-                            logger.info(f"Using train.jsonl from adapter config (original dataset unknown)")
+                            logger.info(f"Using {os.path.basename(training_data_path)} from adapter config (original dataset unknown)")
             except Exception as e:
                 logger.error(f"Failed to load training data path: {e}")
                 raise ValueError(f"Could not load training data path: {e}")
         
         if not training_data_path or not os.path.exists(training_data_path):
-            raise ValueError(f"Training data path not found: {training_data_path}")
+            # Try to fix common path issues (different user directories, etc.)
+            if training_data_path:
+                # Replace /Users/work2024 with current user path
+                fixed_path = training_data_path.replace('/Users/work2024', '/Users/macbook2024/Library/CloudStorage')
+                if os.path.exists(fixed_path):
+                    training_data_path = fixed_path
+                    logger.info(f"Fixed training data path to: {training_data_path}")
+                else:
+                    raise ValueError(f"Training data path not found: {training_data_path} (tried: {fixed_path})")
+            else:
+                raise ValueError(f"Training data path not found: {training_data_path}")
+        
+        # If it's a directory, look for train.jsonl inside it
+        if os.path.isdir(training_data_path):
+            jsonl_files = sorted(glob.glob(os.path.join(training_data_path, "*.jsonl")))
+            if jsonl_files:
+                training_data_path = jsonl_files[0]
+                logger.info(f"Using {os.path.basename(training_data_path)} from directory")
+            else:
+                raise ValueError(f"No .jsonl files found in directory: {training_data_path}")
         
         logger.info(f"Using training data: {training_data_path}")
         

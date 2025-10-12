@@ -257,19 +257,39 @@ async def validate_adapters(adapter_names: List[str]):
                 return {"compatible": False, "error": f"Failed to load {adapter_name}: {str(e)}"}
         
         # Validate compatibility
-        is_compatible = fusion.validate_adapter_compatibility(loaded_adapters)
+        is_compatible, layer_info = fusion.validate_adapter_compatibility(loaded_adapters)
         
         if is_compatible:
+            all_keys = layer_info.get('all_keys', set())
+            common_keys = layer_info.get('common_keys', set())
             return {
                 "compatible": True,
                 "num_adapters": len(adapter_names),
-                "num_parameters": len(loaded_adapters[0]),
-                "message": "All adapters are compatible for fusion"
+                "total_layers": len(all_keys),
+                "common_layers": len(common_keys),
+                "message": f"Adapters are compatible. {len(all_keys)} total layers, {len(common_keys)} common layers. Missing layers will use base model weights."
             }
         else:
+            # Try to get more specific error from logs
+            error_msg = "Adapters are not compatible. "
+            # Check if it's a rank mismatch by examining the adapters
+            try:
+                ranks = []
+                for adapter in loaded_adapters:
+                    for key in adapter.keys():
+                        if 'lora_b' in key:
+                            ranks.append(adapter[key].shape[0])
+                            break
+                if len(set(ranks)) > 1:
+                    error_msg += f"LoRA rank mismatch detected: {set(ranks)}. All adapters must have the same rank."
+                else:
+                    error_msg += "Incompatible dimensions or layer structure."
+            except:
+                error_msg += "Incompatible dimensions or keys."
+            
             return {
                 "compatible": False,
-                "error": "Adapters have incompatible dimensions or keys"
+                "error": error_msg
             }
             
     except Exception as e:
@@ -319,7 +339,8 @@ async def run_fusion_and_evaluation(request: FusionRequest):
         fusion_state["current_step"] = "Validating compatibility..."
         fusion_state["progress"] = 20
         
-        if not fusion.validate_adapter_compatibility(loaded_adapters):
+        is_compatible, layer_info = fusion.validate_adapter_compatibility(loaded_adapters)
+        if not is_compatible:
             raise Exception("Adapters are not compatible")
         
         # Step 3: Perform fusion (30% progress)
@@ -331,11 +352,12 @@ async def run_fusion_and_evaluation(request: FusionRequest):
             request.weights = [1.0 / len(loaded_adapters)] * len(loaded_adapters)
         
         # Perform fusion
+        all_keys = layer_info.get('all_keys')
         if request.method == "slerp" and len(loaded_adapters) == 2:
             t = request.weights[1]
             fused_weights = fusion.slerp_fusion(loaded_adapters[0], loaded_adapters[1], t)
         else:
-            fused_weights = fusion.weighted_average_fusion(loaded_adapters, request.weights)
+            fused_weights = fusion.weighted_average_fusion(loaded_adapters, request.weights, all_keys=all_keys)
         
         # Step 4: Save fused adapter (40% progress)
         fusion_state["current_step"] = "Saving fused adapter..."
@@ -450,19 +472,9 @@ async def run_evaluation(adapter_name: str, is_base: bool) -> Dict[str, Any]:
     
     except Exception as e:
         logger.error(f"Evaluation failed for {adapter_name}: {e}")
-        # Return mock data as fallback
-        import random
-        base_score = 65 if is_base else random.randint(70, 90)
-        
-        return {
-            "adapter_name": adapter_name,
-            "is_base_model": is_base,
-            "overall_score": base_score,
-            "faithfulness": base_score + random.randint(-5, 5),
-            "fact_recall": base_score + random.randint(-5, 5),
-            "consistency": base_score + random.randint(-5, 5),
-            "hallucination": random.randint(5, 15)
-        }
+        logger.error(f"Full error details:", exc_info=True)
+        # Re-raise the exception instead of returning mock data
+        raise Exception(f"Evaluation failed for {adapter_name}: {str(e)}")
 
 @router.get("/status")
 async def get_fusion_status():

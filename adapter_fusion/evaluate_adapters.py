@@ -107,6 +107,8 @@ class AdapterEvaluator:
                 if line.strip():
                     data.append(json.loads(line))
         
+        logger.info(f"===== LOADING TRAINING DATA =====")
+        logger.info(f"Path: {data_path}")
         logger.info(f"Loaded {len(data)} examples from training data")
         return data
     
@@ -194,9 +196,15 @@ class AdapterEvaluator:
         if len(qa_pairs) <= num_questions:
             return qa_pairs
         
-        # Random sample
+        # Use fixed seed for consistent question selection
+        random.seed(42)
         test_set = random.sample(qa_pairs, num_questions)
-        logger.info(f"Selected {num_questions} test questions")
+        
+        # Log first 3 questions for debugging
+        logger.info(f"Selected {num_questions} test questions (deterministic with seed=42)")
+        if len(test_set) >= 3:
+            logger.info(f"First 3 questions: {[q['question'][:50] for q in test_set[:3]]}")
+        
         return test_set
     
     def generate_response(self, adapter_path: Optional[str], model_path: str, prompt: str) -> str:
@@ -303,7 +311,8 @@ Provide your evaluation in JSON format:
                     {"role": "system", "content": "You are an expert evaluator. Always respond with valid JSON."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.3,
+                temperature=0.0,  # Fully deterministic for consistent evaluation
+                seed=42,  # Fixed seed for reproducibility
                 max_tokens=1024
             )
             
@@ -386,6 +395,10 @@ Provide your evaluation in JSON format:
         avg_hallucination = sum(r['evaluation']['hallucination'] for r in results) / len(results)
 
         overall_score = (avg_faithfulness + avg_fact_recall + avg_consistency + avg_hallucination) / 4
+        
+        # Debug logging
+        logger.info(f"SCORES - Faithfulness: {avg_faithfulness:.2f}, Fact Recall: {avg_fact_recall:.2f}, Consistency: {avg_consistency:.2f}, Hallucination: {avg_hallucination:.2f}")
+        logger.info(f"OVERALL SCORE: {overall_score:.2f} (from {len(results)} questions)")
         
         report = {
             'adapter_name': adapter_name,
