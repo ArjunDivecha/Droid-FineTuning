@@ -31,6 +31,7 @@ export interface EnhancedTrainingConfig {
   val_data_path?: string;
   learning_rate: number;
   batch_size: number;
+  grad_accumulation_steps?: number;
   max_seq_length: number;
   iterations: number;
   steps_per_report: number;

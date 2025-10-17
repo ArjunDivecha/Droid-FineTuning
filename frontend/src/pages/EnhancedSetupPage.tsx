@@ -37,6 +37,7 @@ interface EnhancedTrainingConfig {
   val_data_path?: string;
   learning_rate: number;
   batch_size: number;
+  grad_accumulation_steps?: number;
   max_seq_length: number;
   iterations: number;
   steps_per_report: number;
@@ -132,6 +133,7 @@ const EnhancedSetupPage: React.FC = () => {
     val_data_path: '',
     learning_rate: 1e-5,
     batch_size: 1,
+    grad_accumulation_steps: 1,
     max_seq_length: 2048,
     iterations: 100,
     steps_per_report: 10,
@@ -605,6 +607,19 @@ const EnhancedSetupPage: React.FC = () => {
                   type="number"
                   value={formData.batch_size || ''}
                   onChange={(e) => handleInputChange('batch_size', parseInt(e.target.value))}
+                  className="input-field"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Gradient Accumulation Steps
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={formData.grad_accumulation_steps ?? 1}
+                  onChange={(e) => handleInputChange('grad_accumulation_steps', parseInt(e.target.value) || 1)}
                   className="input-field"
                 />
               </div>

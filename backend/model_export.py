@@ -161,9 +161,9 @@ class ModelExporter:
         if progress_callback:
             progress_callback(10, "Starting merge process...")
         
-        # Build fuse command using mlx_lm.fuse
+        # Build fuse command using mlx_lm fuse subcommand (new style)
         cmd = [
-            "python3", "-m", "mlx_lm.fuse",
+            "python3", "-m", "mlx_lm", "fuse",
             "--model", base_model,
             "--adapter-path", adapter_path,
             "--save-path", output_dir,

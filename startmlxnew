@@ -13,9 +13,15 @@ lsof -ti:8000 | xargs kill -9 2>/dev/null
 pkill -f "Electron.*MLX Fine-Tuner" 2>/dev/null
 sleep 2
 
+# Build frontend and main process before starting Electron so UI reflects latest changes
+echo "🛠️  Building app (frontend + main)..."
+npm run build > "$SCRIPT_DIR/logs/build.log" 2>&1 || {
+  echo "❌ Build failed. See logs/build.log"
+  exit 1
+}
+
 # Start Electron app (which starts backend automatically)
 echo "🎨 Starting Electron app..."
-cd "$SCRIPT_DIR"
 npm start > "$SCRIPT_DIR/logs/electron.log" 2>&1 &
 APP_PID=$!
 echo "App PID: $APP_PID"

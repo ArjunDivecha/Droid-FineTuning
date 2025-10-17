@@ -182,6 +182,15 @@ npm run start              # Start built application
 npm run dist               # Package for distribution
 ```
 
+## 🧰 MLX CLI Notes
+
+Recent MLX versions prefer subcommands instead of module names:
+
+- LoRA training: `python3 -m mlx_lm lora ...`
+- Fuse adapter: `python3 -m mlx_lm fuse ...`
+
+Older styles like `python3 -m mlx_lm.lora` or `python3 -m mlx_lm.fuse` still work but print deprecation warnings.
+
 ## 🔌 Integration
 
 Works with your existing MLX setup:

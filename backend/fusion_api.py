@@ -337,11 +337,6 @@ async def run_fusion_and_evaluation(request: FusionRequest):
         if not is_compatible:
             raise Exception("Adapters are not compatible")
         
-        # Calculate all_keys for fusion
-        all_keys = set()
-        for adapter in loaded_adapters:
-            all_keys.update(adapter.keys())
-        
         # Step 3: Perform fusion (30% progress)
         fusion_state["current_step"] = f"Fusing adapters using {request.method}..."
         fusion_state["progress"] = 30
@@ -355,7 +350,7 @@ async def run_fusion_and_evaluation(request: FusionRequest):
             t = request.weights[1]
             fused_weights = fusion.slerp_fusion(loaded_adapters[0], loaded_adapters[1], t)
         else:
-            fused_weights = fusion.weighted_average_fusion(loaded_adapters, request.weights, all_keys=all_keys)
+            fused_weights = fusion.weighted_average_fusion(loaded_adapters, request.weights)
         
         # Step 4: Save fused adapter (40% progress)
         fusion_state["current_step"] = "Saving fused adapter..."

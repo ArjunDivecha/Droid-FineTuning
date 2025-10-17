@@ -223,7 +223,7 @@ MLX-LM-LORA BACKEND INTEGRATION TEST SUITE
 
 6. ✅ **Standard SFT** (unchanged):
    - Still works via Standard Setup tab
-   - Uses `mlx_lm.lora` as before
+   - Uses `mlx_lm lora` subcommand (new style)
    - No changes to existing functionality
 
 ---

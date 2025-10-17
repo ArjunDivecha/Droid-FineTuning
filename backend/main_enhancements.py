@@ -57,6 +57,8 @@ class EnhancedTrainingConfig:
     steps_per_report: int = 10
     steps_per_eval: int = 25
     save_every: int = 100
+    # New in mlx-lm v0.28.3: effective batch via accumulation
+    grad_accumulation_steps: int = 1
 
 class EnhancedTrainingManager:
     """Enhanced training manager that extends the existing TrainingManager functionality"""
@@ -112,10 +114,25 @@ class EnhancedTrainingManager:
         adapter_path = os.path.join(self.base_manager.output_dir, config.adapter_name)
         os.makedirs(adapter_path, exist_ok=True)
 
-        cmd = [
-            self.python_executable,
-            "-m", module_name,
-            "--model", config.model_path,
+        # Use subcommand style for mlx-lm modules to avoid deprecation warnings
+        if module_name.startswith("mlx_lm."):
+            subcmd = module_name.split(".")[-1]
+            cmd = [
+                self.python_executable,
+                "-m", "mlx_lm", subcmd,
+                "--model", config.model_path,
+            ]
+        else:
+            # Fallback for non-mlx_lm modules
+            subcmd = module_name
+            cmd = [
+                self.python_executable,
+                "-m", module_name,
+                "--model", config.model_path,
+            ]
+
+        # Common arguments
+        cmd += [
             "--train",
             "--data", config.train_data_path,
             "--adapter-path", adapter_path,
@@ -127,14 +144,21 @@ class EnhancedTrainingManager:
             "--steps-per-eval", str(config.steps_per_eval),
             "--save-every", str(config.save_every),
             "--max-seq-length", str(config.max_seq_length),
-            "--beta", str(config.beta),
         ]
+
+        # Pass gradient accumulation only for lora subcommand
+        if subcmd == "lora" and int(getattr(config, "grad_accumulation_steps", 1) or 1) > 0:
+            cmd += ["--grad-accumulation-steps", str(int(config.grad_accumulation_steps))]
+
+        # DPO/ORPO-only parameters
+        if subcmd in ("dpo", "orpo"):
+            cmd += ["--beta", str(config.beta)]
 
         if config.val_data_path:
             cmd.extend(["--val", config.val_data_path])
 
         # ORPO has an extra 'alpha' parameter
-        if method == TrainingMethod.ORPO and config.alpha is not None:
+        if method == TrainingMethod.ORPO and config.alpha is not None and subcmd == "orpo":
             cmd.extend(["--alpha", str(config.alpha)])
 
         # Add quantization parameters if enabled

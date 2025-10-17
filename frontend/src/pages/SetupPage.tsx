@@ -22,6 +22,7 @@ export const SetupPage: React.FC = () => {
     val_data_path: '',
     learning_rate: 1e-4,  // Updated: 10x increase for LoRA
     batch_size: 1,
+    grad_accumulation_steps: 1,
     max_seq_length: 32768,
     iterations: 7329,
     steps_per_report: 25,
@@ -171,6 +172,7 @@ export const SetupPage: React.FC = () => {
       val_data_path: formData.val_data_path || '',
       learning_rate: formData.learning_rate!,
       batch_size: formData.batch_size!,
+      grad_accumulation_steps: formData.grad_accumulation_steps || 1,
       max_seq_length: formData.max_seq_length!,
       iterations: formData.iterations!,
       steps_per_report: formData.steps_per_report!,
@@ -365,6 +367,23 @@ export const SetupPage: React.FC = () => {
                   <option value={4}>4</option>
                   <option value={8}>8</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Gradient Accumulation Steps</label>
+                <select
+                  className="select-field"
+                  value={formData.grad_accumulation_steps}
+                  onChange={(e) => setFormData(prev => ({ ...prev, grad_accumulation_steps: parseInt(e.target.value) }))}
+                >
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={4}>4</option>
+                  <option value={8}>8</option>
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Increases effective batch size without extra VRAM.
+                </p>
               </div>
 
               <div>

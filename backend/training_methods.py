@@ -13,8 +13,14 @@ logger = logging.getLogger(__name__)
 
 class TrainingMethod(str, Enum):
     """Available training methods"""
-    DPO = "dpo"  # Direct Preference Optimization
+    # Alignment methods
+    DPO = "dpo"   # Direct Preference Optimization
     ORPO = "orpo"  # Odds Ratio Preference Optimization
+    # Supervised/Reasoning methods supported by the app UI
+    SFT = "sft"
+    GSPO = "gspo"
+    DR_GRPO = "dr_grpo"
+    GRPO = "grpo"
 
 @dataclass
 class TrainingMethodConfig:
@@ -69,6 +75,60 @@ TRAINING_METHODS = {
         module_name="mlx_lm.orpo",
         additional_params=["beta", "alpha"]
     )
+    ,
+    # Minimal configs to unblock validation/estimation for existing UI flows
+    TrainingMethod.SFT: TrainingMethodConfig(
+        name="sft",
+        display_name="Supervised Fine-Tuning (SFT)",
+        description="Standard instruction-following fine-tuning.",
+        complexity="⭐⭐",
+        use_case="General instruction following.",
+        data_format="instruction",
+        requires_preferences=False,
+        supports_batch=True,
+        resource_intensity="medium",
+        module_name="mlx_lm.lora",
+        additional_params=[]
+    ),
+    TrainingMethod.GSPO: TrainingMethodConfig(
+        name="gspo",
+        display_name="GSPO (Guided Stepwise Preference Optimization)",
+        description="Reasoning-oriented supervised data with stepwise signals.",
+        complexity="⭐⭐⭐",
+        use_case="Reasoning with step traces.",
+        data_format="reasoning_supervised",
+        requires_preferences=False,
+        supports_batch=True,
+        resource_intensity="high",
+        module_name="mlx_lm.lora",
+        additional_params=[]
+    ),
+    TrainingMethod.DR_GRPO: TrainingMethodConfig(
+        name="dr_grpo",
+        display_name="Dr. GRPO",
+        description="Domain‑regularized GRPO style training.",
+        complexity="⭐⭐⭐⭐",
+        use_case="Preference/reward‑guided optimization with domain regularization.",
+        data_format="reasoning_supervised",
+        requires_preferences=False,
+        supports_batch=True,
+        resource_intensity="high",
+        module_name="mlx_lm.lora",
+        additional_params=[]
+    ),
+    TrainingMethod.GRPO: TrainingMethodConfig(
+        name="grpo",
+        display_name="GRPO",
+        description="Generalized preference optimization variant.",
+        complexity="⭐⭐⭐",
+        use_case="Reasoning and preference signals.",
+        data_format="reasoning_supervised",
+        requires_preferences=False,
+        supports_batch=True,
+        resource_intensity="high",
+        module_name="mlx_lm.lora",
+        additional_params=[]
+    ),
 }
 
 class TrainingDataValidator:
@@ -85,59 +145,92 @@ class TrainingDataValidator:
             if not os.path.exists(data_path):
                 return {"valid": False, "error": f"Data file not found: {data_path}"}
             
-            # Read all lines to check format and count samples
+            # Support both JSONL (one JSON per line) and JSON/JSON-array files
             valid_samples = 0
             total_lines = 0
             errors = []
-            
             detected_format = None
 
+            def validate_sample(sample: Dict, index_info: str):
+                nonlocal valid_samples, detected_format
+                if config.requires_preferences:
+                    validation = TrainingDataValidator._validate_preference_data(sample, method)
+                else:
+                    validation = TrainingDataValidator._validate_instruction_data(sample, method)
+                if validation.get("valid"):
+                    valid_samples += 1
+                    if not detected_format and validation.get("format"):
+                        detected_format = validation["format"]
+                else:
+                    errors.append(f"{index_info}: {validation.get('error')}")
+
             with open(data_path, 'r', encoding='utf-8') as f:
-                for line_num, line in enumerate(f, 1):
+                content = f.read().strip()
+
+            if not content:
+                return {"valid": False, "error": "Empty data file"}
+
+            # If file starts with '[' or '{', try full JSON parsing (array or object)
+            if content[0] in ['[', '{']:
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, list):
+                        total_lines = len(parsed)
+                        for idx, item in enumerate(parsed, 1):
+                            if isinstance(item, dict):
+                                validate_sample(item, f"Item {idx}")
+                            else:
+                                errors.append(f"Item {idx}: Expected object, got {type(item).__name__}")
+                    elif isinstance(parsed, dict):
+                        # Look for common array containers: data/samples/examples
+                        container = None
+                        for key in ["data", "samples", "examples"]:
+                            if isinstance(parsed.get(key), list):
+                                container = parsed[key]
+                                break
+                        if container is None:
+                            return {"valid": False, "error": "JSON object must contain an array under one of: data, samples, examples"}
+                        total_lines = len(container)
+                        for idx, item in enumerate(container, 1):
+                            if isinstance(item, dict):
+                                validate_sample(item, f"Item {idx}")
+                            else:
+                                errors.append(f"Item {idx}: Expected object, got {type(item).__name__}")
+                    else:
+                        return {"valid": False, "error": "Unsupported JSON root type; expected array or object"}
+                except json.JSONDecodeError as e:
+                    return {"valid": False, "error": f"Invalid JSON: {str(e)}"}
+            else:
+                # JSONL: process line by line
+                for line_num, line in enumerate(content.splitlines(), 1):
                     line = line.strip()
                     if not line:
                         continue
-                    
                     total_lines += 1
-                    
                     try:
                         data_sample = json.loads(line)
-                        
-                        # Validate this sample
-                        if config.requires_preferences:
-                            validation = TrainingDataValidator._validate_preference_data(data_sample, method)
+                        if isinstance(data_sample, dict):
+                            validate_sample(data_sample, f"Line {line_num}")
                         else:
-                            # Fallback for any non-preference formats if added in the future
-                            validation = TrainingDataValidator._validate_instruction_data(data_sample, method)
-                        
-                        if validation.get("valid"):
-                            valid_samples += 1
-                            if not detected_format and validation.get("format"):
-                                detected_format = validation["format"]
-                        else:
-                            errors.append(f"Line {line_num}: {validation.get('error')}")
-                            
+                            errors.append(f"Line {line_num}: Expected object, got {type(data_sample).__name__}")
                     except json.JSONDecodeError as e:
                         errors.append(f"Line {line_num}: Invalid JSON - {str(e)}")
-            
+
             if total_lines == 0:
-                return {"valid": False, "error": "Empty data file"}
-            
+                return {"valid": False, "error": "No samples found"}
+
             if valid_samples == 0:
-                error_summary = ". ".join(errors[:3])  # Show first 3 errors
+                error_summary = ". ".join(errors[:3]) if errors else "No valid samples detected"
                 return {"valid": False, "error": f"No valid samples found. {error_summary}"}
-            
-            # Return success with sample count
+
             result = {
                 "valid": True,
                 "num_samples": valid_samples,
                 "total_lines": total_lines,
                 "format": detected_format or ("preference" if config.requires_preferences else "instruction_following")
             }
-            
             if errors:
                 result["warnings"] = f"{len(errors)} samples had errors"
-            
             return result
                 
         except Exception as e:
@@ -175,18 +268,27 @@ class TrainingDataValidator:
                 }
             return {"valid": True, "format": "chat_messages"}
         else:
-            # Instruction format
+            # Broaden acceptance: support common schemas used in this repo
+            # 1) instruction/response
+            if "instruction" in data_sample and "response" in data_sample:
+                return {"valid": True, "format": "instruction_response"}
+            # 2) prompt/response or prompt/output variants
+            if "prompt" in data_sample and ("response" in data_sample or "output" in data_sample):
+                return {"valid": True, "format": "prompt_response"}
+            # 3) reasoning datasets like GSPO/GRPO: problem + solution (optionally reasoning_steps)
+            if "problem" in data_sample and "solution" in data_sample:
+                return {"valid": True, "format": "reasoning_supervised"}
+
+            # If none matched, report the most standard requirement
             required_fields = ["instruction", "response"]
             missing_fields = [field for field in required_fields if field not in data_sample]
-            
-            if missing_fields:
-                return {
-                    "valid": False,
-                    "error": f"Missing required fields: {missing_fields}",
-                    "required_format": required_fields,
-                    "note": "Supports both instruction/response format or messages format"
-                }
-        
+            return {
+                "valid": False,
+                "error": f"Missing required fields: {missing_fields}",
+                "required_format": required_fields,
+                "note": "Also supports messages[], prompt/response, or problem/solution for reasoning data"
+            }
+
         return {"valid": True, "format": "instruction_response"}
     
     @staticmethod
@@ -198,7 +300,7 @@ class TrainingDataValidator:
                 "chosen": "MLX offers several key advantages: 1) Unified Memory, which avoids data copies between CPU and GPU, 2) Lazy Computation, which only materializes arrays when needed, optimizing performance, and 3) a familiar NumPy-like API, making it easy to adopt.",
                 "rejected": "MLX is just another framework, it doesn't do much."
             }
-        else: # Fallback for future methods
+        else: # Supervised/reasoning fallback
             return {
                 "instruction": "Your instruction here",
                 "response": "Expected response here"
@@ -220,9 +322,11 @@ class ResourceEstimator:
         # Method-specific multipliers
         method_multipliers = {
             TrainingMethod.SFT: {"memory": 1.0, "time": 1.0},
-            TrainingMethod.GSPO: {"memory": 1.2, "time": 0.5},  # More memory, much faster
-            TrainingMethod.DR_GRPO: {"memory": 1.5, "time": 1.3},  # More memory and time
-            TrainingMethod.GRPO: {"memory": 1.3, "time": 1.0}
+            TrainingMethod.GSPO: {"memory": 1.2, "time": 0.5},
+            TrainingMethod.DR_GRPO: {"memory": 1.5, "time": 1.3},
+            TrainingMethod.GRPO: {"memory": 1.3, "time": 1.0},
+            TrainingMethod.DPO: {"memory": 1.6, "time": 1.4},
+            TrainingMethod.ORPO: {"memory": 1.6, "time": 1.4},
         }
         
         multiplier = method_multipliers.get(method, {"memory": 1.0, "time": 1.0})

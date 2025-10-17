@@ -62,6 +62,8 @@ class TrainingConfig:
     lora_alpha: float = 32.0
     lora_dropout: float = 0.0
     lora_num_layers: int = -1  # -1 means all layers
+    # Training efficiency
+    grad_accumulation_steps: int = 1
 
 class TrainingManager:
     """Manages training processes and state"""
@@ -470,6 +472,7 @@ class TrainingManager:
             "scale": lora_alpha,
             "dropout": lora_dropout,
             "keys": lora_keys,
+            "num_layers": lora_num_layers
         }
         
         # Log the complete LoRA configuration
@@ -509,6 +512,8 @@ class TrainingManager:
             "train_log": self.log_file,
             "enable_early_stop": config.early_stop,
             "no_improve_patience_evals": config.patience,
+            # Batch accumulation for effective larger batch size
+            "grad_accumulation_steps": int(getattr(config, "grad_accumulation_steps", 1) or 1),
             # Full-layer LoRA configuration
             "fine_tune_type": getattr(config, "fine_tune_type", "lora") or "lora",
             "num_layers": lora_num_layers,
@@ -526,9 +531,11 @@ class TrainingManager:
         
         # Start training process
         try:
+            # Use local wrapper to avoid editing external scripts and to support grad accumulation
+            wrapper_path = os.path.join(os.path.dirname(__file__), "run_finetune_wrapper.py")
             cmd = [
                 "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python",
-                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/run_finetune.py",
+                wrapper_path,
                 "--config", config_path
             ]
             
@@ -907,6 +914,7 @@ async def start_training(config_data: Dict[str, Any], background_tasks: Backgrou
             early_stop=config_data.get("early_stop", True),
             patience=config_data.get("patience", 3),
             adapter_name=config_data.get("adapter_name", "mlx_finetune"),
+            grad_accumulation_steps=int(config_data.get("grad_accumulation_steps", 1) or 1),
             # Full-layer LoRA parameters
             fine_tune_type=config_data.get("fine_tune_type", "lora") or "lora",
             lora_rank=int(config_data.get("lora_rank", 32) or 32),
