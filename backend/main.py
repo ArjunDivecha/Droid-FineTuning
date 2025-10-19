@@ -624,6 +624,18 @@ class TrainingManager:
                 r'(?:avg(?:erage)?\s*reward|mean\s*reward|reward(?:\s*avg)?|avg_reward|reward_mean)[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
                 re.IGNORECASE,
             )
+            total_r_pattern = re.compile(
+                r'\btotal[_\s]?r[_\s]?mean[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
+                re.IGNORECASE,
+            )
+            grouped_r_pattern = re.compile(
+                r'\bgroup(?:ed)?[_\s]?r[_\s]?mean[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
+                re.IGNORECASE,
+            )
+            reward_json_pattern = re.compile(
+                r'"(train_(?:total|grouped)_rewards_mean)"\s*:\s*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
+                re.IGNORECASE,
+            )
             # success rate / pass@1 / accuracy / EM
             success_rate_pattern = re.compile(
                 r'(?:success\s*rate|pass@1|accuracy|exact\s*match|\bEM\b)[^\d\-+]*([\-+]?\d+(?:\.\d+)?)%?',
@@ -647,6 +659,9 @@ class TrainingManager:
                         grpo_progress_match = grpo_progress_pattern.search(output)
                         grpo_iter_match = grpo_iter_pattern.search(output)
                         reward_match = reward_pattern.search(output)
+                        total_r_match = total_r_pattern.search(output)
+                        grouped_r_match = grouped_r_pattern.search(output)
+                        reward_json_matches = list(reward_json_pattern.finditer(output))
                         success_match = success_rate_pattern.search(output)
                         kl_match = kl_pattern.search(output)
                         entropy_match = entropy_pattern.search(output)
@@ -686,9 +701,33 @@ class TrainingManager:
                             self.training_metrics["learning_rate"] = learning_rate
 
                         # RL metrics (optional)
+                        reward_value = None
                         if reward_match:
                             try:
-                                self.training_metrics["avg_reward"] = float(reward_match.group(1))
+                                reward_value = float(reward_match.group(1))
+                            except Exception:
+                                pass
+                        if total_r_match:
+                            try:
+                                reward_value = float(total_r_match.group(1))
+                            except Exception:
+                                pass
+                        if reward_json_matches:
+                            for match in reward_json_matches:
+                                key = match.group(1).lower()
+                                try:
+                                    parsed_value = float(match.group(2))
+                                except Exception:
+                                    continue
+                                if "total" in key:
+                                    reward_value = parsed_value
+                                elif "grouped" in key:
+                                    self.training_metrics["group_reward"] = parsed_value
+                        if reward_value is not None:
+                            self.training_metrics["avg_reward"] = reward_value
+                        if grouped_r_match:
+                            try:
+                                self.training_metrics["group_reward"] = float(grouped_r_match.group(1))
                             except Exception:
                                 pass
                         if success_match:
