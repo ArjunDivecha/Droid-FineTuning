@@ -108,32 +108,46 @@ class AdapterFusion:
         return weights
     
     def validate_adapter_compatibility(self, adapters: List[Dict[str, np.ndarray]]) -> bool:
-        """Validate that adapters have compatible dimensions."""
+        """Validate that adapters have compatible dimensions.
+
+        Allows adapters with different sparsity patterns (e.g., partial layer LoRA)
+        as long as overlapping tensors share the same shapes.
+        """
         if len(adapters) < 2:
             return True
-        
-        reference = adapters[0]
-        reference_keys = set(reference.keys())
-        
-        for i, adapter in enumerate(adapters[1:], 1):
-            adapter_keys = set(adapter.keys())
-            
-            # Check if keys match
-            if reference_keys != adapter_keys:
-                missing_in_ref = adapter_keys - reference_keys
-                missing_in_adapter = reference_keys - adapter_keys
-                
-                if missing_in_ref:
-                    logger.error(f"Adapter {i} has extra keys: {missing_in_ref}")
-                if missing_in_adapter:
-                    logger.error(f"Adapter {i} missing keys: {missing_in_adapter}")
-                return False
-            
-            # Check dimensions
-            for key in reference_keys:
-                if reference[key].shape != adapter[key].shape:
-                    logger.error(f"Shape mismatch for key '{key}': {reference[key].shape} vs {adapter[key].shape}")
+
+        shape_map: Dict[str, Tuple[Tuple[int, ...], str]] = {}
+
+        for idx, adapter in enumerate(adapters):
+            for key, value in adapter.items():
+                current_shape = tuple(value.shape)
+                dtype_name = str(value.dtype)
+
+                if key not in shape_map:
+                    shape_map[key] = (current_shape, dtype_name)
+                    continue
+
+                reference_shape, reference_dtype = shape_map[key]
+                if reference_shape != current_shape:
+                    logger.error(
+                        "Shape mismatch for key '%s' between adapters. "
+                        "Expected %s but adapter %d has %s",
+                        key,
+                        reference_shape,
+                        idx,
+                        current_shape,
+                    )
                     return False
+
+                if reference_dtype != dtype_name:
+                    logger.warning(
+                        "Dtype mismatch for key '%s' (expected %s, adapter %d has %s). "
+                        "Casting to reference dtype during fusion.",
+                        key,
+                        reference_dtype,
+                        idx,
+                        dtype_name,
+                    )
         
         logger.info("All adapters are compatible for fusion")
         return True
@@ -152,16 +166,43 @@ class AdapterFusion:
         logger.info(f"Fusing {len(adapters)} adapters with weights: {weights}")
         
         # Initialize result with zeros
-        fused = {}
-        reference = adapters[0]
-        
-        for key in reference.keys():
-            fused[key] = np.zeros_like(reference[key])
-        
-        # Weighted sum
+        # Collect union of keys across adapters and remember canonical shapes/dtypes
+        key_specs: Dict[str, Tuple[Tuple[int, ...], np.dtype]] = {}
+        for adapter in adapters:
+            for key, tensor in adapter.items():
+                shape = tensor.shape
+                dtype = tensor.dtype
+                if key in key_specs:
+                    ref_shape, ref_dtype = key_specs[key]
+                    if ref_shape != shape:
+                        raise ValueError(
+                            f"Incompatible shapes for key '{key}': {ref_shape} vs {shape}"
+                        )
+                    if ref_dtype != dtype:
+                        logger.warning(
+                            "Casting key '%s' from %s to %s to keep dtype consistent",
+                            key,
+                            dtype,
+                            ref_dtype,
+                        )
+                        # Cast to reference dtype so downstream math stays stable
+                        adapter[key] = adapter[key].astype(ref_dtype, copy=False)
+                else:
+                    key_specs[key] = (shape, dtype)
+
+        fused: Dict[str, np.ndarray] = {}
+        for key, (shape, dtype) in key_specs.items():
+            fused[key] = np.zeros(shape, dtype=dtype)
+
+        # Weighted sum, treating missing tensors as zeros
         for adapter, weight in zip(adapters, weights):
-            for key in adapter.keys():
-                fused[key] += weight * adapter[key]
+            for key, (shape, dtype) in key_specs.items():
+                if key not in adapter:
+                    continue
+                tensor = adapter[key]
+                if tensor.dtype != dtype:
+                    tensor = tensor.astype(dtype, copy=False)
+                fused[key] += weight * tensor
         
         return fused
     
@@ -173,10 +214,30 @@ class AdapterFusion:
         
         logger.info(f"SLERP fusion with interpolation factor t={t}")
         
-        fused = {}
-        for key in adapter1.keys():
-            w1 = torch.from_numpy(adapter1[key]).float()
-            w2 = torch.from_numpy(adapter2[key]).float()
+        fused: Dict[str, np.ndarray] = {}
+        all_keys = set(adapter1.keys()) | set(adapter2.keys())
+
+        for key in all_keys:
+            if key in adapter1:
+                w1_np = adapter1[key]
+            elif key in adapter2:
+                w1_np = np.zeros_like(adapter2[key])
+            else:
+                # Should not happen because key is in union
+                continue
+
+            if key in adapter2:
+                w2_np = adapter2[key]
+            else:
+                w2_np = np.zeros_like(w1_np)
+
+            # Ensure dtypes align before converting to torch
+            target_dtype = w1_np.dtype
+            if w2_np.dtype != target_dtype:
+                w2_np = w2_np.astype(target_dtype, copy=False)
+
+            w1 = torch.from_numpy(w1_np).float()
+            w2 = torch.from_numpy(w2_np).float()
             
             # Flatten for SLERP computation
             w1_flat = w1.flatten()
@@ -202,7 +263,7 @@ class AdapterFusion:
                     b = torch.sin(t * theta) / sin_theta
                     result = a * w1 + b * w2
             
-            fused[key] = result.numpy()
+            fused[key] = result.numpy().astype(w1_np.dtype, copy=False)
         
         return fused
     
