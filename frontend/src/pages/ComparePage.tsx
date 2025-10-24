@@ -39,6 +39,38 @@ interface Evaluation {
   detailed_results?: any;
 }
 
+interface ComparisonEvaluation {
+  id: string;
+  adapter_name: string;
+  base_model_scores: {
+    overall: number;
+    faithfulness: number;
+    fact_recall: number;
+    consistency: number;
+    hallucination: number;
+  };
+  adapter_scores: {
+    overall: number;
+    faithfulness: number;
+    fact_recall: number;
+    consistency: number;
+    hallucination: number;
+  };
+  detailed_comparisons: Array<{
+    question: string;
+    expected_answer: string;
+    base_response: string;
+    adapter_response: string;
+    base_scores: any;
+    adapter_scores: any;
+  }>;
+  timestamp: Date;
+  report_files?: {
+    json: string;
+    text: string;
+  };
+}
+
 export const ComparePage: React.FC = () => {
   const { config } = useSelector((state: RootState) => state.training);
   const [prompt, setPrompt] = useState('');
@@ -51,6 +83,8 @@ export const ComparePage: React.FC = () => {
   
   // Evaluation state
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [comparisonEvaluations, setComparisonEvaluations] = useState<ComparisonEvaluation[]>([]);
+  const [selectedEvaluation, setSelectedEvaluation] = useState<string | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationProgress, setEvaluationProgress] = useState(0);
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
@@ -333,77 +367,68 @@ export const ComparePage: React.FC = () => {
     }
     
     // Clear previous evaluation results
-    setEvaluations([]);
+    setComparisonEvaluations([]);
+    setSelectedEvaluation(null);
     setIsEvaluating(true);
     setEvaluationProgress(0);
     setEvaluationError(null);
     
     try {
       const adapterName = loadedSession.adapter_name || 'mlx_finetune';
-      const newEvaluations: Evaluation[] = [];
       
-      // Evaluate BOTH base model and adapter
-      for (const isBase of [true, false]) {
-        const response = await axios.post('http://localhost:8000/api/evaluation/start', {
-          adapter_name: adapterName,
-          training_data_path: null,
-          num_questions: 20,
-          evaluate_base_model: isBase
-        });
-        
-        if (!response.data.success) {
-          throw new Error(`Failed to start ${isBase ? 'base model' : 'adapter'} evaluation`);
-        }
-        
-        // Poll for this evaluation to complete
-        let hasAddedResult = false;
-        await new Promise<void>((resolve, reject) => {
-          const pollInterval = setInterval(async () => {
-            try {
-              const statusResponse = await axios.get('http://localhost:8000/api/evaluation/status');
-              const status = statusResponse.data;
-              
-              // Update progress (0-50% for base, 50-100% for adapter)
-              const progressOffset = isBase ? 0 : 50;
-              setEvaluationProgress(progressOffset + (status.progress / 2));
-              
-              if (!status.running && !hasAddedResult) {
-                clearInterval(pollInterval);
-                hasAddedResult = true;
-                
-                if (status.error) {
-                  reject(new Error(status.error));
-                } else {
-                  const resultResponse = await axios.get('http://localhost:8000/api/evaluation/result');
-                  const result = resultResponse.data.result;
-                  
-                  newEvaluations.push({
-                    id: `${Date.now()}-${isBase ? 'base' : 'adapter'}`,
-                    adapter_name: result.adapter_name,
-                    is_base_model: result.is_base_model || false,
-                    overall_score: result.scores.overall,
-                    faithfulness: result.scores.faithfulness,
-                    fact_recall: result.scores.fact_recall,
-                    consistency: result.scores.consistency,
-                    hallucination: result.scores.hallucination,
-                    num_questions: result.num_questions,
-                    timestamp: new Date(),
-                    detailed_results: result.detailed_results
-                  });
-                  
-                  resolve();
-                }
-              }
-            } catch (error) {
-              clearInterval(pollInterval);
-              reject(error);
-            }
-          }, 2000);
-        });
+      // Use new comparison endpoint
+      const response = await axios.post('http://localhost:8000/api/evaluation/compare', {
+        adapter_name: adapterName,
+        training_data_path: null,
+        num_questions: 20
+      });
+      
+      if (!response.data.success) {
+        throw new Error('Failed to start comparison evaluation');
       }
       
-      // Add both evaluations at once
-      setEvaluations(prev => [...newEvaluations, ...prev]);
+      // Poll for completion
+      await new Promise<void>((resolve, reject) => {
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusResponse = await axios.get('http://localhost:8000/api/evaluation/status');
+            const status = statusResponse.data;
+            
+            // Update progress
+            setEvaluationProgress(status.progress);
+            
+            if (!status.running) {
+              clearInterval(pollInterval);
+              
+              if (status.error) {
+                reject(new Error(status.error));
+              } else {
+                const resultResponse = await axios.get('http://localhost:8000/api/evaluation/result');
+                const result = resultResponse.data.result;
+                
+                // Add comparison evaluation
+                const compEval: ComparisonEvaluation = {
+                  id: `${Date.now()}`,
+                  adapter_name: result.adapter_name,
+                  base_model_scores: result.base_model_scores,
+                  adapter_scores: result.adapter_scores,
+                  detailed_comparisons: result.detailed_comparisons || [],
+                  timestamp: new Date(),
+                  report_files: result.report_files
+                };
+                
+                setComparisonEvaluations(prev => [compEval, ...prev]);
+                setSelectedEvaluation(compEval.id);
+                resolve();
+              }
+            }
+          } catch (error) {
+            clearInterval(pollInterval);
+            reject(error);
+          }
+        }, 2000);
+      });
+      
       setIsEvaluating(false);
       setEvaluationProgress(100);
       
@@ -560,12 +585,14 @@ export const ComparePage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Comparison History */}
         <div className="lg:col-span-1">
-          <div className="card h-fit max-h-96 overflow-hidden">
+          <div className="card h-fit overflow-hidden">
             <div className="card-header">
-              <h3 className="text-lg font-semibold">Comparison History</h3>
+              <h3 className="text-lg font-semibold">
+                {comparisonEvaluations.length > 0 ? 'Evaluation Results' : 'Comparison History'}
+              </h3>
             </div>
-            <div className="overflow-y-auto max-h-80">
-              {evaluations.length === 0 && comparisons.length === 0 ? (
+            <div className="overflow-y-auto" style={{maxHeight: '600px'}}>
+              {evaluations.length === 0 && comparisons.length === 0 && comparisonEvaluations.length === 0 ? (
                 <div className="p-6 text-center text-gray-500 dark:text-gray-400">
                   <ArrowRight className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No comparisons yet</p>
@@ -573,6 +600,81 @@ export const ComparePage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* Comparison Evaluations Section */}
+                  {comparisonEvaluations.length > 0 && (
+                    <div>
+                      <div className="p-3 space-y-3">
+                        {comparisonEvaluations.map((compEval) => {
+                          const improvement = compEval.adapter_scores.overall - compEval.base_model_scores.overall;
+                          const isSelected = selectedEvaluation === compEval.id;
+                          
+                          return (
+                            <div 
+                              key={compEval.id} 
+                              onClick={() => setSelectedEvaluation(compEval.id)}
+                              className={`card cursor-pointer transition-all ${isSelected ? 'ring-2 ring-primary-500' : 'hover:shadow-md'}`}
+                            >
+                              <div className="card-header flex items-center justify-between">
+                                <div>
+                                  <h5 className="font-semibold text-gray-900 dark:text-gray-100">
+                                    {compEval.adapter_name}
+                                  </h5>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {compEval.detailed_comparisons.length} questions • {compEval.timestamp.toLocaleDateString()}
+                                  </p>
+                                </div>
+                                <div className={`text-right ${improvement > 0 ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
+                                  <div className="text-2xl font-bold">
+                                    {improvement > 0 ? '+' : ''}{improvement.toFixed(1)}
+                                  </div>
+                                  <div className="text-xs">Improvement</div>
+                                </div>
+                              </div>
+                              <div className="card-body p-0">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-gray-50 dark:bg-gray-800">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Metric</th>
+                                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Base</th>
+                                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Adapter</th>
+                                      <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Δ</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {[
+                                      { label: 'Overall', base: compEval.base_model_scores.overall, adapter: compEval.adapter_scores.overall },
+                                      { label: 'Faithfulness', base: compEval.base_model_scores.faithfulness, adapter: compEval.adapter_scores.faithfulness },
+                                      { label: 'Fact Recall', base: compEval.base_model_scores.fact_recall, adapter: compEval.adapter_scores.fact_recall },
+                                      { label: 'Consistency', base: compEval.base_model_scores.consistency, adapter: compEval.adapter_scores.consistency },
+                                    ].map((row, i) => {
+                                      const delta = row.adapter - row.base;
+                                      return (
+                                        <tr key={i} className={i === 0 ? 'bg-primary-50 dark:bg-primary-900/10' : ''}>
+                                          <td className={`px-4 py-2 ${i === 0 ? 'font-semibold' : ''} text-gray-900 dark:text-gray-100`}>
+                                            {row.label}
+                                          </td>
+                                          <td className="px-4 py-2 text-center text-gray-600 dark:text-gray-400">
+                                            {row.base.toFixed(1)}
+                                          </td>
+                                          <td className="px-4 py-2 text-center font-medium text-gray-900 dark:text-gray-100">
+                                            {row.adapter.toFixed(1)}
+                                          </td>
+                                          <td className={`px-4 py-2 text-center font-semibold ${delta > 0 ? 'text-success-600 dark:text-success-400' : delta < 0 ? 'text-error-600 dark:text-error-400' : 'text-gray-500'}`}>
+                                            {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Evaluations Section */}
                   {evaluations.length > 0 && (() => {
                     // Group evaluations by adapter name, find pairs within 5 minutes
@@ -722,7 +824,101 @@ export const ComparePage: React.FC = () => {
 
         {/* Comparison View */}
         <div className="lg:col-span-2">
-          {selectedComp ? (
+          {selectedEvaluation && comparisonEvaluations.find(e => e.id === selectedEvaluation) ? (
+            (() => {
+              const compEval = comparisonEvaluations.find(e => e.id === selectedEvaluation)!;
+              return (
+                <div className="space-y-6">
+                  {/* Header with file paths */}
+                  <div className="card">
+                    <div className="card-header">
+                      <h3 className="text-lg font-semibold">Evaluation: {compEval.adapter_name}</h3>
+                    </div>
+                    <div className="card-body">
+                      <div className="text-sm space-y-2">
+                        <p><span className="font-semibold">Questions:</span> {compEval.detailed_comparisons.length}</p>
+                        <p><span className="font-semibold">Date:</span> {compEval.timestamp.toLocaleString()}</p>
+                        {compEval.report_files && (
+                          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded">
+                            <p className="font-semibold mb-2">Report Files:</p>
+                            <p className="text-xs font-mono break-all text-gray-600 dark:text-gray-400">
+                              📄 {compEval.report_files.json}
+                            </p>
+                            <p className="text-xs font-mono break-all text-gray-600 dark:text-gray-400 mt-1">
+                              📄 {compEval.report_files.text}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Question-by-Question Comparison */}
+                  {compEval.detailed_comparisons.map((comp, idx) => (
+                    <div key={idx} className="card">
+                      <div className="card-header">
+                        <h4 className="font-semibold">Question {idx + 1} of {compEval.detailed_comparisons.length}</h4>
+                      </div>
+                      <div className="card-body space-y-4">
+                        {/* Question */}
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Question:</p>
+                          <p className="text-gray-900 dark:text-gray-100">{comp.question}</p>
+                        </div>
+
+                        {/* Expected Answer */}
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+                          <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2">Expected Answer:</p>
+                          <p className="text-sm text-gray-900 dark:text-gray-100">{comp.expected_answer}</p>
+                        </div>
+
+                        {/* Responses Side by Side */}
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          {/* Base Model Response */}
+                          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-semibold text-gray-900 dark:text-gray-100">Base Model</h5>
+                              <div className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                                Score: {((comp.base_scores.faithfulness + comp.base_scores.fact_recall + comp.base_scores.consistency + comp.base_scores.hallucination) / 4 * 10).toFixed(1)}/100
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap mb-3">
+                              {comp.base_response}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div><span className="font-semibold">Faith:</span> {comp.base_scores.faithfulness}/10</div>
+                              <div><span className="font-semibold">Recall:</span> {comp.base_scores.fact_recall}/10</div>
+                              <div><span className="font-semibold">Consist:</span> {comp.base_scores.consistency}/10</div>
+                              <div><span className="font-semibold">Halluc:</span> {comp.base_scores.hallucination}/10</div>
+                            </div>
+                          </div>
+
+                          {/* Adapter Response */}
+                          <div className="border-2 border-primary-200 dark:border-primary-800 rounded-lg p-4 bg-primary-50/30 dark:bg-primary-900/10">
+                            <div className="flex items-center justify-between mb-3">
+                              <h5 className="font-semibold text-primary-900 dark:text-primary-100">Fine-tuned Model</h5>
+                              <div className="text-sm font-semibold text-primary-600 dark:text-primary-400">
+                                Score: {((comp.adapter_scores.faithfulness + comp.adapter_scores.fact_recall + comp.adapter_scores.consistency + comp.adapter_scores.hallucination) / 4 * 10).toFixed(1)}/100
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap mb-3">
+                              {comp.adapter_response}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div><span className="font-semibold">Faith:</span> {comp.adapter_scores.faithfulness}/10</div>
+                              <div><span className="font-semibold">Recall:</span> {comp.adapter_scores.fact_recall}/10</div>
+                              <div><span className="font-semibold">Consist:</span> {comp.adapter_scores.consistency}/10</div>
+                              <div><span className="font-semibold">Halluc:</span> {comp.adapter_scores.hallucination}/10</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()
+          ) : selectedComp ? (
             <div className="space-y-6">
               {/* Prompt */}
               <div className="card">
