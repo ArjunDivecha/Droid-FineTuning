@@ -197,17 +197,36 @@ const FusionPage: React.FC = () => {
   };
 
   const handleStartFusion = async () => {
-    if (selectedAdapters.length < 2) {
-      setError('Please select at least 2 adapters');
+    if (selectedAdapters.length < 1) {
+      setError('Please select at least 1 adapter');
       return;
     }
 
-    setIsFusing(true);
     setError(null);
-    setFusionResult(null);
+    setIsFusing(true);
     setFusionProgress(0);
 
     try {
+      // If only one adapter selected, skip fusion and just prepare for export
+      if (selectedAdapters.length === 1) {
+        // Create a minimal fusion result for single adapter (no actual fusion needed)
+        setFusionResult({
+          base_model_result: { adapter_name: 'base', is_base_model: true, overall_score: 0, faithfulness: 0, fact_recall: 0, consistency: 0, hallucination: 0 },
+          individual_results: [{ adapter_name: selectedAdapters[0], is_base_model: false, overall_score: 0, faithfulness: 0, fact_recall: 0, consistency: 0, hallucination: 0 }],
+          fused_result: { adapter_name: selectedAdapters[0], is_base_model: false, overall_score: 0, faithfulness: 0, fact_recall: 0, consistency: 0, hallucination: 0 },
+          fusion_info: {
+            adapter_names: selectedAdapters,
+            method: 'single',
+            weights: [1.0],
+            output_name: selectedAdapters[0],
+            timestamp: new Date().toISOString()
+          }
+        });
+        setIsFusing(false);
+        setFusionProgress(100);
+        return;
+      }
+
       const method = selectedAdapters.length === 2 ? 'slerp' : 'weighted';
       await axios.post('http://localhost:8000/api/fusion/fuse', {
         adapter_names: selectedAdapters,
@@ -337,10 +356,10 @@ const FusionPage: React.FC = () => {
             <div className="text-sm text-primary-900 dark:text-primary-100">
               <p className="font-semibold mb-1">How Adapter Fusion Works:</p>
               <ul className="list-disc list-inside space-y-1 text-primary-800 dark:text-primary-200">
-                <li>Select 2-5 adapters trained on the <strong>same base model</strong></li>
-                <li>Uses <strong>SLERP</strong> (Spherical Linear Interpolation) for smooth blending</li>
-                <li>Evaluates each adapter individually, then the fused result</li>
-                <li>Compare all variants side-by-side to find the best combination</li>
+                <li>Select 1-5 adapters trained on the <strong>same base model</strong></li>
+                <li>Single adapter: Export directly to GGUF format</li>
+                <li>Multiple adapters: Uses <strong>SLERP</strong> for smooth blending</li>
+                <li>Evaluates adapters and compares results</li>
               </ul>
             </div>
           </div>
@@ -490,11 +509,11 @@ const FusionPage: React.FC = () => {
                   </button>
                   <button
                     onClick={handleStartFusion}
-                    disabled={selectedAdapters.length < 2 || isFusing}
+                    disabled={selectedAdapters.length < 1 || isFusing}
                     className="btn-primary flex items-center space-x-2"
                   >
                     <GitMerge className="w-4 h-4" />
-                    <span>Start Fusion & Evaluation</span>
+                    <span>{isFusing ? (selectedAdapters.length === 1 ? 'Preparing...' : 'Fusing...') : (selectedAdapters.length === 1 ? 'Prepare for Export' : 'Start Fusion')}</span>
                   </button>
                 </div>
               </div>

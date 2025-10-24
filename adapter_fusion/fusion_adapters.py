@@ -129,15 +129,25 @@ class AdapterFusion:
 
                 reference_shape, reference_dtype = shape_map[key]
                 if reference_shape != current_shape:
-                    logger.error(
-                        "Shape mismatch for key '%s' between adapters. "
-                        "Expected %s but adapter %d has %s",
-                        key,
-                        reference_shape,
-                        idx,
-                        current_shape,
-                    )
-                    return False
+                    # Allow different LoRA ranks - we'll pad during fusion
+                    if 'lora_a' in key or 'lora_b' in key:
+                        logger.info(
+                            "Different LoRA rank for key '%s': %s vs %s. Will pad during fusion.",
+                            key,
+                            reference_shape,
+                            current_shape
+                        )
+                        continue
+                    else:
+                        logger.error(
+                            "Shape mismatch for key '%s' between adapters. "
+                            "Expected %s but adapter %d has %s",
+                            key,
+                            reference_shape,
+                            idx,
+                            current_shape,
+                        )
+                        return False
 
                 if reference_dtype != dtype_name:
                     logger.warning(
@@ -230,6 +240,19 @@ class AdapterFusion:
                 w2_np = adapter2[key]
             else:
                 w2_np = np.zeros_like(w1_np)
+
+            # Handle different shapes (different LoRA ranks) by padding
+            if w1_np.shape != w2_np.shape:
+                # Pad to match larger shape
+                max_shape = tuple(max(s1, s2) for s1, s2 in zip(w1_np.shape, w2_np.shape))
+                if w1_np.shape != max_shape:
+                    padded = np.zeros(max_shape, dtype=w1_np.dtype)
+                    padded[tuple(slice(0, s) for s in w1_np.shape)] = w1_np
+                    w1_np = padded
+                if w2_np.shape != max_shape:
+                    padded = np.zeros(max_shape, dtype=w2_np.dtype)
+                    padded[tuple(slice(0, s) for s in w2_np.shape)] = w2_np
+                    w2_np = padded
 
             # Ensure dtypes align before converting to torch
             target_dtype = w1_np.dtype

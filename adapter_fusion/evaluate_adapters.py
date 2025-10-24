@@ -49,15 +49,19 @@ import random
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # Load .env from the adapter_fusion directory
+    dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+    load_dotenv(dotenv_path)
 except ImportError:
     print("Warning: python-dotenv not installed. Install with: pip install python-dotenv")
 
 try:
     import openai
+    OPENAI_AVAILABLE = True
 except ImportError:
-    print("Error: openai not installed. Install with: pip install openai")
-    sys.exit(1)
+    print("Warning: openai not installed. Some evaluation features may be limited.")
+    OPENAI_AVAILABLE = False
+    openai = None
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,9 +77,13 @@ class AdapterEvaluator:
         
     def _init_cerebras(self):
         """Initialize Cerebras client."""
+        if not OPENAI_AVAILABLE:
+            logger.warning("OpenAI not available, Cerebras client will not be initialized")
+            return
         api_key = os.getenv('CEREBRAS_API_KEY')
         if not api_key:
-            raise ValueError("CEREBRAS_API_KEY not found in environment variables")
+            logger.warning("CEREBRAS_API_KEY not found in environment variables")
+            return
         self.cerebras_client = openai.OpenAI(
             base_url="https://api.cerebras.ai/v1",
             api_key=api_key
@@ -135,11 +143,27 @@ class AdapterEvaluator:
                 ranking = item.get('ranking', [0])
                 best_idx = ranking[0] if ranking else 0
                 answer = item['completions'][best_idx]['text']
-                
+
                 qa_pairs.append({
                     'question': question,
                     'answer': answer
                 })
+            elif 'messages' in item and isinstance(item['messages'], list):
+                # Chat format with system/user/assistant messages
+                user_message = None
+                assistant_message = None
+
+                for message in item['messages']:
+                    if message.get('role') == 'user':
+                        user_message = message.get('content', '')
+                    elif message.get('role') == 'assistant':
+                        assistant_message = message.get('content', '')
+
+                if user_message and assistant_message:
+                    qa_pairs.append({
+                        'question': user_message,
+                        'answer': assistant_message
+                    })
             elif 'text' in item:
                 # Parse chat format or Q&A format
                 text = item['text']
@@ -201,7 +225,11 @@ class AdapterEvaluator:
     
     def generate_response(self, adapter_path: Optional[str], model_path: str, prompt: str) -> str:
         """Generate response from adapter or base model using MLX."""
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python'
+        import time
+        start_time = time.time()
+        logger.info(f"🟢 STARTING MODEL INFERENCE - Loading model and generating response...")
+        
+        python_path = '/opt/anaconda3/bin/python'
         
         # Build adapter_path parameter
         adapter_param = f'adapter_path="{adapter_path}"' if adapter_path else 'adapter_path=None'
@@ -230,6 +258,9 @@ except Exception as e:
             process = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             
             if process.returncode != 0:
+                elapsed = time.time() - start_time
+                logger.error(f"❌ MODEL INFERENCE FAILED in {elapsed:.3f}s - Return code: {process.returncode}")
+                logger.error(f"STDERR: {process.stderr[:500]}")
                 return f"Error: {process.stderr}"
             
             # Extract response
@@ -241,6 +272,9 @@ except Exception as e:
             else:
                 response = output.strip()
             
+            elapsed = time.time() - start_time
+            logger.info(f"✅ MODEL INFERENCE COMPLETE in {elapsed:.3f} seconds - Response: {len(response)} chars")
+            
             return response
         
         except subprocess.TimeoutExpired:
@@ -250,6 +284,20 @@ except Exception as e:
     
     def evaluate_response(self, question: str, training_answer: str, model_response: str) -> Dict:
         """Evaluate response using Cerebras (ultra-fast)."""
+        
+        # Check if cerebras client is available
+        if not self.cerebras_client:
+            logger.warning("Cerebras client not available, returning default scores")
+            return {
+                "faithfulness": 5,
+                "fact_recall": 5,
+                "consistency": 5,
+                "hallucination": 5,
+                "facts_recalled": [],
+                "facts_missing": [],
+                "facts_added": [],
+                "explanation": "Evaluation unavailable: Cerebras client not initialized (OpenAI library or API key missing)"
+            }
         
         prompt = f"""You are evaluating if a model's response is faithful to its training data.
 
@@ -297,6 +345,10 @@ Provide your evaluation in JSON format:
 }}"""
 
         try:
+            import time
+            start_time = time.time()
+            logger.info(f"🔵 CALLING CEREBRAS API - Starting request...")
+            
             response = self.cerebras_client.chat.completions.create(
                 model="llama-4-scout-17b-16e-instruct",
                 messages=[
@@ -307,7 +359,11 @@ Provide your evaluation in JSON format:
                 max_tokens=1024
             )
             
+            elapsed = time.time() - start_time
+            logger.info(f"✅ CEREBRAS API RESPONDED in {elapsed:.3f} seconds")
+            
             response_text = response.choices[0].message.content
+            logger.info(f"📊 Response length: {len(response_text)} chars")
             
             # Extract JSON from response
             if "```json" in response_text:
@@ -334,6 +390,164 @@ Provide your evaluation in JSON format:
                 "facts_added": [],
                 "explanation": f"Evaluation error: {str(e)}"
             }
+    
+    def compare_base_vs_adapter(self, adapter_name: str, training_data_path: str, num_questions: int = 20, progress_callback=None) -> Dict:
+        """Compare base model vs adapter on the same questions."""
+        logger.info(f"Starting comparison: base model vs adapter {adapter_name}")
+        
+        # Load adapter config
+        config = self.load_adapter_config(adapter_name)
+        model_path = config.get('model', '')
+        adapter_path = os.path.join(self.adapter_base_dir, adapter_name)
+        
+        # Load training data
+        training_data = self.load_training_data(training_data_path)
+        qa_pairs = self.extract_qa_pairs(training_data)
+        
+        # Use Cerebras to generate questions from training data
+        logger.info("Generating evaluation questions using Cerebras...")
+        questions = self._generate_questions_with_cerebras(qa_pairs, num_questions)
+        
+        # Evaluate each question with both models
+        comparisons = []
+        for i, question_data in enumerate(questions, 1):
+            logger.info(f"Evaluating question {i}/{len(questions)}")
+            
+            if progress_callback:
+                progress = int((i / len(questions)) * 100)
+                progress_callback(i, len(questions), progress)
+            
+            question = question_data['question']
+            expected_answer = question_data['expected_answer']
+            
+            # Get response from base model
+            base_response = self.generate_response(None, model_path, question)
+            
+            # Get response from adapter
+            adapter_response = self.generate_response(adapter_path, model_path, question)
+            
+            # Evaluate both responses
+            base_eval = self.evaluate_response(question, expected_answer, base_response)
+            adapter_eval = self.evaluate_response(question, expected_answer, adapter_response)
+            
+            comparisons.append({
+                'question': question,
+                'expected_answer': expected_answer,
+                'base_response': base_response,
+                'adapter_response': adapter_response,
+                'base_scores': base_eval,
+                'adapter_scores': adapter_eval
+            })
+        
+        # Calculate aggregate scores
+        base_avg = {
+            'faithfulness': sum(c['base_scores']['faithfulness'] for c in comparisons) / len(comparisons),
+            'fact_recall': sum(c['base_scores']['fact_recall'] for c in comparisons) / len(comparisons),
+            'consistency': sum(c['base_scores']['consistency'] for c in comparisons) / len(comparisons),
+            'hallucination': sum(c['base_scores']['hallucination'] for c in comparisons) / len(comparisons)
+        }
+        
+        adapter_avg = {
+            'faithfulness': sum(c['adapter_scores']['faithfulness'] for c in comparisons) / len(comparisons),
+            'fact_recall': sum(c['adapter_scores']['fact_recall'] for c in comparisons) / len(comparisons),
+            'consistency': sum(c['adapter_scores']['consistency'] for c in comparisons) / len(comparisons),
+            'hallucination': sum(c['adapter_scores']['hallucination'] for c in comparisons) / len(comparisons)
+        }
+        
+        base_overall = sum(base_avg.values()) / 4
+        adapter_overall = sum(adapter_avg.values()) / 4
+        
+        report = {
+            'adapter_name': adapter_name,
+            'adapter_config': config,
+            'training_data_path': training_data_path,
+            'num_questions': len(questions),
+            'evaluation_date': datetime.now().isoformat(),
+            'base_model_scores': {
+                'overall': round(base_overall * 10, 1),
+                'faithfulness': round(base_avg['faithfulness'] * 10, 1),
+                'fact_recall': round(base_avg['fact_recall'] * 10, 1),
+                'consistency': round(base_avg['consistency'] * 10, 1),
+                'hallucination': round(base_avg['hallucination'] * 10, 1)
+            },
+            'adapter_scores': {
+                'overall': round(adapter_overall * 10, 1),
+                'faithfulness': round(adapter_avg['faithfulness'] * 10, 1),
+                'fact_recall': round(adapter_avg['fact_recall'] * 10, 1),
+                'consistency': round(adapter_avg['consistency'] * 10, 1),
+                'hallucination': round(adapter_avg['hallucination'] * 10, 1)
+            },
+            'detailed_comparisons': comparisons
+        }
+        
+        logger.info(f"Comparison complete. Base: {report['base_model_scores']['overall']}/100, Adapter: {report['adapter_scores']['overall']}/100")
+        return report
+    
+    def _generate_questions_with_cerebras(self, qa_pairs: List[Dict[str, str]], num_questions: int) -> List[Dict[str, str]]:
+        """Use Cerebras to generate evaluation questions from training data."""
+        if not self.cerebras_client:
+            logger.warning("Cerebras not available, using random selection from training data")
+            selected = random.sample(qa_pairs, min(num_questions, len(qa_pairs)))
+            return [{'question': qa['question'], 'expected_answer': qa['answer']} for qa in selected]
+        
+        # Sample training examples to give Cerebras context
+        sample_size = min(10, len(qa_pairs))
+        samples = random.sample(qa_pairs, sample_size)
+        
+        context = "\n".join([f"Q: {qa['question']}\nA: {qa['answer']}" for qa in samples])
+        
+        prompt = f"""Based on this training data, generate {num_questions} diverse evaluation questions that test understanding of the material.
+
+Training data samples:
+{context}
+
+Generate {num_questions} questions in JSON format:
+[
+  {{"question": "...", "expected_answer": "..."}},
+  ...
+]
+
+Make questions diverse and challenging. Expected answers should be concise."""
+
+        try:
+            import time
+            start_time = time.time()
+            logger.info("🔵 Generating questions with Cerebras...")
+            
+            response = self.cerebras_client.chat.completions.create(
+                model="llama-4-scout-17b-16e-instruct",
+                messages=[
+                    {"role": "system", "content": "You are an expert at creating evaluation questions. Always respond with valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2048
+            )
+            
+            elapsed = time.time() - start_time
+            logger.info(f"✅ Questions generated in {elapsed:.3f} seconds")
+            
+            response_text = response.choices[0].message.content
+            
+            # Extract JSON
+            if "```json" in response_text:
+                json_start = response_text.find("```json") + 7
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+            elif "```" in response_text:
+                json_start = response_text.find("```") + 3
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+            
+            questions = json.loads(response_text)
+            logger.info(f"Generated {len(questions)} questions")
+            return questions[:num_questions]
+            
+        except Exception as e:
+            logger.error(f"Failed to generate questions with Cerebras: {e}")
+            logger.warning("Falling back to random selection from training data")
+            selected = random.sample(qa_pairs, min(num_questions, len(qa_pairs)))
+            return [{'question': qa['question'], 'expected_answer': qa['answer']} for qa in selected]
     
     def evaluate_adapter(self, adapter_name: str, training_data_path: str, num_questions: int = 20, progress_callback=None, use_base_model: bool = False) -> Dict:
         """Evaluate an adapter against training data."""
@@ -407,6 +621,63 @@ Provide your evaluation in JSON format:
         logger.info(f"Evaluation complete. Overall score: {report['scores']['overall']}/100")
         return report
     
+    def save_comparison_report(self, report: Dict, output_dir: str = "./evaluation_results"):
+        """Save comparison report with detailed Q&A."""
+        os.makedirs(output_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save detailed JSON with all questions and answers
+        json_file = os.path.join(output_dir, f"{report['adapter_name']}_comparison_{timestamp}.json")
+        with open(json_file, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        # Save human-readable comparison
+        txt_file = os.path.join(output_dir, f"{report['adapter_name']}_comparison_{timestamp}.txt")
+        with open(txt_file, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("BASE MODEL vs ADAPTER COMPARISON\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(f"Adapter: {report['adapter_name']}\n")
+            f.write(f"Date: {report['evaluation_date']}\n")
+            f.write(f"Questions: {report['num_questions']}\n\n")
+            
+            f.write("OVERALL SCORES:\n")
+            f.write("-" * 80 + "\n")
+            f.write(f"Base Model:  {report['base_model_scores']['overall']}/100\n")
+            f.write(f"Adapter:     {report['adapter_scores']['overall']}/100\n")
+            f.write(f"Improvement: {report['adapter_scores']['overall'] - report['base_model_scores']['overall']:+.1f}\n\n")
+            
+            f.write("DETAILED SCORES:\n")
+            f.write("-" * 80 + "\n")
+            for metric in ['faithfulness', 'fact_recall', 'consistency', 'hallucination']:
+                base_score = report['base_model_scores'][metric]
+                adapter_score = report['adapter_scores'][metric]
+                diff = adapter_score - base_score
+                f.write(f"{metric.title():15} Base: {base_score:5.1f}  Adapter: {adapter_score:5.1f}  Diff: {diff:+5.1f}\n")
+            
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("QUESTION-BY-QUESTION COMPARISON\n")
+            f.write("=" * 80 + "\n\n")
+            
+            for i, comp in enumerate(report['detailed_comparisons'], 1):
+                f.write(f"\nQUESTION {i}:\n")
+                f.write(f"{comp['question']}\n\n")
+                
+                f.write(f"EXPECTED ANSWER:\n{comp['expected_answer']}\n\n")
+                
+                f.write(f"BASE MODEL RESPONSE:\n{comp['base_response']}\n")
+                f.write(f"Scores: F={comp['base_scores']['faithfulness']} R={comp['base_scores']['fact_recall']} C={comp['base_scores']['consistency']} H={comp['base_scores']['hallucination']}\n\n")
+                
+                f.write(f"ADAPTER RESPONSE:\n{comp['adapter_response']}\n")
+                f.write(f"Scores: F={comp['adapter_scores']['faithfulness']} R={comp['adapter_scores']['fact_recall']} C={comp['adapter_scores']['consistency']} H={comp['adapter_scores']['hallucination']}\n")
+                f.write("-" * 80 + "\n")
+        
+        logger.info(f"Comparison report saved to {output_dir}")
+        logger.info(f"JSON: {json_file}")
+        logger.info(f"Text: {txt_file}")
+        return json_file, txt_file
+    
     def save_report(self, report: Dict, output_dir: str = "./evaluation_results"):
         """Save evaluation report."""
         os.makedirs(output_dir, exist_ok=True)
@@ -426,10 +697,10 @@ Provide your evaluation in JSON format:
             f.write(f"Evaluated: {report['evaluation_date']}\n")
             f.write(f"Test Questions: {report['num_questions']}\n\n")
             f.write("SCORES:\n")
-            f.write(f"  Overall:       {report['scores']['overall']}/100\n")
-            f.write(f"  Faithfulness:  {report['scores']['faithfulness']}/100\n")
-            f.write(f"  Fact Recall:   {report['scores']['fact_recall']}/100\n")
-            f.write(f"  Consistency:   {report['scores']['consistency']}/100\n")
+            f.write(f"  Overall: {report['scores']['overall']}/100\n")
+            f.write(f"  Faithfulness: {report['scores']['faithfulness']}/100\n")
+            f.write(f"  Fact Recall: {report['scores']['fact_recall']}/100\n")
+            f.write(f"  Consistency: {report['scores']['consistency']}/100\n")
             f.write(f"  Hallucination: {report['scores']['hallucination']}/100\n\n")
             f.write("=" * 60 + "\n")
         

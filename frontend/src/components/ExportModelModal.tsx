@@ -301,10 +301,20 @@ const ExportModelModal: React.FC<ExportModalProps> = ({
               {!isCompleted && !isError && (
                 <button
                   onClick={onExport}
-                  className="btn-primary flex items-center space-x-2"
+                  disabled={isExporting}
+                  className={`btn-primary flex items-center space-x-2 ${isExporting ? 'opacity-75 cursor-not-allowed' : ''}`}
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Start Export</span>
+                  {isExporting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>Start Export</span>
+                    </>
+                  )}
                 </button>
               )}
             </>
