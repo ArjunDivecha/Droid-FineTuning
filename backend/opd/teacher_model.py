@@ -85,13 +85,9 @@ class TeacherModel:
         try:
             self.model, self.tokenizer = load(self.model_path)
 
-            # Freeze all parameters
-            for param in self.model.parameters():
-                param.requires_grad = False
-
-            # Set to eval mode
-            self.model.eval()
-
+            # MLX models are frozen by default for inference
+            # No need to explicitly freeze parameters like in PyTorch
+            
             load_time = time.time() - start_time
             logger.info(f"Teacher model loaded in {load_time:.2f}s")
 
