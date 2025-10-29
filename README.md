@@ -32,6 +32,10 @@ Droid-FineTuning/
 ├── src/              # Electron main process
 │   ├── main.ts       # Main Electron process
 │   └── preload.ts    # Electron preload script
+├── OnPolicyDistill/   # OPD data and outputs
+│   ├── checkpoints/  # Distilled model checkpoints
+│   ├── teacher_cache/# Cached teacher outputs
+│   └── metrics/      # Training metrics
 └── package.json      # Root dependencies
 ```
 
@@ -132,51 +136,49 @@ cd frontend && npm run build && cd .. && npm start
 3. **Configure Training** - Method-specific parameters
 4. **Start Training** - GPU will run at optimal performance
 
-### On-Policy Distillation 🎓
-Transfer knowledge from a large teacher model to a smaller student model:
+### On-Policy Distillation (OPD) 🎓
+
+After fine-tuning your model, you can optionally use knowledge distillation to compress knowledge from a larger teacher model into your fine-tuned student model.
+
+#### Quick Start with OPD
 
 ```bash
 python3 backend/opd/run_distillation.py \
-  --teacher-path /path/to/teacher/model \
-  --student-path /path/to/student/base/model \
-  --adapter-path /path/to/student/lora/adapter \
-  --prompts-path ./prompts.jsonl \
-  --output-path ./output/checkpoints \
+  --teacher-path /path/to/larger/model \
+  --student-path /path/to/base/model \
+  --adapter-path /path/to/fine-tuned/adapter \
+  --prompts-path /path/to/validation_prompts.jsonl \
+  --output-path ./OnPolicyDistill/checkpoints/my_distilled_model \
   --steps 1000 \
   --batch-size 4 \
   --temperature 2.0
 ```
 
-**Key Features:**
-- **Reverse KL Divergence** - Optimized for mode-seeking behavior
-- **Teacher Caching** - Efficient memory usage with output caching
-- **LoRA Training** - Only trains adapter parameters on student model
-- **MLX Optimized** - Full Apple Silicon GPU acceleration
-- **Flexible Architecture** - Works with different model sizes (e.g., 32B → 7B)
+#### OPD Parameters
 
-### 📊 Sample Training Data Available
+- `--teacher-path`: Path to teacher model (e.g., Qwen 32B)
+- `--student-path`: Path to student base model (e.g., Qwen 7B)
+- `--adapter-path`: Path to your fine-tuned LoRA adapter
+- `--prompts-path`: Validation prompts in JSONL format
+- `--steps`: Number of training steps (default: 1000)
+- `--batch-size`: Batch size (default: 4)
+- `--temperature`: Distillation temperature (default: 2.0)
+- `--kl-weight`: Weight for KL divergence loss (default: 0.8)
 
-For testing GRPO/GSPO/Dr. GRPO methods, converted training data is ready at:
-- **Location:** `grpo_training_data/`
-  - `train.jsonl` - 17 examples (Arjun Divecha investment writing)
-  - `valid.jsonl` - 2 examples
+#### What OPD Does
 
-**Data format:**
-```json
-{"prompt": "Write an article on: ...", "answer": "...", "system": "You are..."}
-```
+1. **Teacher Inference**: Runs the larger teacher model to generate outputs
+2. **Loss Computation**: Calculates KL divergence between student and teacher
+3. **Knowledge Transfer**: Updates student LoRA adapters to match teacher behavior
+4. **Caching**: Automatically caches teacher outputs for efficiency
+5. **Checkpointing**: Saves best model based on validation loss
 
-To use your own data, run the conversion script:
-```bash
-python3.11 convert_to_grpo.py
-```
+#### Benefits
 
-This converts messages format (SFT) to GRPO format automatically.
-
-### Other Pages
-- **Training Page** - Monitor real-time training progress with live metrics
-- **Results Page** - Review training history and performance
-- **Compare Page** - Test and compare base vs fine-tuned model outputs
+- 📉 **Better Quality**: Student learns from superior teacher model
+- ⚡ **Faster Inference**: Deploy compact model with large model's knowledge
+- 💾 **Memory Efficient**: Teacher outputs are cached (50%+ time savings)
+- 🎯 **Fine Control**: Adjust temperature and loss weights for your use case
 
 ## 🔧 Configuration
 
