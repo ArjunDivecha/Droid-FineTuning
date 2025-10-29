@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type ActivePage = 'setup' | 'training' | 'results' | 'compare' | 'distillation';
+export type ActivePage = 'setup' | 'enhanced' | 'training' | 'results' | 'compare' | 'distillation';
 
 interface UISliceState {
   theme: ThemeMode;

@@ -1,0 +1,16 @@
+============================================================
+ADAPTER EVALUATION REPORT
+============================================================
+
+Adapter: qwen32-layers-all
+Evaluated: 2025-10-24T10:25:14.062237
+Test Questions: 20
+
+SCORES:
+  Overall:       43.0/100
+  Faithfulness:  32.5/100
+  Fact Recall:   31.5/100
+  Consistency:   55.0/100
+  Hallucination: 53.0/100
+
+============================================================

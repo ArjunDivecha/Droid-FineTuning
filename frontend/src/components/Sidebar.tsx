@@ -28,7 +28,14 @@ const navItems: NavItem[] = [
     label: 'Setup',
     icon: Settings,
     path: '/setup',
-    description: 'Configure models and datasets'
+    description: 'Basic fine-tuning setup'
+  },
+  {
+    id: 'enhanced',
+    label: 'Enhanced',
+    icon: Zap,
+    path: '/enhanced',
+    description: 'Advanced training methods'
   },
   {
     id: 'training',

@@ -1,0 +1,16 @@
+{
+  "prompt": "What is the difference between stocks and bonds?",
+  "answer": "Stocks represent ownership in a company with potential for capital gains and dividends, while bonds are debt instruments that pay fixed interest. Stocks offer higher potential returns but with greater risk, while bonds provide more stable income with lower risk.",
+  "system": "You are an expert investment analyst and educator."
+}
+
+---
+
+{
+  "prompt": "Explain the concept of diversification in investing.",
+  "answer": "Diversification is the practice of spreading investments across various assets, sectors, or geographic regions to reduce risk. By not putting all eggs in one basket, investors can minimize the impact of poor performance in any single investment on their overall portfolio.",
+  "system": "You are an expert investment analyst and educator."
+}
+
+---
+

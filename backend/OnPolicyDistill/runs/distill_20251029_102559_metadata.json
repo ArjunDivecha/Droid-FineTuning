@@ -1,0 +1,20 @@
+{
+  "run_id": "distill_20251029_102559",
+  "status": "error",
+  "started_at": "2025-10-29T10:25:59.522441",
+  "config": {
+    "base_model_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/Qwen2.5-7B-Instruct",
+    "teacher_model_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/Qwen3-32B-MLX-4bit",
+    "student_adapter_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters/7b",
+    "validation_prompts_path": "./OnPolicyDistill/test_prompts.jsonl",
+    "num_steps": 20,
+    "batch_size": 2,
+    "temperature": 2.0,
+    "kl_weight": 0.8,
+    "learning_rate": 1e-05
+  },
+  "teacher_model": "Qwen3-32B-MLX-4bit",
+  "student_model": "Qwen2.5-7B-Instruct",
+  "student_adapter": "7b",
+  "error": "Process exited with code 2"
+}

@@ -1,0 +1,23 @@
+{
+  "models": [
+    {
+      "name": "qwen2.5-0.5b-bf16",
+      "path": "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/models/qwen2.5-0.5b-bf16",
+      "app_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/qwen2.5-0.5b-bf16",
+      "description": "Lightweight Qwen2.5 model (0.5B params) in bf16 format, optimized for Apple Silicon. Ideal for fast fine-tuning on stock sentiment analysis or predictions.",
+      "file_size_gb": 0.95,
+      "format": "mlx-community (Hugging Face compatible)",
+      "hardware_notes": "Loads in ~1-2GB VRAM on M4 Max; use MLX or PyTorch MPS for GPU parallelization. Max batch size: 32+ with 128GB RAM.",
+      "fine_tuning_params": {
+        "library": "transformers or mlx",
+        "lora_rank": 16,
+        "parallelization": "torch.backends.mps or mlx.device('gpu')"
+      },
+      "download_date": "2025-10-26",
+      "version": "Qwen2.5-0.5B-bf16",
+      "gui_visible": true,
+      "status": "ready"
+    }
+  ],
+  "inventory_notes": "Add new models here for easy loading in fine-tuning scripts. 'path' is for Python scripts, 'app_path' is for GUI model selector. Update as needed. No missing data; all models verified post-download."
+}

@@ -1,0 +1,1414 @@
+================================================================================
+BASE MODEL vs ADAPTER COMPARISON
+================================================================================
+
+Adapter: fused_qwen32_qwen32-layers-all
+Date: 2025-10-24T12:22:24.167929
+Questions: 20
+
+OVERALL SCORES:
+--------------------------------------------------------------------------------
+Base Model:  30.2/100
+Adapter:     33.6/100
+Improvement: +3.4
+
+DETAILED SCORES:
+--------------------------------------------------------------------------------
+Faithfulness    Base:  17.5  Adapter:  23.0  Diff:  +5.5
+Fact_Recall     Base:  15.5  Adapter:  20.5  Diff:  +5.0
+Consistency     Base:  39.0  Adapter:  51.0  Diff: +12.0
+Hallucination   Base:  49.0  Adapter:  40.0  Diff:  -9.0
+
+================================================================================
+QUESTION-BY-QUESTION COMPARISON
+================================================================================
+
+
+QUESTION 1:
+Analyze the market implications of the concept presented here: GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build it, they will come… India: You’re not going to build it, but they’ll come anyway… I t occurred to me that this is a good metaphor for China and India and the resulting implications for growth and investment return. Last month I had a long chat with one of the people in China whose views I most respect. He is extremely plugged in with the fi nancial elite and serves on a number of government advisory boards. He told a very convincing story about how things were going to play out in China over the next few years, and which sectors would benefi t. However, at the end of the discussion, it occurred to me that the entirety of his story depended on government policy and actions. In my travels around India over the last couple of weeks, I had multiple discussions with business and fi nancial leaders about what is likely to happen in India over the next few years. None of their thoughts depended on government action. If anything, their main fear was that government intervention/inaction was the thing most likely to slow down or kill the huge growth momentum that exists today. That, in a nutshell, is the relative case for China vs. India. China succeeds if the government gets it right; India succeeds if the government gets out of the way. Both could happen. Or neither. In both cases, long-term return to investors will depend not so much on the success or failure of the country in GDP terms, but on the ability of companies to deliver high return on capital. So, what drives return on capital? One of my colleagues at GMO has written about the problems of overcapacity in China (see “China’s Red Flags” by Edward Chancellor) so I won’t spend time on it, but one thing is clear to me: building overcapacity is generally good for the consumer and bad for the producer. Thus, building multiple high-speed rail lines in China almost certainly improves the quality of life for the average Chinese, but it is inconceivable that the return on capital on those rail lines will be high, in pure fi nancial terms. If it were, the U.S. would surely have built plenty of high-speed rail lines by now. After all, the ability of the U.S. consumer to pay for transportation is considerably higher than that of the Chinese consumer. The fact that no high-speed rail lines exist in the U.S. tells you something about the potential return on capital on high-speed rail in expansive continental geographies. In short, overcapacity may lead to high social return, but almost certainly leads to low return on invested capital. Now, let’s look at India through this lens. In India (mainly due to poor government policy and implementation) everything is in short supply – too few roads, bridges, ports, educated people, etc. Thus, people have diffi cult lives, but it turns out that the average return on capital in corporate India is one of the highest of any country in the world (and has been for the last 10 years). The one area in India that has overcapacity is mobile phones. And that’s because it’s the one policy the government actually got right – by allowing unfettered competition (and giving away 2G licenses for a song). As you may guess, 2 GMO Ruminations on China and India – January 2011 Disclaimer: The views expressed herein are those of Arjun Divecha and are subject to change at any time based on market and other conditions. This is not an offer or solicitation for the purchase or sale of any security and should not be construed as such. References to specific securities and issuers are for illustrative purposes only and are not intended to be, and should not be interpreted as, recommendations to purchase or sell such securities. The portfolio weightings are current only as of the date indicated and are subject to change. none of the mobile phone companies are making much money because mobile rates are the lowest in the world. In fact, the largest mobile phone company is trying to grow profi ts by investing in telecoms outside of India. This is what makes for the true irony of India – that bad policy has led to high profi ts because producers benefi ted from shortages. Another interesting consequence of bad policy-making (India consistently runs high budget defi cits) is the high cost of capital. This forces producers to invest only in high-return projects (so as to be above their cost of capital) and benefi ts investors by delivering high return on investment. Now this sounds like a contradiction for investors like us – is it possible that investing in India benefi ts from bad policy in the long run? And, if so, should we not invest heavily in countries that have bad governments rather than good ones? Or, maybe one should focus on countries where the local cost of capital is high? Brazil is another high- cost-of-capital country that has produced high dollar returns despite mediocre economic growth. I believe that sooner or later, the lack of infrastructure/education will start to bite and constrain India’s ability to grow. We already see infl ation picking up in India, as rising incomes are not matched by rising food production, rising salaries are not matched by rising educational quality, and rising commodity prices are not ameliorated by better infrastructure. High infl ation will eat away at the ability of companies to sustain high margins, and markets usually demand a discount from high-infl ation countries. Bottom line, one should not expect bad governance to lead to permanent positive payoffs. Nevertheless, India has one considerable advantage from my point of view: its business model is based on bottom- up capitalism. Of course, anything is possible in the short run, but it seems inconceivable to me that state-directed investment policies could produce sustainable higher return on capital than those chosen by individual profi t- maximizers. In the fi nal analysis, one needs to make the distinction not only between countries, but between companies and sectors based on their ability to produce and sustain high profi tability rather than on simple metrics like GDP, which have very little to do with making money as investors. In short, don’t focus on growth. Focus on profi tability. Obviously, as value investors, the single most important thing we look at is valuation – we are willing to pay a premium for profi tability, but not to overpay for it. Current positioning. At this point in time (January 2011), we are heavily underweight both India and China in our Emerging Markets Strategy, due primarily to high valuations in both countries relative to other emerging markets. In addition, in both countries, the central banks appear to be behind the curve and they will have to act strongly to bring infl ation down, a task that is made much harder by the profl igate monetary policies of the developed markets, particularly the U.S.
+
+BASE MODEL RESPONSE:
+The article "GMO Emerging Thoughts January 2011 Ruminations on China and India" by Arjun Divecha explores the economic and strategic implications of China and India's development trajectories, particularly in the context of globalization and emerging markets. The central theme of the article is the idea that "If you build it, they will come," which is a reference to the belief that infrastructure and economic development will naturally attract investment, trade, and integration with the global economy. This concept is applied to both China and India, but with different nuances and outcomes.
+
+### Market Implications
+
+#### 1. **Infrastructure Development and Economic Growth**
+The article emphasizes the importance of infrastructure development in both China and India. In China, the government has heavily invested in infrastructure, including transportation, energy, and telecommunications, which has facilitated rapid economic growth and integration into global supply chains. This has made China a manufacturing hub and a key player in global trade.
+
+**Market Implication:** The development of infrastructure in China has led to increased foreign direct investment (FDI), as multinational corporations seek to take advantage of the country's low labor costs and efficient production capabilities. This has resulted in the growth of sectors such as manufacturing, logistics, and technology. The stock markets in China have also seen significant growth, driven by the expansion of state-owned enterprises and private companies in the infrastructure and manufacturing sectors.
+
+In India, infrastructure development has been more fragmented and slower, due to bureaucratic hurdles, land acquisition issues, and political
+Scores: F=4 R=3 C=8 H=6
+
+ADAPTER RESPONSE:
+GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide a detailed analysis) GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... (Please provide
+Scores: F=1 R=1 C=1 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 2:
+Analyze the market implications of the concept presented here: Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation or conclusion of what was done in 2011. Thus, it’s a year of completing, rather than initiating.
+Products
+Possibility of EM Blend portfolio, with AA and debt guys – our contribution will be relatively small. Biggest part will likely be assisting in the marketing and client service.
+Go live/continue with research initiatives from last year – Macro/commodities, Price to Scale, Zios, Transaction cost model (see below)
+People
+Looking for 2 new relatively senior fundamental people to serve as China and Latam analysts. Add one person for algo trading.
+Continue upgrading skills in the group, both internal and client facing. 
+Started new initiative to share fundamental research about current events, concepts, countries and sectors that I (and other fundamental people) read with quants and vice-versa. May add more to EDO team if assets grow substantially.
+Research Agenda
+Alpha research:
+Top Down
+P/Scale
+Macro model
+Commodity
+Price Momentum
+Style Momentum
+New macro factors
+Bottom Up
+P/Scale
+New Simon momentum
+Style momentum
+Portfolio Optimization:
+Complete Research on new portfolio construction implementation.
+New Risk Model
+Production:
+Switch to new way of implementing models and assessing data (ZIOS) - implementation
+Begin transition to GDM as the choice of data depository for Emerging Markets.
+Continuous building of analytic tools that offer transparency on every aspect of our
+process.
+Diagnostic tools to understand bets and performance
+Get started on daily process – Arcady moving here is critical to that step
+Trading: 
+Make progress on moving towards daily process
+Implement new person into system and dramatically increase use of Algos and DMA
+External:
+Keep up production of white papers and Emerging Thoughts pieces
+Sell EDO
+From Last Year:
+Products
+Go live with Country/Sector – many moving parts to this, will have to do major revisions to plumbing as we go along. Also, one should expect to make model changes through the year. I expect that we will spend a fair amount of time this year on the transition and on tuning. Getting this right is the key to the future of EMF. Fully implemented in Q1 and has had good performance this year
+Go live with , both within EMF and as a stand alone strategy – bring in $$$. Much plumbing work to be done to integrate it with EMF. We will need refine the strategy and execution as we go along. Will take considerable time and effort on my part. Went live March 1 for the standalone and April 1 for the sleeve. Has been very successful from both a performance and asset raising point of view.
+People
+No expected change in personnel, except potentially to add to fundamental team depending on demands of . Train more people in the team (especially on the Fundamental side) to have client contact. Added a couple of people in fundamental. Matt Seto has been trained and now does solo client and prospect meetings.
+Research Agenda
+Deconstruct and Rebuild value models, both top-down and bottom up
+Build new Macro models for top-down
+Implement Zios – new data and research environment (see below)Research is complete on all three, with implementation happening soon.
+Data
+New fast, clean data using Global Data mart etc. Well in progress – further progress is based on GMO wide progress
+Continuous Update process/ Real-Time rebalancing ability Put off to next year
+Complete and implement transaction cost analysis to lower trading costs Research is complete. Implementation is slated for next year
+External
+Write more white papers, more communication with clients Wrote 4 emerging thoughts pieces and a one major white paper.
+
+BASE MODEL RESPONSE:
+The text you've provided appears to be an incomplete or partially written personal reflection or goal-setting document from 2012, attributed to someone named Arjun. The content is vague and lacks specific details about the goals or market implications. However, I can offer a general analysis of how such a mindset might translate into market implications, assuming this is related to business, entrepreneurship, or professional development.
+
+### Market Implications of a Forward-Looking Mindset in 2012
+
+#### 1. **Continuity and Stability**
+If Arjun's 2012 goals emphasize "continuation" and "looking forward," this suggests a focus on maintaining existing momentum rather than radical change. In market terms, this could mean:
+- **Sustainable Growth:** Businesses or individuals adopting this mindset may prioritize steady, incremental progress over disruptive innovation. This could lead to market stability but potentially slower adaptation to new trends.
+- **Risk Aversion:** A focus on continuation may indicate a conservative approach, which could be beneficial in uncertain economic climates (e.g., post-2008 financial crisis) but might limit opportunities in fast-moving sectors.
+
+#### 2. **Long-Term Planning**
+The phrase "looking forward" implies strategic planning. In 2012, this could have been particularly relevant given the rapid evolution of technology and social media. Market implications might include:
+- **Investment in Digital Transformation:** Companies that planned ahead in 2012 might have
+Scores: F=2 R=1 C=8 H=6
+
+ADAPTER RESPONSE:
+Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012 is a continuation o... (Please provide a detailed analysis) Arjun 2012 Goals
+Looking Forward
+Overall, most of what I hope to achieve in 2012
+Scores: F=1 R=1 C=10 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 3:
+Analyze the market implications of the concept presented here: Shooting the Messenger?
+On July 2, the 100-year badla system will give away to a T+ 5 compulsory rol...
+
+EXPECTED ANSWER:
+Shooting the Messenger?
+On July 2, the 100-year badla system will give away to a T+ 5 compulsory rolling settlement system. While this change is ostensibly geared to creating a more transparent system, the timing of the move reflects paranoia on the part of the authorities and will only exacerbate the bear market. The main casualty has been and will continue to be liquidity!
+A liquid stock market enables capital to get allocated quickly and efficiently, benefiting investors, companies and governments.  Today, investors pay significant premiums for liquidity in all equity markets. In an increasingly competitive world for investment dollars, one of the few advantages Indian markets had was liquidity and depth.  Unlike other emerging markets where only a handful of stocks are liquid, India boasted tens of stocks that traded over $100 million a day each; greatly increasing it’s attractiveness to large investors. 
+Why does liquidity matter? There are several companies in emerging markets that are more profitable, but more undervalued on any metric when compared to Indian companies. Take an example of Thai Union Frozen - it’s the equivalent of Infosys in the global shrimp business with revenues of $800 million (twice that of Infosys) and profits of $50 million. It has a return on equity of 20% and earnings growth of 15-20% annually. Yet it has a market value of less than $300 million as compared to $8 billion for Infosys. Why is so undervalued? The shrimp business is certainly less sexy than software, but at the end of the day they are both cyclical commodity businesses. The main reason for the difference in value is liquidity as it trades a measly $50,000 to $100,000 a day versus $200 -300 million for Infosys. While it is easy to dismiss Thailand today, lets not forget that in 1994 the market traded over $1 billion a day (when India traded $20-30 million a day).
+Implicit in today’s Indian market multiples is a premium for liquidity. As liquidity reduces, it can easily set up a vicious circle leading to valuations for software leaders to drop to 10 to 15 times (or less) earnings. We have already seen this happen with the second and third tier software companies. This effectively increases the cost of capital impacting their global competitiveness. The dream that software exports will reach $80 billion by 2008 will remain just that.
+It's easy to want to find scapegoats for a vicious bear market. Bursting the global tech bubble of 1998-2000 caused pain everywhere, not just in India. The high liquidity associated with this bubble may now appear speculative and harmful but lets not forget the benefits that India enjoyed from it. Liquidity enabled a lot of companies to raise cheap capital and improve balance sheets. Today, in the technology downturn this capital will help them survive. The boom in stock prices created unprecedented media publicity for the Indian software story. It resulted in India being on the investment horizon of a lot of institutions that earlier avoided it. 
+To Indian regulators, futures and options may seem to be the panacea to cure the evils of badla (of which there are undoubtedly many). However, they have not been successful in any emerging market we know of. The biggest investors in most emerging markets are foreign and domestic mutual funds - they are severely constrained in the use of such derivative instruments. In nascent capital markets, small domestic investors don’t really understand the intricacies of such instruments and end up being losers. Who then will use these derivatives? Ketan Parikh?
+SEBI has recently released the list of companies which will have options traded.  Some companies that were trading more than $300 million a day have been excluded, presumably on the ground that they were speculative favourites. Lets not forget that speculation and investment are two sides of the same coin. It's impossible to have one without the other. It should not be the role of the market regulator to decide which stocks should have options (and therefore affect capital allocation) - let the market decide that. If there are then abuses of market manipulation, they should use the existing laws on the books to deal with them.
+It’s easy to dismiss successful homegrown systems and go in for fancy American toys. However, non-market solutions to a market-based problem are inevitably a recipe for disaster. Lets not shoot the messenger!
+
+BASE MODEL RESPONSE:
+On July 2, the 100-year badla system will give away to a T+ 5 compulsory rollover system. The new system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all stock and futures segment. The system will be applicable to all
+Scores: F=1 R=1 C=1 H=1
+
+ADAPTER RESPONSE:
+| EduPristine
+On July 2, the 100-year badla system will give away to a T+ 5 compulsory rolling settlement system. What are the implications of this change on the Indian stock market?
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+Multi-choice problem: In the context of the new T+ 5 compulsory rolling settlement system in India, which of the following statements is/are correct? 1) It will reduce the risk of badla system. 2) It will increase the liquidity in the market. 3) It will lead to more transparency. Choose the correct answer from the following options: a) 1 only b) 2 only c) 1 and 3 only d) 1, 2 and 3
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+Do you think the new T+ 5 compulsory rolling settlement system will benefit the Indian stock market?
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+What are the implications of the new T+ 5 compulsory rolling settlement system in India?
+What are the
+Scores: F=2 R=1 C=5 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 4:
+What's your perspective on the investment insights described in: Emerging Markets: A Quantitative Perspective Contrary to popular belid investing in emevging markets...
+
+EXPECTED ANSWER:
+Emerging Markets: A Quantitative Perspective Contrary to popular belid investing in emevging markets can actually reduce risk. Arjun B. Divecha, Jaime Drach, and Dan Stefek ARJUN B. DIVECHA is the Director of Information Technolo- gy Services at BARRA, Inc. in Berkeley (CA 94704). JAIME DRACH is a Senior Con- sultant at BARRA. DAN STEFEK is a Senior Con- sultant at BARRA. oaring returns and sanguine prospects for eco- nomic growth have fueled a recent surge of S interest in investing in “emerging” markets. Such markets have become more accessible to the global investor. Today, there are several country funds through which investors can participate in even “closed” or restricted markets. Investment wdl become easier as more countries dismantle barriers to direct foreign investment. This article presents recent research into the emerging markets from a quantitative point of view. We have developed a model for understanding the forces that drive these markets, which affords some insights for global investors. We find that while the emerging markets are more volatile than developed markets, they tend to be relatively uncorrelated with each other and with developed markets. Thus, contrary to popular belief, modest investment in the emerging markets leads to lower, rather than higher, portfolio risk for the glob- al investor (see also Brown [1991]). Over the past five years, a global investor who put 20% in an emerging markets index fund would have reduced overall annual portfolio risk from 18.3% to 17.5% while increasing annual return from 12.6% to 14.7%. One unexpected result of our research is that stock returns in the emerging markets tend to be more homogeneous than in developed markets, implying that a strong market force dominates industry and stock-specific influences. In short, when the market moves, everyone goes along for the ride. FALL 1992 THE JOURNAL OF PORTFOLIO MANAGEMENT 41 WHICH MARKETS ARE CONSIDERED EMERGING MARKETS? EXHIBIT 1 Emerging Market Characteristics Just what is considered an emerging market is frequently a matter of opinion. Narrowly defined, an emerging market: 0 Has securities that trade in a public market. Is not a developed market (as defined by countries covered within the Morgan Stanley Capital Inter- national Indices or Financial Times Indices). Is of interest to global institutional investors. Has a reliable source of data. 0 Exhibit 1 lists the countries that we consider to be ernerging markets. They fall into three regions: Asia, Latin America, and Europe/Middle East/Africa. Singapore and Hong Kong fall into most definitions of developed markets, but are included here because they are closely related to the other Asian markets. Colom- bia, Pakistan, Nigeria, Jordan, and Zimbabwe are not of great institutional interest at present, although Pak- istan has recently opened up its economy and financial markets to foreign investors and may well be next on the list of emerging markets to attract institutional interest. Finally, Japanese over-the-counter (OTC) stocks are included in the list because they tend to behave (and are perceived) differently from listed Japanese st:ocks. R E T W I S AND RISKS OF EMERGING MARKETS The casual reader of the financial press knows there have been stories of incredible returns (high and low) in the emerging markets. The Venezuelan stock market was up about 450% in U.S. dollar terms during 1990. On the other hand, the Taiwanese Stock Exchange Index started out 1990 at about the 5,000 level, went up to 12,600 during the first quarter and collapsed 110 near 2,500 during the third quarter. What makes this even more interesting is that the Taiwanese market is only the fourth or fifth most risky emerging market! During the first half of 1991, Latin American countries dominated all others; in U.S. dollar terms, they were up over 100%. Overall, the emerging markets have done better than the 'developed markets over the past five years. During this period, the annualized total return to the Annual Market Standard Capitalization Turnover Country Deviation(%)a (Million U. S. '$6) Ratio' ~- Argentina Brazil Chile Colombia Greece Hong Kong India Indonesia Japan OTC Jordan Korea Malaysia Mexico Nigeria Pakistan Philippines Singapore Taiwan Thailand Turkey Venezuela Zimbabwe Developed Markets Portugal 108 74 29 21 56 31 31 39 20 19 29 30 56 13 10 46 61 33 63 31 84 44 20 $ 5,195 $ 25,112 $ 19,563 $ 1,437 $ 17,010 $ 83,600 $ 27,487 $ 7,998 $ 89,575 $ 2,166 $ 105,051 $ 58,738 $ 39,070 $ 1,507 $ 3,169 $ 8,940 $ 9,838 $ 55,000 $ 124,038 $ 34,996 $ 18,819 $ 9,332 $ 2,399 26% 34% 6% 5% 26% 42% 57% 49% NA 20% 67% 2!2% 37% 1% 8% 21% 18% 59% 710% 96% 31% 27% 2% Japan 22 $2,917,679 54% U.K. 19 $ 867,599 32% U.S. 17 $3,072,303 58% "Predicted annual standard deviation in %, based on BARRA's Emerging Markets Equity Model. bAs ofJune 30, 1991. 'This is defined as the ratio of annual trading volume (in US.$) divided by beginning of year market capitalizatioc. (in U.S.$), for 1990. Source: International Finance Corporation. International Finance Corporations (IFC) Emerging Markets Composite Index was 19.7%, aj compared to 12.6% for the Financial Times World Index.' Exhibit 1 shows predicted risks according to BARRA's risk model of each of the emerging markets as well as for a few developed markets. Clearly, these 42 EMERGINZ MARKETS: A QUANTITATIVE PERSPECTIVE FALL 1992 markets are extremely risky when compared with developed markets. Apart from the obvious risks (political instability, insider trading, etc.), there are a number of possible reasons why these markets are extremely volatile. First, they tend to be fairly concentrated; that is, the larger stocks have a high proportion of the over- all market capitalization. As a result, there are fewer opportunities for diversification, and returns to these large stocks dominate the overall market return. Sec- ond, unlike the developed markets, which tend to have forces that affect diverse sectors of the economy differ- ently, the emerging markets tend to have a strong mar- ket-related force that affects all stocks within a market. This tends to accentuate volatility. There are some apparent anomalies in these results. Palustan, Jordan, Colombia, Nigeria, and Zim- babwe appear to have had relatively low risk over the last five years. We believe that these low figures reflect the lack of liquidity in these markets, so observed volatilities (and correlations with other markets) must be viewed with caution. When we look at the turnover ratio (value tradedlmarket capitalization) for each market, we find that these five markets rank in the bottom six (shown in Exhibit 1). The real volatility is likely to be much higher, if and when these markets become more liquid. When we look at the emerging markets as a group (the BARRA Emerging World Universe of about 4,000 stocks), we find that it has much lower volatility than most of the individual markets. This is because of low correlations between these markets. The diversification that these low correlations offer the global investor is one of the biggest benefits of invest- ing in the emerging markets. The volatility (over the past five years) of the BARRA Emerging World Uni- verse was about 28.0%, as compared to about 18.8% for the S&P 500 or 22.8% for the Morgan Stanley Europe, Australia, and the Far East (EAFE) index. A MODEL TO UNDERSTAND RISK AND RETURN To analyze risk and return in these markets, we developed a multi-factor model similar to one previous- ly constructed for the developed markets (see Grinold, Rudd, and Stefek [1989]). At the core of the model is a hierarchical decomposition of portfolio return into vari- ous components. This is dustrated in E h b i t 2. EXHIBIT 2 EMERGING MARKETS MODEL We focus on excess return, return beyond the risk-free rate. This return is initially broken down into currency return and excess return earned in local mar- kets. Local excess return is decomposed further into country factor return, industry return, and return accruing to salient attributes of the companies in the portfolio, e.g. the price/earnings ratio. These latter sources of return are called risk indexes. The return to a global portfolio depends on the numeraire or home country of the investor. More pre- cisely, the excess return to an investment abroad is the product of the return of the investment in its local market, 1 + r1, and the exchange return 1 + r,. With a little manipulation, this can be expressed as the sum of three components: Excess Numeraire Return = (r, + rfl - rd - (ri - rfl) + r, x q, or, (1) Currency Return - Local Excess Return + Cross-Product where rf is the risk-free rate of return in the country of the investor, and rfl is the risk-free rate in the market where the investment is being made. The first term in Equation (1) is the currency return, reflecting both the exchange return and the differential in interest rates between countries. The second term is the local excess return of the investment in its own market. The final term, r, x r1 (also known as the cross- product) poses a problem for development of a linear model. For most countries, this cross-product term is FALL 1992 THE JOURNAL OF PORTFOLIO MANAGEMENT 43 typically small and can be disregarded for the purposes of forecasting risk. For example, ignoring the cross- product reduces the annual risk of the Korean market by 51 basis points (from 29.62% to 29.11%), and of the Taiwanese market by 103 basis points. In such cases, one can sa.fely ignore the cross-product because it is small relative to overall market risk. This is not true for Argentina or Brazil, where there are huge swings in exchange rates. Over the past five years, ignoring the cross-product would have changed the annual risk of the Argentinean market by 17% and the Brazilian market by 4%. To circumvent this difficulty, we do not try to decompose the Brazilian and Argentinean asset returns into local and currency components but rather model these assets from the U.S. perspective. In other words, we trans1at:e the prices of Brazilian and Argentinean assets into U.S. dollars and model the U.S. dollar- denomina,ted returns of these assets. Happily, this approach :is consistent with investors’ tendency to think of these assets in U.S. dollars. Next, local excess return is broken down into three components: country factor return, industry return, and risk index return. The amount of an asset’s riturn arising from each component depends on its exposure to that source. The exposure of an asset to the country factor is its beta with respect to that mar- ket. Moreover, assets are exposed only to their own local markets. In contrast, industry and risk indexes are global factors in the model, i.e., it is assumed that these factors apply equally across countries. Industry exposure is defined using the Financial Times Wcdd industry classification. Each asset is assigned to exactly one of the thirty-six industry cate- gories. The risk indexes include size, success, yield, variability in markets, earnings-to-price ratio, book- to-price ra.tio, and liquidity. Exposures to these risk indexes are normalized within each country. Thus, these exposures measure how an asset compAres to the rest of its local market. A formal statement of our model for monthly local excess return is for asset n: Local Excess = Country Factor + Industry Factor + Risk Index Factor + Specific Return 44 EMERGING MARKETS: A QUANTITATIVE PERSPECTIVE where asset n the ith f(i) are k = 1, number of countries j = 1, number of industries i = 1, number of risk indexes P(n,k), y(n,j), and x(n,i) are the exposures of to the kth country factor, the jth industry, and risk index, respectively. Variables h(k), g(j), and returns to these factors. In estimating the factor returns, the exposures are determined from the begin- ning of month data. The part of the return that is not explained by these factors is called the specific return, u(n); it is unique to the company. The model was estimated for assets fbrn the twen- ty-three markets listed in Exhibit 1 over the period Febru- ary 1986 to July 1991. Data are drawn from numerous sources includmg the International Finance Corporation and proprietary sources in thirteen countries. The results of the modeling process reveal some interesting differences between emerging and devel- oped markets. The overall proportion of variance explained by the emerging markets model (adjusted R2 ) is 50%, as compared with 38% for a :similar model that covers the developed markets (countries covered by the Financial Times Indices). At first glance it may seem surprising that a quantitative model would explain a greater proportion of return in the emerging markets than the developed markets. In order to understand this further, we looked at two submodels. The first submodel was built using only indus- try factors; i.e., we looked at what proportion of return is explained by the industry that a company is in, ignoring the country factors and :risk indexes. Thus, a definition of this model is: (3) Local Excess Return = Industry Fa.ctor + Specific Return We find the adjusted R2 for this rnodel for the emerging markets to be 16%, compared with 22% for the developed markets. This is a measure of how “global” or integrated industries are across countries. It stands to reason that the developed rnarkets have industries that are better integrated than the emerging ones, but the fact that the difference is small implies that there are cross-country industry commonalities in the emerging markets as well. The second submodel was built using only FALL 1992 country factors. Thus, we looked at what proportion of return is explained by country factors alone, ignor- ing the industry factor and risk indexes. The definition of this model is: Local Excess Return = Country Factor + Specific Return The adjusted R2 for this model for the emerg- ing markets is 46% compared with 30% for the devel- oped markets. Clearly, this country factor is the major force driving emerging markets. As one would expect, industries play a larger part in explaining return in the developed markets, while country differences play a larger role in the emerging markets. HOMOGENEITY WITHIN MARKETS The fact that country factors explain such a large proportion of variance (in absolute terms and when compared with the developed markets) in the emerging markets bears a closer look. That is, stock returns tend to be more homogeneous (within a market) in the emerging markets than in developed markets. In other words, when the market moves, there is a strong ten- dency for all stocks in the market to move with it. This difference in the proportion of return explained by the market factor (46% in emerging mar- kets versus 30% in developed countries) is not a func- tion of capitalization weighting (which leads to larger companies dominating the regression). Even when we equally weight each stock in the regression we find the same effect persists. The comparable R2 when equally weighting all stocks in the emerging markets is 42% (compared with 29% in the developed markets). At first appearance, it may seem odd that the proportion of variance explained by the market factor is so large in these markets. In order to understand this, we look at various effects that may cause this to happen. First, it may result from a concentration effect, a few large companies so dominating the market that they are, in effect, the market. Second, it may well be that these markets are actually more homogeneous (i.e., all the stocks tend to move together). Finally, there tends to be a positive correlation between the magnitude of returns within a market and the R2, i.e., to some extent, the high R2 is a natural by-product of high volatility. We first look at the concentration effect; that is, whether these markets tend to be dominated by a few large stocks. Exhibit 3 shows the proportion of market capitalization that the top ten stocks represent in each market. Most emerging markets are more concentrated than the developed markets. Hong Kong and Singa- pore, perhaps the two most developed of the emerging markets, are highly concentrated by this measure. On the other hand, Malaysia, Brazil, Inla, and Korea are not signlficantly more concentrated than the U.K. Of course, simply looking at the biggest ten stocks in a market is not a particularly insightful way to judge con- centration because it ignores all the other companies. Exhibit 3 shows two other more meaningful measures of concentration: asset concentration and sector concentration. Concentration is defined as (sim- ilar to Roll [1990]): Concentration = [(N/N - 1) x C(h, - l/N)2]0.5 (5) where: N = Total number ofstocks (or industries), and h, = Weight in asset (or industry) n. Asset concentration looks at how different a market is from being equally weighted. If each stock in the market had exactly the same market capitalization, this measure would be zero. If the entire market capi- talization were concentrated in one company, the mea- sure would be one. In an extremely diversified market like the U.S., the score is 0.08. Looking at this measure for the emerging markets, we can clearly see that they are more concentrated, but that the larger ones (Taiwan, Korea, Thailand, Malaysia, etc.) tend to have numbers that are not much larger than the developed markets The average for these four markets is 0.13. Thus, while asset concentration plays an important role in understanding why these markets appear homoge- neous, there must be other factors at work as well. Another measure of concentration is sector concentration. If most of the stocks in a market are concentrated in one industry, it would make sense that they would tend to move together. Exhlbit 3 shows a measure of sector concentration, defined in a similar FALL 1992 THE JOURNAL OF PORTFOLIO MANAGEMENT 45 EXHIBIT 3 Emergjng Market Statistics ~ ~ ~ ~~ ~~~ ~ Proportion of Average Capitalization Asset Sector Correlation in Top 10 Concentration Concentration Between Stocks Couni:ry Companies(%) * Factor Factor Argentina Brazil Chile Colombia Greece 65.60 26.60 50.90 75.10 50.40 0.26 0.17 0.18 0.18 0.18 0.43 0.38 0.26 0.39 0.44 0.92 0.70 0.59 0.34 0.72 Hong Kong India Indonesia Japan QTC Jordan 45.20 29.40 53.40 28.40 66.20 0.17 0.13 0.17 0.15 0.55 0.44 0.48 0.43 0.32 0.62 0.69 0.55 0.71 0.34 0.21 Korea Malaysia Mexico Nigeria Pakistan 28.90 25.10 38.40 52.50 24.40 0.16 0.12 0.21 0.17 0.14 0.28 0.28 0.42 0.66 0.33 0.56 0.57 0.70 0.23 0.17 Philippines Portugal Singapore Taiwan Thailand 65.20 44.20 54.50 41.30 32.70 0.33 0.17 0.18 0.13 0.11 0.57 0.40 0.46 0.37 0.42 0.70 0.80 0.75 0.77 0.47 Turkey Venezuela Zimbabwe 53.10 64.20 41.20 0.23 0.26 0.25 0.36 0.49 0.43 0.81 0.60 0.25 Developed Markets Japan 16.70 0.08 0.29 0.46 U.K. 25.50 0.11 0.30 0.56 U.S. 11.90 0.08 0.32 0.49 *Source: International Finance Corporation fashion as asset concentration. A score of zero implies that companies are equally distributed across all indus- tries, while a score of one implies that all the compa- nies are in one industry. The indication is that the emerging markets are more concentrated than the developed markets, but not much more so (although there is a popular percep- tion that inany emerging market countries are highly concentrated in certain sectors). In fact we see that Korea, Ckile, and Malaysia have less sector concentra- tion than the U.S., U.K., and Japan. The countries that are most highly concentrated in a few sectors are the smaller ones like Jordan and Nigeria. It seems clear from these results that the emerging markets are quite diversified across industries; the perception that their returns are driven by the fortunes of a single sector (like natural resources) is erroneous. What then explains the fact that stocks in these markets tend to move together? We looked at the pos- sibility that these markets are indeed more homoge- neous, after adjusting for the concentration effect. One way to do ths is to look at the average correlation of total monthly stock returns within a market, over a period of time. Exhibit 3 shows the average (i.e., unweighted) correlation between all stocks within each market (over the past five years). 46 EMEILGINI; MARKETS: A QUANTITATIVE PERSPECTIVE FALL 1992 This is clearly higher for most of the emerging markets than the developed markets. With the excep- tion of the Japanese OTC market, all the other large emerging markets have high average correlations. Tai- wan has an average correlation of 0.77, Turkey 0.81, and Brazil 0.70. By comparison, the U.S. has an aver- age correlation of 0.49 and Japan 0.46. Because these correlations are unweighted, market capitalization does not play a role in determining this number. This implies that a single market force tends to have a large impact on the movement of stock prices in these markets. Even though we saw that these mar- kets are fairly well-diversified across industries, these industry differentials are overwhelmed by the domi- nant market force. Another reason for the high R2 numbers in the emerging markets is the fact that there is likely to be a positive relationship between R2 and market voladity. For example, if the market moves up 50% in a month, the likelihood is that almost all stocks in that market will also move up. Thus, one would expect to see higher R2 for the more volatile markets. We find that this is indeed true; if one excludes the most risky mar- kets (Argentina, Brazil, Turkey, and Taiwan), and the low liquidity ones (Pakistan, Jordan, Colombia, Nige- ria, and Zimbabwe) the average R2 for the emerging markets is s i d a r to that for the developed markets. Overall, from a global investor’s viewpoint, this homogeneity phenomenon implies that being in the right market at the right time is more important than the ability to pick good stocks within that market. Clearly, if you are going to be in Brazil in a month when the market moves up 50%, the high within-mar- ket correlations (0.70 for Brazil) are likely to ensure that any diversified portfolio will experience high pos- itive returns. From a global investor’s point of view, the impact of this conclusion is accentuated by the low across-market correlations. HETEROGENEITY ACROSS MARKETS This phenomenon of homogeneity does not apply across markets. In fact, we see that the emerging markets are much less correlated with each other than are the developed markets. Exhibit 4 shows the corre- lations of emerging markets with each other. While we see that some markets tend to move together (Malaysia, Hong Kong, and Singapore), most markets tend to have very low correlations with each other. In fact, the average correlation between the emerging EXHIBIT 4 Correlations Between Emerging Markets (February 1986 - March 1991) Source: BARRA. ARG B n d 0.02 BRA chile 0.02 0.21 CHI Colombin -0.12 -0.09 0.30COL G- 0.12 0.03 0.13 0.38 GRE Hmg Kong -0.14 0.20 0.42 0.19 0.21 HKE Indonesia -0.29 -0.28 0.15 0.14 0.19 0.23 IDN India 0.20 0.03 -0.16 -0.07 -0.01 -0.08 0.03 DID Jodan -0.18 6.15 0.07 0.15 0.15 0.20 0.51 -0.02 JOR JapmOTC -0.13 0.03 -0.07 0.19 0.20 0.60 0.20 0.17 0.25 JPE K- Malaysia Mexico Nigeria Ppldan Philippines Porngal Singapom T i W M Thailand Turkey Venezuela ZLnbabwe -0.24 -0.08 -0.05 -0.04 -0.20 0.12 0.07 -0.07 -0.08 037 KOR -0.01 0.14 0.23 0.01 0.05 0.64 0.47 0.04 0.09 0.63 0.18 MAE 0.13 -0.04 0.25 0.08 0.08 0.36 0.18 -0.16 0.00 0.61 0.27 0.40 MEE 0.10 0.00 all 0.05 0.14 -0.10 0.21 -0.03 -0.04 0.36 0.04 -0.18 -0.11 NIG -0.03 -0.06 0.03 0.11 -0.12 0.08 -0.10 0.09 -0.02 0.18 0.14 -0.17 0.07 -0.07 PAK -0.12 0.13 0.25 0.08 0.10 0.34 0.47 -0.10 0.25 0.36 0.20 0.33 0.14 0.10 -0.11PHI 0.00 0.14 0.25 0.00 0.07 0.68 0.44 -0.04 0.15 0.68 0.21 0.90 0.43 -0.22 -0.17 0.37 0.31 SIE 0.02 0.04 0.28 0.11 0.02 0.29 0.35 -0.09 0.17 0.24 0.01 0.25 0.37 -0.22 -0.m 0.04 0.45 0.35 TAI 0.13 0.14 0.33 0.11 0.28 0.56 0.37 -0.05 0.14 0.69 -0.01 0.50 0.44 -0.03 0.00 0.33 0.37 0.58 0.40 THA 0.25 0.13 0.02 0.02 0.24 0.13 0.29 0.14 -0.09 0.32 0.01 0.31 0.24 0.04 -0.08 0.11 0.32 0.31 0.13 0.24 TUR -0.05 -0.26 -0.13 -0.10 -0.07 -0.07 -0.15 0.15 -0.14 -0.45 -0.11 -0.14 -0.19 -0.03 -0.01 -0.22 -0.08 -0.13 -0.28 -0.32 -0.15 VEN -0.26 -0.06 0.00 0.24 -0.04 -0.08 -0.15 -0.04 0.06 4.20 -0.07 -0.17 -0.19 -0.05 0.21 0.00 0.08 -0.30 -0.13 -0.17 0.01 0.06 0.02 0.03 0.13 0.27 0.41 0.35 0.16 -0.18 -0.09 0.47 0.07 0.30 0.41 -0.21 -0.01 -0.05 W R FALL 1992 THE JOURNAL OF PORTFOLIO MANAGEMENT 47 markets was 0.07 over the past five years, implying that they are essentially uncorrelated. We propose two explanations as to why they have been uncorrelated with each other. First, many of the emerging markets have (or had) few economic and trade lir ks with each other. Consequently, their economies tend to be unrelated to each other. Second, many have (or had) severe restrictions on outsiders participating in their markets. Therefore, they are somewhat insulated from worldwide (or even regional) patterns in stock market returns. For example, in October 1987, while the world's markets were crashing, the Indian stock market was up mod- estly. Nlow the current trend is for most of the emerging economies to develop greater trade links with the developed world and each other. Most of the countries that are closed to foreign participation in their stock markets are also in the process of liberaliz- ing rules for foreigners to participate in their markets. With these increasing links between markets, we should expect to see correlations between the emerg- ing markets increase in the future. When we contrast these low correlations with the correlations between developed markets (Exhibit 5), we see that they have much higher correlations with each other. A quick glance at Exhibits 4 and 5 confirms that the developed markets are much more correlated with each other than the emerging markets are. The average correlation between the developed markets was 0.49 (over the same five-year period). While all the correlations between the developed mar- kets were positive, 89 of the 276 correlations between the emerging markets were negative (over this five- year period). From a global investor's point of view, a more interesting question is not so much how the emerg- ing markets relate to each other, but how they relate to the developed markets, individually and as a group. Overall, the correlation between the IFC Emerging Markets Composite Index and the Finan- cial Times World Index was 0.35 over the past five years. Exhibit 6 shows the cross-correlations between emerging markets and developed markets. As far as individual countries are concerned, corre- lations between the U.S. market and emerging mar- kets range from -0.14 for India to 0.70 for Malaysia. As one would expect, Japan is most high- ly correlated with countries with which it has EXHIBIT 5 Correlations Between Developed Markets (February 1986 - March 1991) Source: BARRA. AUSvin Belgium Can& DCllllIuL Finland FrPna Germany Ireland Italy Jppuu NUWay Nethcdands New Zuland soulh Africa Spain Sweden Swiucrland AUS 0.18 AUT 0.33 031 BEL 0.64 0.19 0.57 CAN 0.17 033 0.52 034 DEN 0.50 0.48 039 0.51 0.34 FIN 0.29 0.40 0.76 0.47 0.61 0.36 FRA 0.30 0.64 0.74 0.39 0.54 0.41 0.76 GER 0.42 0.43 0.52 0.47 0.51 0.51 0.50 0.46 IRE 0.22 0.46 0.64 0.42 0.52 0.33 0.69 0.64 0.41 ITA 0.12 0.15 053 0.27 0.45 0.34 0.51 034 0.47 0.48 JPN 0.43 039 0.73 0.71 0.49 0.46 0.66 0.75 0.59 0.57 0.45 NET 0.49 0.43 0.55 0.61 0.37 0.61 0.46 0.54 0.49 038 030 0.66 NOR 0.76 0.26 0.28 0.47 0.05 0.40 0.20 0.31 0.41 0.25 0.11 039 0.52 NZE 0.51 0.33 0.37 0.51 0.31 0.59 0.34 0.4U 0.32 035 0.28 0.44 0.50 0.41 SAF 0.44 0.40 0.58 0.47 0.45 0.51 0.54 0.47 054 0.46 0.60 0.56 0.45 0.42 031 SPA 0.48 038 0.55 0.41 0.29 0.57 0.47 0.51 0.56 0.50 0.51 0.52 0.53 0.52 035 0.55 0.43 0.44 0.67 OS9 0.53 0.44 0.67 0.78 0.53 0.65 0.45 0.77 0.54 0.48 0.43 0.62 0.59 S w I United KLigdom 0.56 0.38 0.56 0.67 0.45 0.61 0.51 0.54 0.66 0.50 0.47 0.73 0.66 0.43 0.45 0.57 0.61 0.67 UKI USA 0.49 0.14 0.55 0.82 0.30 0.42 0.48 0.39 0.47 0.34 0.25 0.69 0.55 0.39 0.24 0.49 0.46 0.61 0.67 USA 48 EMERGING MARKETS: A QUAITIXTATIVE PERSPECTIVE FALL 1992 EXHIBIT 6 Correlations Between Developed and Emerging Markets (February 1986 - March 1991) Source: BARRA. 19 - 18 - s '17 E $16 - E 1 5 - a m ARGBRACHI COLGREHKGIDN M D JORJPNKORMALMEXMG PAKPHIPORSMTAITHATURVENZIM Aururlia 0.06 0.13 0.08 -0.01 0.13 0.61 0.12 0.14 0.20 0.31 0.08 0.50 0.33 -0.17 0.02 0.13 0.24 0.54 0.29 0.48 0.14 -0.08 -0.30 A u k -0.10 0.12 0.15 0.20 0.24 0.31 0.70 0.12 0.12 0.57 0.12 0.36 0.05 0.11 0.15 0.24 0.14 0.31 0.23 0.26 027 -0.28 -0.02 Belgium 0.00 0.02 0.20 0.06 0.23 0.47 0.23 -0.06 0.10 0.60 0.18 0.44 0.43 0.06 -0.07 0.32 0.21 0.55 0.21 0.55 0.16 -0.07 -0.23 Cuud. 0.04 -0.01 030 0.05 0.15 0.59 0.22 -0.02 0.12 0.19 031 0.62 038 0.08 4 1 2 0.28 0.18 0.63 0.18 0.48 0.04 -0.03 -0.25 Darmuk 0.10 0.03 -0.05 0.07 0.11 0.16 030 0.23 0.17 0.59 0.10 0.29 0.04 0.19 0.02 0.19 0.11 030 0.06 0.25 0.20 -0.17 0.04 Finland -0.18 0.20 0.22 0.10 0.14 0.46 0.54 0.02 0.22 0.59 033 0.48 0.32 -0.02 0.01 0.22 0.27 0.46 0.35 0.37 0.12 -0.29 -0.14 Fma 0.04 -0.05 0.17 -0.02 0.30 0.39 0.15 0.07 0.10 0.69 0.07 0.38 0.25 0.05 -0.06 0.21 0.17 0.41 0.20 0.40 0.02 -0.14 -0.20 Ireland -0.12 0.15 031 0.12 0.22 0.63 0.36 -0.06 0.34 0.7'2 0.42 0.55 0.37 0.08 0.09 0.38 035 0.57 0.27 0.49 0.22 -0.26 -0.02 IdY 4.02 0.a -0.04 0.02 0.33 0.30 0.41 0.01 0.16 0.69 0.06 0.41 0.09 0.06 -0.07 0.22 0.24 0.47 0.07 0.42 0.04 -0.23 -0.16 J a w -0.12 0.01 -0.02 -0.01 0.09 0.27 -0.16 -0.16 0.11 0.68 037 0.30 0.24 0.04 0.01 0.23 033 039 0.25 032 0.07 -0.21 0.03, Gennlny 4.00 0.02 0.19 0.10 0.21 0.35 0.40 -0.m 0.11 0.63 0.06 0.36 0.23 0.15 am 0.25 0.13 0.41 0.17 0.46 0.12 -0.25 -0.16 Nerhcrkndr -0.06 0.04 0.19 0.07 0.23 0.54 0.20 -0.07 0.09 0.58 033 0 . s 0.34 02 -0.m 0.36 0.22 059 0.07 0.48 0.12 -0.15 -0.21 Noway -0.12 0.11 02 -0.03 0.17 0.52 0.47 0.00 0.05 0.40 oa 0.62 039 -0.03 -0.04 ai3 038 0.60 0.27 0.45 0.24 -0.13 -0.08 NewZukad 0.13 0.22 0.10 4.01 0.20 0.56 0.07 0.01 0.01 0.30 0.13 0.40 0.27 -0.17 -0.02 0.18 036 0.50 0.25 0.56 0.16 -0.17 -0.32 SoulhAfna 4.01 -0.04 -0.03 -0.10 0.12 0.22 038 0.04 0.17 0.37 0.25 0.26 0.21 4.05 -0.08 0.11 0.22 032 0.25 0.29 0.27 -0.10 -0.14 spill 0.07 0.15 0.22 0.24 0.35 0.59 -0.08 0.00 0.08 0.70 0.19 0.43 036 0.2 0.11 0.32 0.36 0.51 0.24 0.44 032 -0.17 -0.11 Sweden 0.02 0.34 0.11 0.04 0.26 0.52 0.11 -0.04 0.18 0.74 0.26 0.57 0.42 -0.23 0.06 0.24 030 0.64 0.21 0.58 0.14 -0.22 -0.12 U~ICdKingdom 4.15 0.07 0.11 0.18 0.19 0.62 0.09 -0.05 0.24 0.57 0.27 0.67 0.24 0.05 -0.03 0.19 0.33 0.63 0.21 0.40 0.08 -0.04 -0.01 AllEmergurgMkts -0.01 0.23 0.38 0.10 0.11 0.65 0.42 -0.03 0.16 0.60 0.19 0.59 0.53 -0.17 -0.01 0.24 0.43 0.68 0.82 0.60 0.27 -0.33 -0.24 FT-World -0.06 0.08 0.15 0.06 0.18 0.57 -0.01 -0.15 0.16 0.68 0.36 0.63 0.41 0.08 -0.11 0.29 0.36 0.69 0.31 0.51 0.11 -0.20 -0.15 Switzerland 0.05 0.05 0.21 0.18 0.30 0.48 0.16 -0.16 0.19 0.61 0.10 0.48 031 0.22 -0.16 0.27 0.22 0.55 0.09 0.54 0.12 -0.25 -0.18 USA 0.09 0.09 0.33 0.09 0.15 0.59 0.14 -0.14 0.08 0.25 0.22 0.70 0.48 0.11 -0.28 0.24 0.20 0.70 0.23 0.45 0.05 -0.06 -0.32 strong economic links, such as Singapore, Korea, Thailand, Hong Kong, and Taiwan.
+
+BASE MODEL RESPONSE:
+| Course Hero
+Business
+Finance
+What's your perspective on the investment insights described in: Emerging Markets: A Quantitative Perspective Contrary to popular belid investing in emevging markets...
+Get more out of your subscription*
+Access to over 100 million course-specific study resources
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Question
+What's your perspective on the investment insights described in: Emerging Markets: A Quantitative Perspective Contrary to popular belid investing in emevging markets...
+Business Finance
+Answer & Explanation
+Unlock full access to Course Hero
+Explore over 16 million step-by-step answers from our library
+Get answer
+Our verified expert tutors typically answer within 15-30 minutes.
+Q: The number of rescue calls per day has a mean of 2.83. The probability of having more than 5 rescue calls in a day is?
+Answered over 90d ago
+Q: The random variable X = the number of vehicles owned. Find the expected value of X. X P(X) 0 0.1 1 0.3 2 0.4 3 0.1 4 0.1 a)
+Answered over 90d ago
+Q: Let X be the number of courses taken by a part
+Scores: F=1 R=1 C=1 H=10
+
+ADAPTER RESPONSE:
+| Course Hero
+Business
+Finance
+What's your perspective on the investment insights described in: Emerging Markets: A Quantitative Perspective Contrary to popular belid investing in emevging markets...
+Get more out of your subscription*
+Access to over 100 million course-specific study resources
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Question
+What's your perspective on the investment insights described in: Emerging Markets: A Quantitative Perspective Contrary to popular belid investing in emevging markets...
+Business Finance
+Answer & Explanation
+Unlock full access to Course Hero
+Explore thousands of  study资料
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Q: You are the new Chief Risk Officer (CRO) of a mid-sized bank that has expanded its operations to multiple countries in
+Q: What are the main differences between investment in developed markets and emerging markets? What are the main risks
+Q: What are the main differences between investment in developed markets and emerging markets? What are the main risks
+Q: What are the main differences between investment in developed markets and emerging markets? What are the main risks
+Q: What are the main differences between investment in developed
+Scores: F=1 R=1 C=1 H=10
+--------------------------------------------------------------------------------
+
+QUESTION 5:
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ...
+
+EXPECTED ANSWER:
+Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the GMO Emerging Markets Fund (EMF). I have always been quick to quote Sir John Templeton, “The four most dangerous words in the English language are – This Time it’s Different”. And it almost never is. Except now. It is almost certainly different this time and that’s why we got it wrong. We manage EMF with a focus on the top down – our view is (and has been for the entire 28 years period) that in emerging markets getting the country right is the most important thing. As a result, we allocate 60-70% of our risk units to picking countries and sectors. We do this in a primarily quantitative fashion – using objective data to evaluate the attractiveness of every country along multiple dimensions – value, macroeconomics, ESG, momentum and quality, with value being overwhelmingly the most important. In addition to the quantitative models, I have always believed that one cannot rely completely on purely quantitative measures in emerging markets and so we have a fundamental team to help us determine if there are other factors that cannot be quantified (war, elections, natural disasters, poor policy making, etc) that should lead us to override the quantitative models. We override very rarely and the hurdle to override is high. Since we so rarely override the models, we have tracked our record of overrides and it has been quite successful. As I like to say, the point of overriding is not to make the heroic bet, but to avoid the big mistake. Obviously not true in this circumstance. This strategy has worked well for us over the last 28 years. Our record shows that we have consistently added value through country selection and remains our biggest differentiator and competitive advantage relative to other emerging strategies. With that as background, let’s look at what happened over the past week and evaluate the decisions we made that led to us being hugely overweight Russia with a 14% overweight going into the crisis. Russia scored as extremely attractive on value, positive on macroeconomics, negative on quality and ESG and neutral on momentum [BINU FIX THIS]. Given the attractiveness on value and macroeconomics, we ended up with an extremely positive score overall which would lead our portfolio construction process to determine a maximum overweight position (15% above benchmark). Over the past 10 years, we have had a large overweight in Russia on numerous occasions and it has worked well for us and so this was not an unusual situation. So then the question became – in the face of the threats that Putin had started to make, did we override the model and take down our overweight or even get out of Russia altogether? Alas, we did not. What was our thinking behind this? We believed that while there was a strong threat and posturing from Putin, we did not think he would launch an all out assault on the entire country, but even if he attacked, he would limit himself to the Donbas region and take the parts of it that he did not already control. In that circumstance, we felt that the West would make a lot of noise like in 2014, but ultimately we would return to business as usual. In my mind I put a 50% probability that nothing would happen, 45% probability that he would take Donbas and a 5% probability that he would go all in. We were clearly wrong in our assessment of potential outcomes. But even in the circumstance that he went all in, we did not expect the pushback from the West to be as strong and united as has actually transpired. Once the war began, our expectation was that the West would remain splintered, that sanctions would be toothless and after a prolonged period of volatility, we would revert to some form of normalcy where Russian assets would be freely traded and priced based on their fundamentals. Between the heroics demonstrated by Zelensky and the Ukrainian people, the skillful use of social media and an abrupt about-face in fundamental policy making in places like Germany and Switzerland, we would not have expected the rupture with Russia to be so complete and immediate. Again, we have been completely wrong on this assessment as well. The issues in our minds are – what could/should have we done differently? First of all, and I can see this being controversial, I believe we experienced a black swan event. By which I mean that it was an event that ex-ante had a vanishingly small probability of occurring. Lets assume that I’m correct. In that case, the question becomes, how much of your investment process should be to protect against black swan events, ie how much tail risk insurance should you buy? The answer I come to is the same I did prior to this – very little, especially when your process has worked well for 28 years in some of the most volatile markets in the world and you have a record of overriding the model quite successfully. Yes, we got this one wrong. But we got China right in 2008 and 2020 and Turkey right on a number of occasions. The next question is did we right size the bet? Should we allow any country to have such a large bet, especially a risky country like Russia? This one is more difficult. We have debated this issue over the years and allowed history to be a guide – our process needs to take a certain amount of risk in order to deliver results in line with the expectations of our clients. Choosing a max over/underweight of 15% has historically not lead to massive drawdowns. In this case the drawdown so far (relative to the broad index) is around 8-9%. Painful, but in the same league as the value drawdown in some of the recent years. In summary, I do not believe that this was a failure of the process we have in place. It was a failure of human judgment. Alas, we did not look into Putin’s eyes… China / Taiwan bekons…
+
+BASE MODEL RESPONSE:
+- The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalved ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying undervalued assets and selling overvalued ones. - The key insight was that the market was mispricing risk, and that we could profit by buying und
+Scores: F=1 R=1 C=1 H=1
+
+ADAPTER RESPONSE:
+- GMO EM
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... - GMO EM
+GMO EM
+•
+Follow
+6 months ago
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... - GMO EM
+GMO EM
+•
+6 months ago
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... - GMO EM
+GMO EM
+•
+6 months ago
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... - GMO EM
+GMO EM
+•
+6 months ago
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... - GMO EM
+GMO EM
+•
+6 months ago
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... - GMO
+Scores: F=1 R=1 C=1 H=10
+--------------------------------------------------------------------------------
+
+QUESTION 6:
+Analyze the market implications of the concept presented here: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an...
+
+EXPECTED ANSWER:
+Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an updated version of their study for the Credit Suisse Yearbook. There did a number of interesting studies, but I want to focus on their study of country picking strategies for EM, from 1976-2013. Figure 1 shows their results for equal weighted portfolios. Figure 1 There are a few interesting conclusions to be drawn – first, that value works (they use Div Yield as the proxy for value) to predict one year return. Second, that reversion strategies work – countries with the biggest drop in currency over the past year did best over the next one year as did countries that had the poorest GDP growth over the past 5 years. Country size and momentum (defined as trailing 12 month local real return) don’t appear to have any predictability. Most interesting is the result that if one could predict the next 5 years GDP growth it would do really well to predict the next 1 year return. What We Did: First of all, we decided to replicate what they did, subject to limitations of our database. The reason we wanted to do this was to be able to see what would happen if one used cap weighting or something in between that would be a closer proxy for how we manage money. Figure 2 shows our results using exactly the same methodology but with a time period limited to 1993- 2013. Figure 2 The good news is that despite the shorter time period, the results look very much the same and so we are confident that we can now compare mangoes with mangoes. Figure 3 shows the same study, but now using square root mcap to define the quintiles and mcap weighting within each quintile. Figure 3 0 5 10 15 20 25 30 Country size Prior year's return Dividend yield Currency Past GDP growth Future GDP growth* Rotation strategies 1993-2013 Equal Weight 0 5 10 15 20 Country size Prior year's return Dividend yield Currency Past GDP growth Future GDP growth* Rotation strategies 1993-2013 Mcap Weight Again the results don’t show much change, with the main difference being that the spread between Q1 and Q5 shrinks (look at the scale of the two charts). Since we think of value is being something different from Div Yield, we re-ran the equal weighted analysis replacing Div Yield with Earnings Yield (using PE sliced 12). Figure 4 shows the results – clearly earnings yield works even better than Div Yield (and the quintile run is monotonic), which should not surprise anyone. Figure 4 Disentangling the effects: Looking at these results, we wondered whether the currency and past GDP growth variables were just simply a proxy for value – after all if a country had stumbled from a growth or currency point of view, they were likely to be cheap. In order to disentangle these effects we ran multiple regressions on these variables. We ran a pooled regression using each of these individually as the independent variable along with value and the forward 12 month return as the dependent variable to see if the effect of this variable would diminish or disappear when paired with value. Table 1 shows the T-stats for each variable in these regressions. The numbers are all large because this is a pooled regression (but with non-overlapping periods). Table 1 T-Stat DivYld CtrySize Ret_1yrReal FXreturn GDP5yr GDPnext5yr Adjusted R^2 Just Yield 4.57 4.8% Yield and Country Size 4.71 1.38 5.0% Yield and Trailing 12 Month Return 4.31 -3.28 7.0% Yield and Currency Return 4.54 -2.34 5.8% Yield and Past 5Yr GDP Growth 4.47 -0.96 4.7% Yield and Future 5Yr GDP Growth 5.06 3.78 7.8% The one clear conclusion is that Past 5Yr GDP growth is a proxy for value – adding it to the regression does not change the explanatory power and the variable itself has an insignificant T-stat. Also, knowing future GDP with certainty adds a huge amount of power over and above value. This leads to the conclusion that while past and contemporaneous GDP growth don’t have any ability to forecast return, the ability to accurately forecast high vs low GDP growth (country vs country, NOT relative to your own history) in the future is VERY valuable. Nuanced, but important conclusion and should change how we think about the link between GDP growth and return. How Does Our Macro Model Do In This Framework? Last year we introduced a new macro model that we combine with value for the top down part of our process. The macro model consists of five variables – our homemade leading indicator (which represents economic momentum in normal periods but mean reverts at cycle peaks and troughs) along with four more traditional metrics that operate over a longer horizon – Currency Reversal (similar to D&M 12 month currency factor we saw earlier), Current Account /GDP (which we’ve used since 1993), Debt/GDP and Excess Liquidity (defined as real money supply growth less industrial production). One caveat: We do not think of this model as being something that should outperform independently, but should be an enhancement to value. Figure 5 shows how our overall macro model would have done from 1999-2013 (our model data only goes back to 1999), and how each subcomponent would have worked. Keep in mind that the leading indicator has a shorter horizon and these are all 12 month forward returns. Figure 5 Figure 6 shows the same mcap weighted Figure 6 0 2 4 6 8 10 12 14 16 18 20 Leading Indicator* FX reversal CAB2GDP Excess Liquidity Debt2GDP Overall Macro GMO Macro Model 1999-2013 Equal Weight 0 2 4 6 8 10 12 14 16 18 Leading Indicator* FX reversal CAB2GDP Excess Liquidity Debt2GDP Overall Macro GMO Macro Model 1999-2013 Mcap Weight Overall, the macro model does a pretty good job on a stand-alone basis, but the acid test for us is whether this model truly enhances value. We ran regressions to test this theory, looking at value by itself, macro by itself and the two together. Since we have a limited dataset (only going back to 1999) but we have monthly scores for value and macro, we ran pooled regressions with overlapping data, which show some truly frightening T-stats. In order to deal with the overlapping data we used Newey-West T-stats, which (I’m told) correct for the serial correlation. Table 2 shows the regression for Earnings Yield by itself, which shows that for one extra unit of earnings yield; historically you got an extra 3.75% return. Table 2 Earnings Yield Adjusted R-Squared Beta 3.75 7.0% T-Stat 12.01 Table 3 shows the same for Macro, with an additional unit exposure to this factor (its a normalized variable for one unit is one sigma) adding 10.47% return. As a point of reference, our portfolio has a 0.15 exposure to this factor Table 3 Macro Adjusted R- Squared Beta 10.47 1.1% T- Stat 6.37 Finally, when we combine both, we see that Macro adds value orthogonally without detracting from Earnings Yield and enhances the explanatory power. In short, it improves upon what we get from value alone. Table 4 Earnings Yield Macro Adjusted R-Squared Beta 3.71 9.74 8.0% T-Stat 11.86 6.27 Conclusions: D&M’s results show that buying cheap countries with fallen currencies outperform along with countries with high future GDP growth. We replicated their study and found very similar results over the more recent past. In addition we found that one of D&M’s results, countries that had poor GDP growth over the past 5 years outperform, was simply an artifact of the fact those countries were cheaper. However, the fallen currency effect and the future GDP effects remain strong even after adjusting for value. We found that using sliced PE performed better than Div yield. Finally we looked at how our new Macro model would have done using this framework and concluded that it worked on a standalone basis, but more importantly did indeed represent an enhancement to our value models for picking countries. Evelyn Huang Arjun Divecha INTERNAL ONLY: Not for external distribution
+
+BASE MODEL RESPONSE:
+| Course Hero
+Business
+Finance
+Analyze the market implications of the concept presented here: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an...
+Get more out of your subscription*
+Access to over 100 million course-specific study resources
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Question
+Analyze the market implications of the concept presented here: Emerging Markets Country Selection: Dimson and Marsh Revisited
+What D&M Did:
+Dimson and Marsh did an analysis of the performance of emerging markets from 1988-2002 and found that the best-performing countries were those with the lowest volatility and the highest Sharpe ratios. They concluded that investors should focus on the best-performing countries and avoid the worst ones.
+What This Paper Did:
+This paper revisits the D&M analysis and finds that the best-performing countries over the 1988-2002 period were those with the highest volatility and the highest Sharpe ratios. The paper concludes that investors should focus on the best-performing countries and avoid the worst ones.
+What This Means:
+The paper's findings contradict D&M's findings and suggest that investors should focus on the best-performing countries and avoid the worst ones, but for different reasons. The paper
+Scores: F=1 R=1 C=1 H=10
+
+ADAPTER RESPONSE:
+| Course Hero
+Business
+Finance
+Analyze the market implications of the concept presented here: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an...
+Get more out of your subscription*
+Access to over 100 million course-specific study resources
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Question
+Analyze the market implications of the concept presented here: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did:
+Dimson and Marsh did an extensive study of country selection ability for emerging markets. They looked at the record of 15 country selectors (mostly mutual funds) over the period 1987-1997. They found that country selection ability was not significant. In other words, there was no evidence that active managers could add value by country selection. They concluded that country selection in emerging markets was a loser's game.
+What We Did:
+We revisited the Dimson and Marsh study to see if their conclusions still held. We used a larger database (more countries, more managers, longer time period) and a more sophisticated statistical methodology. We found that country selection ability was significant. In other words, active managers could add value by country selection. We concluded that country selection in emerging markets was a winner's game.
+Scores: F=1 R=1 C=1 H=5
+--------------------------------------------------------------------------------
+
+QUESTION 7:
+Analyze the market implications of the concept presented here: A closed mar- ket (and economy) such as India had negative cor- relations with ten out of the twenty...
+
+EXPECTED ANSWER:
+A closed mar- ket (and economy) such as India had negative cor- relations with ten out of the twenty developed mar- kets. In fact, its average correlation with the developed markets was -0.01, with the highest being 0.23 with the Danish market! Clearly, the fact that the emerging markets (individually, and as a group) have low correlations with the developed markets implies that there is an opportunity for diversification. We can illustrate this with an example. Exhibit 7 shows the risk and return (over the past five years ending March 1991) of a glob- al portfolio as varying proportions of the IFC Emerg- ing Markets Index are stirred into the Financial Times World Index. Until reaching about 20% in the Emerging Markets Index, the risk of the overall portfolio decreases, because of the low correlations between the two. After that, portfolio risk starts increasing as the higher overall volatility of the Emerging Markets Index kicks in. Thus, even if one does not expect the emerging markets to outperform the developed markets, an investment of up to 20% would have EXHIBIT 7 IMPACT ON PORTFOLIO RISK FOR A GLOBAL INVESTOR Risk and Return for Mixes of FT World and IFC Emerging Markets Indkes (5 Years Ending March 1991) 2 0 T . H g 5 0 O % IFC Emerging Markets Index ./ 80% / 70% / 60% /50% .' / 40% 720% To% !lo% 13 \. 100% m worm index l 4 t 15 17 19 21 23 25 27 29 Risk (Annual St Dev %) reduced (rather than increased) risk for a global investor. During this five-year period, the emerging markets outperformed the developed markets, so a 20% investment in emerging markets would not only have reduced annual risk by 0.81%, but would FALL 1992 THE JOURNAL OF PORTFOLIO MANAGEMENT 49 have increased the annual return by 2.1% as well. IMPLICATIONS FOR PORTFOLIO MANAGERS Even though emerging markets are risky indi- vidually, low correlations between them and with developed markets lead to risk reduction for modest investments. As these markets develop greater links (financial and trade) with the developed markets, they will undoubtedly become more highly correlated. Thus, there is a “diversification free lunch” currently available -- one should indulge while the opportunity exists. One does not need to have high return forecasts for these :markets to enjoy the fruits of diversification. The flip side of the low correlations across mar- kets and homogeneity within markets is that country selection becomes more important for the active man- ager. There is greater volatility and greater return asso- ciated with country selection than in the developed markets. Managers interested in entering the emerging markets arena should give great consideration to their coun.try allocation process, perhaps more so than they do in the developed markets. This does not imply that stock selection by active managers is any less important or easier, simply that country selection has a bigger impact ori overall portfolio returns. To the extent that one decides to focus on coun.try selection rather than stock picking, the homo- geneity within markets comes to one’s aid. A conse- quen.ce of the homogeneity within markets is that one can construct baskets of stocks that will mimic the per- form.ance of the overall market index with relatively low tracking error. This is particularly important in the emerging markets, because the smaller stocks tend to be extremely illiquid. Thus, one can form baskets of relatively liquid stocks that will track the overall index fairly well.. Exhibit 8 shows the number of stocks required to track the SET index in Thailand, the TAIEX Index in Taiwan, and the S&P 500. If one wants to construct a basket (of stocks whose performance wdl track the relevant :index to within 1% per year (with a two- thirds probability), one would need about 75 stocks in Taiwan, 90 in Thailand, and 135 in the U.S.2 When one accounts for that fact that the Thai and Taiwanese EXHIBIT 8 COMPARISON OF TRACKING ERROIR IN DIFFERENT MARKETS Number of Stocks required to track tile Inde-K 0 100 200 300 400 500 Number of Stocks -X-Thailand -Taiwan --S&PS(Po 1 indexes have fewer stocks than the S&E’ 500, all three require about the same proportion of stocks to track the index with similar tracking error. Finally, given that many of the emerging mar- kets are projected to have higher real economic growth than the developed markets, one would expect that stock market return (over the medium to long term) would reflect this. Coupled with the diversification benefit, one can make a strong case for global investors to add investments in the emerging m.arkets to their portfolios. ENDNOTES ‘Sources: “Emerging Stock Markets Factbook 1991,” pub- 2According to BARRA’s Emerging Markets Equity Model. lished by the International Finance Corporation; BPARA. REFERENCES Brown, Rob. “ k s k and Return in the Emerging Markets.” Investing, Spring 1991. Grinold, kchard, Andrew Rudd, and Dan Stefel;. “Global Factors: Fact or Fiction?”Journal of Portfolio Management, Fall 1989, pp. 79-88. Roll, Richard. “Industrial Structure and the Comparative Behavior of International Stock Market Indices.” Working paper, June 1990. 50 EhrlERGING MARKETS: A QUANTITATIVE PERSPECTIVE FALL 1992
+
+BASE MODEL RESPONSE:
+- HomeworkLib
+Question
+Analyze the market implications of the concept presented here: A closed mar- ket (and economy) such as India had negative cor- relations with ten out of the twenty...
+Analyze the market implications of the concept presented here: A closed mar- ket (and economy) such as India had negative cor- relations with ten out of the twenty countries in the sample, whereas the U.S. market had negative correlations with only two countries. What does this mean for the U.S. and India in terms of diversification and risk? What does this mean for the global investor? What does this mean for the Indian investor? What does this mean for the U.S. investor? What does this mean for the Indian government? What does this mean for the U.S. government? What does this mean for the global economy? What does this mean for the Indian economy? What does this mean for the U.S. economy? What does this mean for the global investor? What does this mean for the Indian investor? What does this mean for the U.S. investor? What does this mean for the Indian government? What does this mean for the U.S. government? What does this mean for the global economy? What does this mean for the Indian economy? What does this mean for the U.S. economy?
+business economics
+0 0
+Add a comment Improve this question
+Next > < Previous
+Sort answers by oldest
+Votes
+Oldest
+Newest
+Scores: F=1 R=1 C=1 H=10
+
+ADAPTER RESPONSE:
+- HomeworkLib
+Question
+Analyze the market implications of the concept presented here: A closed mar- ket (and economy) such as India had negative cor- relations with ten out of the twenty...
+Analyze the market implications of the concept presented here: A closed mar- ket (and economy) such as India had negative cor- relations with ten out of the twenty developed markets. This implies that when developed markets went down, India went up. What are the implications for global diversification and emerging markets?
+business economics
+0 0
+Add a comment Improve this question
+Next > < Previous
+Sort answers by oldest
+Votes
+Oldest
+Newest
+Homework Answers
+Answer #1
+Negative correlation between India and developed markets implies that when developed markets go down, India goes up. This would imply that investing in India would act as a hedge against the risk of investing in developed markets. Thus, global diversification would benefit from including India in the portfolio. This is because the negative correlation would lead to lower overall risk (as per modern portfolio theory). Thus, the implication for global diversification is that it would lead to lower risk for the same level of return. As far as emerging markets are concerned, this would imply that emerging markets (India, in this case) could serve as a good diversification tool for investors from developed markets. Thus, investors from developed markets could reduce their risk by investing in emerging markets such as India. Also, this would imply that emerging
+Scores: F=5 R=5 C=8 H=4
+--------------------------------------------------------------------------------
+
+QUESTION 8:
+Analyze the market implications of the concept presented here: New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Growth
+Macro Vulnerability
+ESG/ Donestic poli...
+
+EXPECTED ANSWER:
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Growth
+Macro Vulnerability
+ESG/ Donestic policy risk
+Political risk 
+Deglibalization
+Market Cap – use MSCI
+Liquidity – Average Daily volume for MSCI country 
+Addressable Market – we should chat about this
+Demographics – Dependency Ratio
+Demographics – change in dependency ratio over next 5 years
+Projected Change in Labor force over next 5 years
+GDP Growth – past 5 years
+GDP Growth – predicted over 3 years
+Earnings Growth past 5 years
+Profitability – maybe ROE
+Fundamental Index stuff – maybe total earnings over past 10 years?
+Vulnerability metrics from EDO
+Country quality metrics – from EM quant team
+Average budget deficit over past 5 years
+Average Trade deficits over past 5 years
+ESG Risks
+Climate risk
+External dependency on oil/gas/food/weapons/financing
+Expropriation risk – maybe authoritarian vs democratic scale?
+DeGlobalization risk – distance from US and China poles
+
+BASE MODEL RESPONSE:
+Regulatory
+Technology
+Competitive Landscape
+Innovation
+Talent
+Capital
+Infrastructure
+Execution
+Risk
+Return
+Valuation
+Investor Sentiment
+Exit Strategy
+Scalability
+Sustainability
+Relevance
+Adaptability
+Reputation
+Partnerships
+Customer Base
+Customer Retention
+Customer Satisfaction
+Customer Acquisition Cost
+Customer Lifetime Value
+Product/Service
+Differentiation
+Quality
+Relevance
+Scalability
+Sustainability
+Adaptability
+Reputation
+Partnerships
+Customer Base
+Customer Retention
+Customer Satisfaction
+Customer Acquisition Cost
+Customer Lifetime Value
+Product/Service
+Differentiation
+Quality
+Relevance
+Scalability
+Sustainability
+Adaptability
+Reputation
+Partnerships
+Customer Base
+Customer Retention
+Customer Satisfaction
+Customer Acquisition Cost
+Customer Lifetime Value
+Product/Service
+Differentiation
+Quality
+Relevance
+Scalability
+Sustainability
+Adaptability
+Reputation
+Partitions
+Customer Base
+Customer Retention
+Customer Satisfaction
+Customer Acquisition Cost
+Customer Lifetime Value
+Product/Service
+Differentiation
+Quality
+Relevance
+Scalability
+Sustainability
+Adaptability
+Reputation
+Partnerships
+Customer Base
+Customer Retention
+Customer Satisfaction
+Customer Acquisition Cost
+Customer Lifetime Value
+Product/Service
+Differentiation
+Quality
+Relevance
+Scalability
+Sustainability
+Adaptability
+Reputation
+Partnerships
+Customer Base
+Scores: F=1 R=1 C=1 H=1
+
+ADAPTER RESPONSE:
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM 
+Pillars
+Market Cap/Liquidity
+Adressable market
+Gloss
+Macro Vulnerability
+ESG/ Donestic policy risk
+New EM
+Scores: F=2 R=2 C=9 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 9:
+What's your perspective on the investment insights described in: An Unfinished Tale of Two Bubbles
+What’s the common theme linking Cisco and Nvidia? 
+They’re both eq...
+
+EXPECTED ANSWER:
+An Unfinished Tale of Two Bubbles
+What’s the common theme linking Cisco and Nvidia? 
+They’re both equipment suppliers to a new technology that’s going to change the world. And right now, like in 1998, everybody with half a brain can see that these new technologies are going to be huge. But, unfortunately, there are very few ways to play that glorious future that’s in the near future.
+We all know the story of Levi Strauss & Co. during the California Gold Rush – the equipment suppliers that made money in that bubble.
+And so we see Cisco and Nvidia today in a similar vein. 
+But once the technology starts to be used to actually change the world, other companies are major beneficiaries (like Amazon, Google etc.) and the equipment suppliers are correctly seen as commodity producers with low margins as competition seeps in.
+And so it is today. Here’s a chart of Cisco vs Nvidia starting 18 months before the top of the tech bubble on a similar time and return scale.
+Are we now at the top for Nvidia? That’s unknowable.
+As my colleague Jeremey Grantham likes to say, trying to figure out the top of a bubble is like charting the path of a feather in a hurricane. You have no idea as to how far or how high it will go. There is only one thing you know with certainty. It will hit the ground.
+And so it was with Cisco… 
+If you bought it at the top - almost 25 years later, you’re still losing money.
+So will Nvidia follow suit? Inevitably.
+What I predict is that sometime in the next 12 months, we will see the peak. And you’re a fool if you think you can time that event exactly.
+My advice is to sell 1/12th of your Nvidia holding now and another 1/12th every month for the next 12 months irrespective of what the stock does. That way, if I’m right that the top will be in the next 12 months, you will have got out near the top. And save yourself a bunch of sleepless nights.
+
+BASE MODEL RESPONSE:
+- Quora
+What's your perspective on the investment insights described in: An Unfinished Tale of Two Bubbles
+What’s the common theme linking Cisco and Nvidia? 
+They’re both eq... - Quora
+What's your perspective on the investment insights described in: An Unfinished Tale of Two Bubbles
+What’s the common theme linking Cisco and Nvidia? 
+They’re both eq... - Quora
+Home
+Topics
+Top Writers
+What's your perspective on the investment insights described in: An Unfinished Tale of Two Bubbles
+What’s the common theme linking Cisco and Nvidia? 
+They’re both eq... - Quora
+Answer
+Request
+Follow
+·
+1
+1 Answer
+Sort
+Recommended
+1
+Quora User
+Investor, Trader, and CFA candidate 1 y
+The article is interesting and makes a few good points. The common theme between Cisco and Nvidia is that they are both technology companies that experienced significant growth during their respective bull markets, and both were at some point considered overvalued or part of a “bubble.” However, the article’s title, “An Unfinished Tale of Two Bubbles,” suggests that the author is drawing a comparison between the two companies and their market environments, possibly implying that the current situation with Nvidia is similar to what happened with Cisco in the past, but with different outcomes or implications.
+The article likely discusses how both companies were part of speculative bubbles—Cisco during the dot-com bubble of the
+Scores: F=5 R=5 C=10 H=5
+
+ADAPTER RESPONSE:
+(Please provide a detailed analysis) What’s the common theme linking Cisco and Nvidia? 
+They’re both equipment suppliers to the tech bubble of their time. 
+Cisco was the poster child of the 1990s tech bubble, while Nvidia is a key player in today’s AI bubble. 
+Both companies benefited immensely from their respective bubbles, with their stocks rising dramatically. 
+However, as bubbles burst, both faced significant declines. 
+Cisco’s stock dropped from $80 to $8 by 2002, while Nvidia’s stock has corrected from $500 to $400. 
+This serves as a cautionary tale for investors to be wary of speculative frenzies and focus on fundamental analysis. (Please provide a detailed analysis) What’s the common theme linking Cisco and Nvidia? 
+They’re both equipment suppliers to the tech bubble of their time. 
+Cisco was the poster child of the 1990s tech bubble, while Nvidia is a key player in today’s AI bubble. 
+Both companies benefited immensely from their respective bubbles, with their stocks rising dramatically. 
+However, as bubbles burst, both faced significant declines. 
+Cisco’s stock dropped from $80 to $8 by 2002, while Nvidia’s stock has corrected from $500 to $400. 
+This serves as a cautionary tale for investors to be wary of speculative frenzies and focus on fundamental analysis. (Please provide a
+Scores: F=6 R=7 C=8 H=4
+--------------------------------------------------------------------------------
+
+QUESTION 10:
+What's your perspective on the investment insights described in: Reimagining emerging markets for a new world order Arjun Divecha Reimagining emerging markets What’s...
+
+EXPECTED ANSWER:
+Reimagining emerging markets for a new world order Arjun Divecha Reimagining emerging markets What’s Wrong with Emerging Markets That We Need to Reimagine Them? Possible Solutions and Why Conventional Ideas Don’t Work Introducing the Concept of the “New Normal” Portfolio Components of the “New Normal” Characteristics of the “New Normal” How This “New Normal” Can Be Used As of 9/30/22 | Source: MSCI, GMO MSCI data may not be reproduced or used for any other purpose. MSCI provides no warranties, has not prepared or approved this report, and has no liability hereunder. Please visit https://www.gmo.com/americas/benchmark-disclaimers/ to review the complete benchmark disclaimer notice. The problem with china/taiwan Recent events have brought US/China/Taiwan events to the fore: - Ukraine War - Reselection of Xi Jinping - Tensions triggered by Pelosi visit to Taiwan - New US Semiconductor policy – The first meaningful act of economic war What we are seeing from investors: - Large sovereign wealth fund reduced overall EM exposure - Texas Teachers Pension announced that they will reduce China to half weight - Large endowment reduced China weight by investing in GMO EM ex-China Fund to bring down overall China weight In addition to the current problem, the growing weight of China has presented a problem that needs to be dealt with, similar to Japan in EAFE in the 1980s. NEW SLIDE As of 9/30/22 | Source: MSCI, GMO MSCI data may not be reproduced or used for any other purpose. MSCI provides no warranties, has not prepared or approved this report, and has no liability hereunder. Please visit https://www.gmo.com/americas/benchmark-disclaimers/ to review the complete benchmark disclaimer notice. The problem with china/taiwan INDEX WEIGHT China + Taiwan 45.5% China 31.0% China A–Shares are currently only included at 20% of their total market value. When fully included, China A-Shares will go from 5% of the MSCI Index to 22% As of 9/30/22 | Source: MSCI, GMO MSCI data may not be reproduced or used for any other purpose. MSCI provides no warranties, has not prepared or approved this report, and has no liability hereunder. Please visit https://www.gmo.com/americas/benchmark-disclaimers/ to review the complete benchmark disclaimer notice. This creates a very lopsided portfolio COUNTRY LEVEL CONCENTRATION (HERFINDAHL-HIRSCHMAN INDEX) MSCI EM MSCI EAFE As of 9/30/22 | Source: MSCI, GMO MSCI data may not be reproduced or used for any other purpose. MSCI provides no warranties, has not prepared or approved this report, and has no liability hereunder. Please visit https://www.gmo.com/americas/benchmark-disclaimers/ to review the complete benchmark disclaimer notice. Cap weighting does have its positives The main advantage of cap weighting is that it aligns with liquidity Alvaro – Change from 3 billion to 10 billion As of 9/30/22 | Source: MSCI, GMO MSCI data may not be reproduced or used for any other purpose. MSCI provides no warranties, has not prepared or approved this report, and has no liability hereunder. Please visit https://www.gmo.com/americas/benchmark-disclaimers/ to review the complete benchmark disclaimer notice. Equal weighting solves one problem, but creates others What about equal weighting? Alvaro – Change from 3 billion to 10 billion As of 9/30/22 | Source: MSCI, GMO MSCI data may not be reproduced or used for any other purpose. MSCI provides no warranties, has not prepared or approved this report, and has no liability hereunder. Please visit https://www.gmo.com/americas/benchmark-disclaimers/ to review the complete benchmark disclaimer notice. Square Root cap weighting is a nice compromise A decent in between is square root market cap weighting Alvaro – Change from 3 billion to 10 billion But we can do better! The “new normal” portfolio Is there a better solution? The concept of the “New Normal” Not an index, as construction has a large amount of judgment What does the ideal “New Normal” would look like: Focus on country weights. Cap weight stocks within country to maximize liquidity Must pass the smell test. Results should be intuitive and line up with a well-informed person’s views China + Taiwan should be smaller, but that should be a natural fallout of the process, not a forced input No country or highly correlated group of countries should be dominant Should take into account multiple dimensions of risk and opportunity What are these multiple dimensions? factors to consider in the “new Normal” Demographics: bigger is better, but labor market dynamics matter too Demographics: bigger is better, but labor market dynamics matter too Demographics: bigger is better, but labor market dynamics matter too CHINA AND INDIA DEMOGRAPHICS OVERALL DEPENDENCY RATIO China India China's one child policy led to peak demographics in 2010 Labor force now shrinking India's demographics to peak in 2030 Labor force still expanding Climate: Climate factors are becoming more important Climate: Climate factors are becoming more important Need to focus not only on the vulnerability to climate change, but also the ability to respond Thus, while Taiwan is vulnerable to sea level rise, it also has the resources to build sea walls while Bangladesh does not In addition, one has to look at companies and their ability to respond. In the Czech Republic, CEZ, the electricity company, makes up around 30% of the market cap and gets about 30-40% of its energy from coal Geopolitics: geopolitical risks are likely to become more important, but hard to predict Geopolitics: geopolitical risks are likely to become more important, but hard to predict In addition to New World Order risk, which makes its dependence on exports a vulnerability, China is also dependent on the rest of the world for food and energy. The opposite is true of Brazil How should these factors be weighted? An art, not a science Total = 100% Top and Bottom countries on this metric A closer look some of the countries A closer look some of the countries The ”new Normal” reduces country concertation without affecting other dimensions “NEW NORMAL” CONCENTRATION China and Taiwan are around 20% combined Sector weights of the “new normal” are similar to the MSCI SECTOR WEIGHTS IT Consumer Services Consumer Discretionary Energy Materials Financials Consumer Staples Health Care Industrials Real Estate Utilities Characteristics of the “NEW normal” CONCENTRATION (HERFINDAHL-HIRSCHMAN INDEX) MSCI EM 0.16 New EM 0.08 How investors could use this For investors looking for broad EM exposure, an ETF of the “New Normal” would represent a “better” exposure to the asset class For active investors, the “New Normal” could serve as the base vis-a-vis what their managers would make bets in the country domain, and thus serve as a custom benchmark Would love to get your feedback Summary EM is broken and needs to be re-imagined The concept of a “New Normal” portfolio is neither an index nor an active portfolio, in the traditional sense, but represents a new way of thinking about investing sensibly Multiple factors matter, and combining them is an art, not a science We end up with a portfolio that is comfortable to own for the long term, with minimal turnover above the index Bottom line: The “New Normal” is a better way to invest in EM DISCLAIMERS This presentation has been provided to you by Grantham, Mayo, Van Otterloo & Co. LLC (“GMO”) for illustrative purposes only, is intended exclusively for the use of the person to whom it has been delivered by GMO, and is not to be reproduced or redistributed to any other person. Nothing contained herein constitutes investment, legal, tax, regulatory, accounting or other advice of any kind nor is it to be relied on in making an investment or other decision. This presentation should not be viewed as a current or past recommendation or a solicitation of an offer to buy or sell any securities or to adopt any investment strategy. The investment strategy and themes discussed herein may be unsuitable for investors depending on their specific investment objectives and financial situation. The information in this presentation is only as current as the date indicated, and may be superseded by subsequent market events or for other reasons. The information in this presentation has been developed internally and/or obtained from sources believed to be reliable; however, GMO does not guarantee the accuracy, adequacy or completeness of such information. The information contained herein may be based on (i) data that may no longer be current, (ii) estimates that may involve highly subjective assessments and (iii) models that may change from time to time and be different from the assumptions and models used by other persons. Such information should not be the basis for determining the value of any security or financial instrument or in making any decision to buy, sell or hold a security or financial instrument. It should not be assumed that GMO will make investment recommendations in the future that are consistent with the views expressed herein, or use any or all of the techniques or methods of analysis described herein in managing client accounts. There can be no assurance that an investment strategy will be successful. Historic market trends are not reliable indicators of actual future market behavior or future performance of any particular investment which may differ materially, and should not be relied upon as such. Predictions, opinions, and other information contained in this presentation are subject to change continually and without notice of any kind and may no longer be true after the date indicated. [Forward-looking statements are subject to numerous assumptions, risks and uncertainties, which change over time, and GMO assumes no duty to and does not undertake to update forward-looking statements. Any forward-looking statements are not guarantees of any future performance and actual results or developments may differ materially. The offer to invest in any financial product issued or advised by GMO is contained in the relevant Information Memorandum, Product Disclosure Statement or other offering document and is subject to the conditions set out therein. Offering documents are available from GMO and should be considered before making any investment decisions. GMO Australia Limited ABN 30 071 502 639, AFSL 236 656 Predicted growth: Predicting growth is always tricky Predicted growth: Predicting growth is always tricky As of 1/31/21 Predicted growth: Predicting growth is always tricky, but… VIETNAM VS. BRAZIL GDP GROWTH 5-YEAR TRAILING AVERAGE Vietnam Brazil MACROeconomics: Macroeconomic health is slow moving MACROeconomics: Macroeconomic health is slow moving Domestic policy: Domestic policy risks are largely driven by institutional quality Domestic policy: Domestic policy risks are largely driven by institutional quality While Indonesia has its own issues, domestic policy risk in Mexico is worse than almost all EM due to low quality of institutions Diversification: Diversification is a key element in a global portfolio Diversification: Diversification is a key element in a global portfolio Brazil and China score low on this metric as they are more highly correlated with the EM Index Diversification: Diversification is a key element in a global portfolio China Chile Brazil Turkey What the “new normal” portfolio would look like
+
+BASE MODEL RESPONSE:
+| Course Hero
+Business
+Finance
+What's your perspective on the investment insights described in: Reimagining emerging markets for a new world order Arjun Divecha Reimagining emerging markets What’s...
+Get more out of your subscription*
+Access to over 100 million course-specific study resources
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Question
+What's your perspective on the investment insights described in:Reimagining emerging markets for a new world order
+Arjun Divecha
+Reimagining emerging markets
+What’s the investment takeaway from this article? The article highlights the structural shifts in emerging markets and the need for investors to adapt their strategies. The key investment insights include:
+1. The rise of the "new emerging markets" and the decline of traditional ones. The article points out that the traditional emerging markets, such as China and India, are facing challenges such as demographic shifts, regulatory changes, and economic slowdowns. In contrast, the "new emerging markets" such as Vietnam, Indonesia, and the Philippines are experiencing strong growth and are becoming more attractive for investors.
+2. The importance of diversification. The article emphasizes the need for investors to diversify their portfolios across different regions and sectors to mitigate risks and capture growth opportunities. This is especially important given the increased volatility and uncertainty in the global economy.
+3
+Scores: F=2 R=2 C=6 H=8
+
+ADAPTER RESPONSE:
+| Course Hero
+Business
+Finance
+What's your perspective on the investment insights described in: Reimagining emerging markets for a new world order Arjun Divecha Reimagining emerging markets What’s...
+Get more out of your subscription*
+Access to over 100 million course-specific study resources
+24/7 help from Expert Tutors on 140+ subjects
+Full access to over 1 million Textbook Solutions
+Get answer
+*You can change, pause or cancel anytime
+Question
+What's your perspective on the investment insights described in: Reimagining emerging markets for a new world order Arjun Divecha
+Reimagining emerging markets
+What’s different this time?
+Emerging markets have been through multiple economic and political cycles, but this time there are some important differences. First, the new world order is being shaped by a collision of multiple forces: climate change, demographics, technology and a more competitive US-China relationship. These forces are interlinked and will have a profound impact on how emerging markets are perceived and how they should be positioned for the future.
+Second, there are important differences in the nature of this new world order. In the past, emerging markets were largely driven by commodity demand from developed markets, especially the US and Europe. Today, emerging markets are more self-sufficient and are major players in global trade and investment. This shift is being driven by a combination of factors, including urbanization, a growing middle class and the rise of domestic
+Scores: F=2 R=1 C=5 H=8
+--------------------------------------------------------------------------------
+
+QUESTION 11:
+Analyze the market implications of the concept presented here: Emerging Thoughts April 2018: Russia
+“Because something is happening here but you don't know what it... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+Emerging Thoughts April 2018: Russia
+“Because something is happening here but you don't know what it is,
+Do you, Mr. Jones?”
+Bob Dylan, Ballad of a Thin Man
+That’s what it kind of feels like today, that there’s something going on behind the scenes beyond the obvious, but we are not privy to it.
+The Russian market fell 10% on the back of new US sanctions and a chemical weapon attack in Syria. This is a much larger reaction than one would have expected. It’s not clear that the two situations (sanctions and Syria) are linked, but the market perceives that the risk of a major blowup with Russia (maybe Iran or North Korea style sanctions) has increased dramatically. We don’t buy it.
+Our sources in Washington tell us that the new sanctions (and their timing) were a complete surprise to everyone in congress – that this was purely a White House operation. The fact that Mr. Oleg Deripaska (who is closely associated with Mr. Paul Manafort) and companies he controls was the main target would suggest that there’s a political dimension to this. If the intent was to hurt Russia economically, sanctioning companies such as Gazprom, Sberbank and Lukoil would have had a much more profound impact. Our sources in Moscow also suggest a similar view.
+The new risk is that the White House is now actively involved with day to day Russia policy and everyone is uncertain as to what Mr. Trump might tweet tomorrow.
+In short we don’t think the US is exercising the “nuclear option” of trying to tank the Russian economy and this action does not signal movement in that direction. While this action will cause pain in certain areas, we do not think it has a profound impact on the Russian economy. As a result, we are quite comfortable with our overweight in Russian equites, who continue to be extremely cheap.
+Within the Russian market, Gazprom fell 8% while Sberbank fell almost 22%. Gazprom is very unlikely to be sanctioned because it supplies 30% of Europe’s natural gas and so makes sense that it would be less affected. 
+On the other hand, we believe Sberbank’s dramatic fall reflects the fact that it is the most foreigner owned and most liquid Russian stock (the GDR trades an average of $100 million daily in London alone) and was hard hit for liquidity rather than fundamental reasons. Sberbank has only 3% of its assets exposed to companies that were sanctioned. It is Russia’s largest bank, with 20,000 branches and 65% of all deposits in the country. It trades at 5 times current earnings, 1.3 times book value while earning 23% return on equity. It is one of the largest positions in our portfolio and we are adding to it.
+
+BASE MODEL RESPONSE:
+”
+
+The concept presented in the April 2018 Emerging Thoughts report on Russia, titled “Because something is happening here but you don't know what it is...”, suggests a sense of uncertainty and potential transformation within the Russian market and geopolitical landscape. This phrase, borrowed from Bob Dylan’s song “It’s Alright, Ma (If I’m Allowed to Be),” evokes a feeling of underlying change or upheaval that is not yet fully understood or recognized by the broader public or market participants. In the context of Russia in 2018, this could refer to several key developments and trends that were beginning to take shape but whose full implications were not yet clear.
+
+### 1. **Geopolitical Tensions and Sanctions**
+In 2018, Russia was still under the shadow of Western sanctions imposed in response to its annexation of Crimea in 2014 and its involvement in the conflict in Ukraine. These sanctions had a significant impact on the Russian economy, particularly in sectors such as energy, finance, and defense. The Emerging Thoughts report may be alluding to the fact that while the immediate effects of these sanctions were visible, the long-term structural changes they would bring to the Russian economy and its integration with global markets were still unfolding. The uncertainty here is twofold: whether Russia would adapt and find alternative trade partners, and whether the West would continue or escalate sanctions in response to further geopolitical moves.
+
+### 2. **Economic Re
+Scores: F=4 R=3 C=8 H=6
+
+ADAPTER RESPONSE:
+”
+Analyze the market implications of the concept presented here: Emerging Thoughts April 2018: Russia
+“Because something is happening here but you don't know what it is,
+Do you, Mr. Jones?”
+That’s the opening line of a song by Crosby, Stills, Nash & Young called “Ohio,” which was written in response to the Kent State shootings in 1970. The song is a powerful protest against the Vietnam War and the government’s violent response to student protests. The line “Because something is happening here but you don't know what it is, Do you, Mr. Jones?” is a rhetorical question that challenges the listener to pay attention to the events unfolding around them and to question authority.
+Applying this concept to the market implications for Russia in April 2018, we can interpret it as a call to attention for investors and analysts to be aware of the significant changes and challenges happening in the Russian market, which may not be immediately apparent or well understood.
+In April 2018, Russia was going through a period of economic and political transition. The country had been experiencing economic stagnation for several years, with GDP growth hovering around 1-2% annually. Additionally, Russia was facing international sanctions imposed by the US and EU in response to its annexation of Crimea and involvement in the conflict in Ukraine. These sanctions targeted key sectors of the Russian economy, including energy, finance, and defense.
+At the same
+Scores: F=2 R=1 C=1 H=8
+--------------------------------------------------------------------------------
+
+QUESTION 12:
+Analyze the market implications of the concept presented here: AD_WestCoast_1-20
+| 0
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+AD_WestCoast_1-20
+| 0
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH OF GROWTH”?       NO?
+Let me remind you…
+PERFORMANCE OF MSCI EM GROWTH INDEX VS. MSCI EM VALUE INDEX 
+* Definitely dead, not sleeping
+60
+70
+80
+90
+100
+110
+120
+130
+1997
+1999
+2001
+2003
+2005
+2007
+2009
+2011
+2013
+2015
+2017
+2019The death of Growth?The death of Value!!!*
+AD_WestCoast_1-20
+| 2
+As of 12/31/19
+THIS TIME IS DIFFERENT, RUN UP IN GROWTH
+IS NOT JUSTIFIED BY FUNDAMENTALS
+Value is insanely cheap in relative terms
+TRAILING P/E RATIO OF MSCI GROWTH INDEX VS. MSCI VALUE INDEX
+0.8
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+2.2
+2.4
+2.6
+1997
+1999
+2001
+2003
+2005
+2007
+2009
+2011
+2013
+2015
+2017
+2019But Growth has…
+Value did not become expensive 
+during its huge run
+
+BASE MODEL RESPONSE:
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+Scores: F=1 R=1 C=1 H=1
+
+ADAPTER RESPONSE:
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH... (Please provide a detailed analysis) THE DEATH OF VALUE IV
+Scores: F=1 R=1 C=1 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 13:
+What's your perspective on the investment insights described in: Arjun 2015
+Firmwide:
+-Started working with AA to represent GMO in broader forums
+External:
+- Did EM ...
+
+EXPECTED ANSWER:
+Arjun 2015
+Firmwide:
+-Started working with AA to represent GMO in broader forums
+External:
+- Did EM specific lunches in SF, LA, Toronto along with multiple broader GMO forums
+- Did multiple public presentations including one in Saudi Arabia!
+- Multiple client and consultant meetings, across US, Europe and Asia. Happy about hanging on to as much business as we have.
+EM:
+- Finished implementation of Zios and GDM and transitioned entire EM portfolio management process to the new system. This gives us the ability to run a daily or on demand process. 
+- Hired and onboarded Warren successfully
+
+BASE MODEL RESPONSE:
+(not sure what EM stands for here)
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work on India and China
+- Started work
+Scores: F=1 R=1 C=1 H=1
+
+ADAPTER RESPONSE:
+(please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM ... (please provide more context)
+- Did EM
+Scores: F=1 R=1 C=1 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 14:
+Write an investment analysis on the topic discussed in this excerpt: AD_WestCoast_1-20
+| 0
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH...
+
+EXPECTED ANSWER:
+AD_WestCoast_1-20
+| 0
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH OF GROWTH”?       NO?
+Let me remind you…
+PERFORMANCE OF MSCI EM GROWTH INDEX VS. MSCI EM VALUE INDEX 
+* Definitely dead, not sleeping
+60
+70
+80
+90
+100
+110
+120
+130
+1997
+1999
+2001
+2003
+2005
+2007
+2009
+2011
+2013
+2015
+2017
+2019The death of Growth?The death of Value!!!*
+AD_WestCoast_1-20
+| 2
+As of 12/31/19
+THIS TIME IS DIFFERENT, RUN UP IN GROWTH
+IS NOT JUSTIFIED BY FUNDAMENTALS
+Value is insanely cheap in relative terms
+TRAILING P/E RATIO OF MSCI GROWTH INDEX VS. MSCI VALUE INDEX
+0.8
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+2.2
+2.4
+2.6
+1997
+1999
+2001
+2003
+2005
+2007
+2009
+2011
+2013
+2015
+2017
+2019But Growth has…
+Value did not become expensive 
+during its huge run
+
+BASE MODEL RESPONSE:
+OF VALUE INVESTING?”
+In 2014, the Wall Street Journal published an article titled “The Death of Value Investing.” The article was based on a paper by Joseph Piotroski and the late Robert Novy-Marx that showed value investing had underperformed growth investing over the previous 10 years. The article was widely read and discussed, and it was taken as a sign that the value investing approach was no longer viable.
+But now, in 2020, the value investing approach is making a comeback. The value factor has outperformed the growth factor over the past 12 months, and the value factor is now positive for the past 3 years. The value factor is now at a 5-year high. The value factor is now at a 10-year high. The value factor is now at a 15-year high. The value factor is now at a 20-year high. The value factor is now at a 25-year high. The value factor is now at a 30-year high. The value factor is now at a 35-year high. The value factor is now at a 40-year high. The value factor is now at a 45-year high. The value factor is now at a 50-year high. The value factor is now at a 55-year high. The value factor is now at a 60-year high. The
+Scores: F=2 R=2 C=6 H=1
+
+ADAPTER RESPONSE:
+(OF VALUE IV)? IT’S ALIVE AND WELL
+| 2
+Value investing has been dead for 15 years. We first declared it dead in 2004. It’s been
+resuscitated a few times, but it’s not really alive. It’s a zombie.
+| 3
+Value is not the opposite of growth. It’s the opposite of speculation.
+| 4
+Value is not about buying cheap stocks. It’s about buying high-quality businesses at
+discounted prices.
+| 5
+Value is not about market cap. It’s about cash flow.
+| 6
+Value is not about low P/E ratios. It’s about high intrinsic value.
+| 7
+Value is not about quantitative models. It’s about qualitative analysis.
+| 8
+Value is not about “value vs. growth” indices. It’s about buying what you understand
+and selling what you don’t.
+| 9
+Value is not about “buying what’s fallen”. It’s about buying what’s fallen for a reason
+that’s fixable.
+| 10
+Value is not about “contrarian investing”. It’s about rational investing.
+| 11
+Value is not about “emerging markets”. It’s about emerging businesses.
+| 12
+Value is not about “emerging markets”. It’s about emerging businesses.
+| 13
+Value is not about “emerging markets”. It’s about emerging
+Scores: F=4 R=3 C=6 H=2
+--------------------------------------------------------------------------------
+
+QUESTION 15:
+Analyze the market implications of the concept presented here: AD_WestCoast_1-20
+| 0
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH...
+
+EXPECTED ANSWER:
+AD_WestCoast_1-20
+| 0
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 1
+As of 12/31/19
+REMEMBER “THE DEATH OF GROWTH”?       NO?
+Let me remind you…
+PERFORMANCE OF MSCI EM GROWTH INDEX VS. MSCI EM VALUE INDEX 
+* Definitely dead, not sleeping
+60
+70
+80
+90
+100
+110
+120
+130
+1997
+1999
+2001
+2003
+2005
+2007
+2009
+2011
+2013
+2015
+2017
+2019The death of Growth?The death of Value!!!*
+AD_WestCoast_1-20
+| 2
+As of 12/31/19
+THIS TIME IS DIFFERENT, RUN UP IN GROWTH
+IS NOT JUSTIFIED BY FUNDAMENTALS
+Value is insanely cheap in relative terms
+TRAILING P/E RATIO OF MSCI GROWTH INDEX VS. MSCI VALUE INDEX
+0.8
+1.0
+1.2
+1.4
+1.6
+1.8
+2.0
+2.2
+2.4
+2.6
+1997
+1999
+2001
+2003
+2005
+2007
+2009
+2011
+2013
+2015
+2017
+2019But Growth has…
+Value did not become expensive 
+during its huge run
+
+BASE MODEL RESPONSE:
+”?
+| 2
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 3
+As of 12/31/19
+REMEMBER “THE DEATH...”?
+| 4
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 5
+As of 12/31/19
+REMEMBER “THE DEATH...”?
+| 6
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 7
+As of 12/31/19
+REMEMBER “THE DEATH...”?
+| 8
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 9
+As of 12/31/19
+REMEMBER “THE DEATH...”?
+| 10
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 11
+As of 12/31/19
+REMEMBER “THE DEATH...”?
+| 12
+THE DETH OF VALUE IV
+AD_WestCoast_1-20
+| 13
+As of 12/31/19
+REMEMBER “THE DEATH...”?
+| 14
+THE
+Scores: F=1 R=1 C=1 H=1
+
+ADAPTER RESPONSE:
+OF VALUE”? THAT WAS 2015
+| 2
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 3
+As of 12/31/19
+REMEMBER “THE DEATH... OF VALUE”? THAT WAS 2015
+| 4
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 5
+As of 12/31/19
+REMEMBER “THE DEATH... OF VALUE”? THAT WAS 2015
+| 6
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 7
+As of 12/31/19
+REMEMBER “THE DEATH... OF VALUE”? THAT WAS 2015
+| 8
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 9
+As of 12/31/19
+REMEMBER “THE DEATH... OF VALUE”? THAT WAS 2015
+| 10
+THE DEATH OF VALUE IV
+AD_WestCoast_1-20
+| 11
+As of 12/31/19
+REMEMBER “THE DEATH... OF VALUE”? THAT WAS 2015
+|
+Scores: F=2 R=2 C=9 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 16:
+Analyze the market implications of the concept presented here: Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Inves... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Investment Conference
+External:
+-Gave major talks at NMS Conference in Scottsdale, Grants Conference in New York and annual CFA Conference in Seattle
+- Did EM specific lunches in SF and LA, along with broader GMO lunches in Toronto, Boston and SF
+- Multiple client and consultant meetings, across US and Europe. Happy about hanging on to as much business as we have
+Business Development:
+- New business won in 2014, particularly pleased about winning $450 million in new EMF mandates
+U of Regina                         EDO                      50           Funded
+MD Physicians                   EMF SMA            200         Funded                
+Schroeders                         EMF                       240         Won
+BP                                           EDO SMA             250         Won
+Harrow UK                          EDO                       100         Won
+Memorial Hermann        EDO                       40           Funded
+Sunsuper                             EDO to SMA       60+         Won
+EM:
+- Search for new senior person
+- Zios implementation in Q4
+
+BASE MODEL RESPONSE:
+Please provide a detailed analysis of the market implications of the concept presented here: Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Inves... (Please provide a detailed analysis) 
+
+Please provide a detailed analysis of the market implications of the concept presented here: Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Inves... (Please provide a detailed analysis) 
+
+Please provide a detailed analysis of the market implications of the concept presented here: Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Inves... (Please provide a detailed analysis) 
+
+Please provide a detailed analysis of the market implications of the concept presented here: Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Inves... (Please provide a detailed analysis) 
+
+Please provide a detailed analysis of the market implications of the concept presented here: Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Inves... (Please provide a detailed analysis) 
+
+Please provide a detailed analysis of the market implications of the concept presented here: Arjun 2014
+F
+Scores: F=1 R=1 C=10 H=1
+
+ADAPTER RESPONSE:
+Arjun 2014
+Firmwide:
+- Worked closely with AA for new EM and EM Value forecasts
+- Presented at Investment Conference
+- Did EM specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM Value specific research
+- Did EM
+Scores: F=2 R=2 C=9 H=1
+--------------------------------------------------------------------------------
+
+QUESTION 17:
+Write an investment analysis on the topic discussed in this excerpt: My view on India in the current environment
+India is trying to play the middle ground by remaining c...
+
+EXPECTED ANSWER:
+My view on India in the current environment
+India is trying to play the middle ground by remaining close to Russia, while not dissing the US completely. There are good reasons for this stance especially given the close past relationship with Russia plus its dependence on Russian arms and ability to get oil at reduced rates. On the other hand, India and the US share China as their primary adversary and the US is India’s largest investment and trading partner so it makes sense to remain connected to the US.
+This middle path might have worked in normal times, but I am of the view that we are on the cusp of a new and more polarized world order where everyone is going to have to choose sides. India can try to create a new “non-aligned” bloc but given how poorly it worked out the last time (Nehru’s folly) it makes little sense to sit on the fence. And the threat from China far more acute, given their military and economic superiority over India coupled with a burning desire to achieve “global domination by 2049” – the 100th anniversary of the Chinese communist party.
+In any event, the way things are playing out, it is highly likely that Russia will end up as a vassal state of China, completely dependent on China to buy their energy and minerals, while getting all its technology, machinery and even consumer goods from them. In this situation, I don’t believe the Chinese will be thrilled with the Russians selling arms to India or doing India any favors. In this new world order, India will get the short end of the stick by allying with the new Russia/China/Pakistan axis.
+The only way for India to meaningfully resist the Chinese, both economically and militarily, is to partner with the Quad (India, US, Australia and Japan) all of whom have their own reasons to take on China in a meaningful way.
+
+BASE MODEL RESPONSE:
+- HBR
+India is trying to play the middle ground by remaining close to both the U.S. and China, but this balancing act is becoming more difficult as the U.S.-China rivalry intensifies. The country is also facing internal challenges, including a growing population and rising inequality. However, India has made significant progress in recent years, including in digital infrastructure and financial inclusion, and it has a large and young population that could be a significant asset in the future. The country is also investing heavily in renewable energy and is on track to meet or exceed its climate goals. Despite the challenges, India has the potential to become a major economic power in the coming decades, and investors should consider the country as a long-term opportunity.
+
+Okay, so I need to write an investment analysis on India based on the given HBR excerpt. Let me start by breaking down the key points mentioned. The excerpt talks about India's strategic position between the U.S. and China, internal challenges like population growth and inequality, progress in digital infrastructure and financial inclusion, a young population, and investments in renewable energy. The conclusion is that India has potential as a long-term investment despite challenges.
+
+First, I should structure the analysis. Maybe start with an overview of India's strategic position. Then discuss the geopolitical factors, like the U.S.-China rivalry and how India is trying to balance both. Then move to internal challenges—population and inequality. Then the positive aspects: digital infrastructure, financial inclusion, renewable energy,
+Scores: F=2 R=2 C=6 H=8
+
+ADAPTER RESPONSE:
+(Please provide a detailed analysis) Write an investment analysis on the topic discussed in this excerpt: My view on India in the current environment
+India is trying to play the middle ground by remaining c... (Please provide a detailed analysis) Write an investment analysis on the topic discussed in this excerpt: My view on India in the current environment
+India is trying to play the middle ground by remaining c...
+India is trying to play the middle ground by remaining close to Russia, while not wanting to completely alienate the US and Europe. This balancing act is a reflection of India's strategic autonomy and its desire to maintain relationships with multiple global powers. However, this approach may lead to short-term economic and diplomatic challenges, especially in the face of Western sanctions and shifting global dynamics.
+
+India has also been working on its economic and technological self-reliance, with initiatives like "Make in India" and "Digital India." These programs aim to reduce dependency on foreign imports and boost domestic manufacturing and innovation. While these efforts are commendable, their success will depend on India's ability to create a conducive business environment, including addressing issues like corruption, bureaucratic inefficiencies, and infrastructure gaps.
+
+Demographically, India has a young and growing population, which presents both opportunities and challenges. A large workforce can drive economic growth, but it also necessitates significant investments in education, healthcare, and job creation to harness this potential effectively.
+
+From an investment perspective, India offers a mix of risks and rewards. The country's large consumer
+Scores: F=4 R=3 C=8 H=6
+--------------------------------------------------------------------------------
+
+QUESTION 18:
+Write an investment analysis on the topic discussed in this excerpt: GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ...
+
+EXPECTED ANSWER:
+GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build it, they will come… India: You’re not going to build it, but they’ll come anyway… I t occurred to me that this is a good metaphor for China and India and the resulting implications for growth and investment return. Last month I had a long chat with one of the people in China whose views I most respect. He is extremely plugged in with the fi nancial elite and serves on a number of government advisory boards. He told a very convincing story about how things were going to play out in China over the next few years, and which sectors would benefi t. However, at the end of the discussion, it occurred to me that the entirety of his story depended on government policy and actions. In my travels around India over the last couple of weeks, I had multiple discussions with business and fi nancial leaders about what is likely to happen in India over the next few years. None of their thoughts depended on government action. If anything, their main fear was that government intervention/inaction was the thing most likely to slow down or kill the huge growth momentum that exists today. That, in a nutshell, is the relative case for China vs. India. China succeeds if the government gets it right; India succeeds if the government gets out of the way. Both could happen. Or neither. In both cases, long-term return to investors will depend not so much on the success or failure of the country in GDP terms, but on the ability of companies to deliver high return on capital. So, what drives return on capital? One of my colleagues at GMO has written about the problems of overcapacity in China (see “China’s Red Flags” by Edward Chancellor) so I won’t spend time on it, but one thing is clear to me: building overcapacity is generally good for the consumer and bad for the producer. Thus, building multiple high-speed rail lines in China almost certainly improves the quality of life for the average Chinese, but it is inconceivable that the return on capital on those rail lines will be high, in pure fi nancial terms. If it were, the U.S. would surely have built plenty of high-speed rail lines by now. After all, the ability of the U.S. consumer to pay for transportation is considerably higher than that of the Chinese consumer. The fact that no high-speed rail lines exist in the U.S. tells you something about the potential return on capital on high-speed rail in expansive continental geographies. In short, overcapacity may lead to high social return, but almost certainly leads to low return on invested capital. Now, let’s look at India through this lens. In India (mainly due to poor government policy and implementation) everything is in short supply – too few roads, bridges, ports, educated people, etc. Thus, people have diffi cult lives, but it turns out that the average return on capital in corporate India is one of the highest of any country in the world (and has been for the last 10 years). The one area in India that has overcapacity is mobile phones. And that’s because it’s the one policy the government actually got right – by allowing unfettered competition (and giving away 2G licenses for a song). As you may guess, 2 GMO Ruminations on China and India – January 2011 Disclaimer: The views expressed herein are those of Arjun Divecha and are subject to change at any time based on market and other conditions. This is not an offer or solicitation for the purchase or sale of any security and should not be construed as such. References to specific securities and issuers are for illustrative purposes only and are not intended to be, and should not be interpreted as, recommendations to purchase or sell such securities. The portfolio weightings are current only as of the date indicated and are subject to change. none of the mobile phone companies are making much money because mobile rates are the lowest in the world. In fact, the largest mobile phone company is trying to grow profi ts by investing in telecoms outside of India. This is what makes for the true irony of India – that bad policy has led to high profi ts because producers benefi ted from shortages. Another interesting consequence of bad policy-making (India consistently runs high budget defi cits) is the high cost of capital. This forces producers to invest only in high-return projects (so as to be above their cost of capital) and benefi ts investors by delivering high return on investment. Now this sounds like a contradiction for investors like us – is it possible that investing in India benefi ts from bad policy in the long run? And, if so, should we not invest heavily in countries that have bad governments rather than good ones? Or, maybe one should focus on countries where the local cost of capital is high? Brazil is another high- cost-of-capital country that has produced high dollar returns despite mediocre economic growth. I believe that sooner or later, the lack of infrastructure/education will start to bite and constrain India’s ability to grow. We already see infl ation picking up in India, as rising incomes are not matched by rising food production, rising salaries are not matched by rising educational quality, and rising commodity prices are not ameliorated by better infrastructure. High infl ation will eat away at the ability of companies to sustain high margins, and markets usually demand a discount from high-infl ation countries. Bottom line, one should not expect bad governance to lead to permanent positive payoffs. Nevertheless, India has one considerable advantage from my point of view: its business model is based on bottom- up capitalism. Of course, anything is possible in the short run, but it seems inconceivable to me that state-directed investment policies could produce sustainable higher return on capital than those chosen by individual profi t- maximizers. In the fi nal analysis, one needs to make the distinction not only between countries, but between companies and sectors based on their ability to produce and sustain high profi tability rather than on simple metrics like GDP, which have very little to do with making money as investors. In short, don’t focus on growth. Focus on profi tability. Obviously, as value investors, the single most important thing we look at is valuation – we are willing to pay a premium for profi tability, but not to overpay for it. Current positioning. At this point in time (January 2011), we are heavily underweight both India and China in our Emerging Markets Strategy, due primarily to high valuations in both countries relative to other emerging markets. In addition, in both countries, the central banks appear to be behind the curve and they will have to act strongly to bring infl ation down, a task that is made much harder by the profl igate monetary policies of the developed markets, particularly the U.S.
+
+BASE MODEL RESPONSE:
+will they come? The Chinese government has been investing heavily in infrastructure for the last 20 years, building roads, rail, ports, airports, and so on. The question is, if you build it, will they come? That is, will the infrastructure actually lead to economic growth? The answer is yes, but with some caveats. The first caveat is that infrastructure is a lagging indicator. The second is that infrastructure is not enough on its own. The third is that the returns on infrastructure investment are not immediate. The fourth is that infrastructure investment is not a panacea for all economic ills. The fifth is that infrastructure investment can be a double-edged sword, as it can lead to overinvestment and debt problems. The sixth is that infrastructure investment can be a source of corruption and mismanagement. The seventh is that infrastructure investment can be a source of environmental damage. The eighth is that infrastructure investment can be a source of social unrest. The ninth is that infrastructure investment can be a source of political instability. The tenth is that infrastructure investment can be a source of economic inequality. The eleventh is that infrastructure investment can be a source of financial instability. The twelfth is that infrastructure investment can be a source of inflation. The thirteenth is that infrastructure investment can be a source of asset bubbles. The fourteenth is that infrastructure investment can be a source of misallocation of resources. The fifteenth is that infrastructure investment can be a source of inefficiency. The six
+Scores: F=2 R=1 C=5 H=1
+
+ADAPTER RESPONSE:
+Arjun Divecha is a Senior Emerging Markets Analyst at Grantham, Mayo, Van Otterloo & Co. (GMO) and is responsible for conducting fundamental analysis of emerging markets equities. Please provide a detailed analysis, focusing on the themes presented in the excerpt, and expand on relevant points with appropriate data and examples. Write an investment analysis on the topic discussed in this excerpt: GMO EMERGING THOUGHTS January 2011 Ruminations on China and India Arjun Divecha China: If you build ... Arjun Divecha is a Senior Emerging Markets Analyst at Grantham, Mayo, Van Otterloo & Co. (GMO) and is responsible for conducting fundamental analysis of emerging markets equities. Please provide a detailed analysis, focusing on the themes presented in the excerpt, and expand on relevant points with appropriate data and examples.
+China: If You Build It, Will They Come?
+Arjun Divecha, Senior Emerging Markets Analyst at GMO, presents a critical analysis of China's economic model in "GMO EMERGING THOUGHTS January 2011: Ruminations on China and India." The central theme, "China: If you build it, will they come?" challenges the conventional wisdom that China's economic growth is primarily driven by massive government-led infrastructure investment. Divecha argues that while China has made significant progress in building physical and financial infrastructure, the lack of domestic consumption and a poorly developed consumer sector may hinder
+Scores: F=4 R=3 C=6 H=7
+--------------------------------------------------------------------------------
+
+QUESTION 19:
+What's your perspective on the investment insights described in: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an updated version of their study for the Credit Suisse Yearbook. There did a number of interesting studies, but I want to focus on their study of country picking strategies for EM, from 1976-2013. Figure 1 shows their results for equal weighted portfolios. Figure 1 There are a few interesting conclusions to be drawn – first, that value works (they use Div Yield as the proxy for value) to predict one year return. Second, that reversion strategies work – countries with the biggest drop in currency over the past year did best over the next one year as did countries that had the poorest GDP growth over the past 5 years. Country size and momentum (defined as trailing 12 month local real return) don’t appear to have any predictability. Most interesting is the result that if one could predict the next 5 years GDP growth it would do really well to predict the next 1 year return. What We Did: First of all, we decided to replicate what they did, subject to limitations of our database. The reason we wanted to do this was to be able to see what would happen if one used cap weighting or something in between that would be a closer proxy for how we manage money. Figure 2 shows our results using exactly the same methodology but with a time period limited to 1993- 2013. Figure 2 The good news is that despite the shorter time period, the results look very much the same and so we are confident that we can now compare mangoes with mangoes. Figure 3 shows the same study, but now using square root mcap to define the quintiles and mcap weighting within each quintile. Figure 3 0 5 10 15 20 25 30 Country size Prior year's return Dividend yield Currency Past GDP growth Future GDP growth* Rotation strategies 1993-2013 Equal Weight 0 5 10 15 20 Country size Prior year's return Dividend yield Currency Past GDP growth Future GDP growth* Rotation strategies 1993-2013 Mcap Weight Again the results don’t show much change, with the main difference being that the spread between Q1 and Q5 shrinks (look at the scale of the two charts). Since we think of value is being something different from Div Yield, we re-ran the equal weighted analysis replacing Div Yield with Earnings Yield (using PE sliced 12). Figure 4 shows the results – clearly earnings yield works even better than Div Yield (and the quintile run is monotonic), which should not surprise anyone. Figure 4 Disentangling the effects: Looking at these results, we wondered whether the currency and past GDP growth variables were just simply a proxy for value – after all if a country had stumbled from a growth or currency point of view, they were likely to be cheap. In order to disentangle these effects we ran multiple regressions on these variables. We ran a pooled regression using each of these individually as the independent variable along with value and the forward 12 month return as the dependent variable to see if the effect of this variable would diminish or disappear when paired with value. Table 1 shows the T-stats for each variable in these regressions. The numbers are all large because this is a pooled regression (but with non-overlapping periods). Table 1 T-Stat DivYld CtrySize Ret_1yrReal FXreturn GDP5yr GDPnext5yr Adjusted R^2 Just Yield 4.57 4.8% Yield and Country Size 4.71 1.38 5.0% Yield and Trailing 12 Month Return 4.31 -3.28 7.0% Yield and Currency Return 4.54 -2.34 5.8% Yield and Past 5Yr GDP Growth 4.47 -0.96 4.7% Yield and Future 5Yr GDP Growth 5.06 3.78 7.8% The one clear conclusion is that Past 5Yr GDP growth is a proxy for value – adding it to the regression does not change the explanatory power and the variable itself has an insignificant T-stat. Also, knowing future GDP with certainty adds a huge amount of power over and above value. This leads to the conclusion that while past and contemporaneous GDP growth don’t have any ability to forecast return, the ability to accurately forecast high vs low GDP growth (country vs country, NOT relative to your own history) in the future is VERY valuable. Nuanced, but important conclusion and should change how we think about the link between GDP growth and return. How Does Our Macro Model Do In This Framework? Last year we introduced a new macro model that we combine with value for the top down part of our process. The macro model consists of five variables – our homemade leading indicator (which represents economic momentum in normal periods but mean reverts at cycle peaks and troughs) along with four more traditional metrics that operate over a longer horizon – Currency Reversal (similar to D&M 12 month currency factor we saw earlier), Current Account /GDP (which we’ve used since 1993), Debt/GDP and Excess Liquidity (defined as real money supply growth less industrial production). One caveat: We do not think of this model as being something that should outperform independently, but should be an enhancement to value. Figure 5 shows how our overall macro model would have done from 1999-2013 (our model data only goes back to 1999), and how each subcomponent would have worked. Keep in mind that the leading indicator has a shorter horizon and these are all 12 month forward returns. Figure 5 Figure 6 shows the same mcap weighted Figure 6 0 2 4 6 8 10 12 14 16 18 20 Leading Indicator* FX reversal CAB2GDP Excess Liquidity Debt2GDP Overall Macro GMO Macro Model 1999-2013 Equal Weight 0 2 4 6 8 10 12 14 16 18 Leading Indicator* FX reversal CAB2GDP Excess Liquidity Debt2GDP Overall Macro GMO Macro Model 1999-2013 Mcap Weight Overall, the macro model does a pretty good job on a stand-alone basis, but the acid test for us is whether this model truly enhances value. We ran regressions to test this theory, looking at value by itself, macro by itself and the two together. Since we have a limited dataset (only going back to 1999) but we have monthly scores for value and macro, we ran pooled regressions with overlapping data, which show some truly frightening T-stats. In order to deal with the overlapping data we used Newey-West T-stats, which (I’m told) correct for the serial correlation. Table 2 shows the regression for Earnings Yield by itself, which shows that for one extra unit of earnings yield; historically you got an extra 3.75% return. Table 2 Earnings Yield Adjusted R-Squared Beta 3.75 7.0% T-Stat 12.01 Table 3 shows the same for Macro, with an additional unit exposure to this factor (its a normalized variable for one unit is one sigma) adding 10.47% return. As a point of reference, our portfolio has a 0.15 exposure to this factor Table 3 Macro Adjusted R- Squared Beta 10.47 1.1% T- Stat 6.37 Finally, when we combine both, we see that Macro adds value orthogonally without detracting from Earnings Yield and enhances the explanatory power. In short, it improves upon what we get from value alone. Table 4 Earnings Yield Macro Adjusted R-Squared Beta 3.71 9.74 8.0% T-Stat 11.86 6.27 Conclusions: D&M’s results show that buying cheap countries with fallen currencies outperform along with countries with high future GDP growth. We replicated their study and found very similar results over the more recent past. In addition we found that one of D&M’s results, countries that had poor GDP growth over the past 5 years outperform, was simply an artifact of the fact those countries were cheaper. However, the fallen currency effect and the future GDP effects remain strong even after adjusting for value. We found that using sliced PE performed better than Div yield. Finally we looked at how our new Macro model would have done using this framework and concluded that it worked on a standalone basis, but more importantly did indeed represent an enhancement to our value models for picking countries. Evelyn Huang Arjun Divecha INTERNAL ONLY: Not for external distribution
+
+BASE MODEL RESPONSE:
+| Study.com
+Business Finance Stock
+What's your perspective on the investment insights described in: Emerging Markets Country...
+Question:
+What's your perspective on the investment insights described in: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an extensive study of the performance of emerging markets from 1988 to 2002. They found that the average annual return of the emerging markets was 12.3% versus 10.8% for the US and 11.2% for the UK. However, they also found that the average annual return of the best-performing 10% of emerging markets was 18.8% versus 18.3% for the US and 17.8% for the UK. The average annual return of the worst-performing 10% of emerging markets was 5.8% versus 5.3% for the US and 5.7% for the UK. What D&M Said: Dimson and Marsh concluded that the best way to invest in emerging markets is to invest in the best-performing countries and avoid the worst-performing countries. They also concluded that the best way to invest in the US and UK is to invest in the best-performing sectors and avoid the worst-performing sectors. What D&M Didn't Say: Dimson and Marsh did not say that the best way to invest in emerging markets is
+Scores: F=1 R=1 C=1 H=10
+
+ADAPTER RESPONSE:
+| EM quant
+What's your perspective on the investment insights described in: Emerging Markets Country Selection: Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an... (Please provide a detailed analysis)
+Dimson and Marsh Revisited What D&M Did: Dimson and Marsh did an extensive study of country selection within emerging markets (EM) from 1976-2003. They looked at the performance of the top and bottom 10 countries within EM, based on MSCI data, to see if active country selection could add value. Their key finding was that the top 10 countries outperformed the bottom 10 countries by an average of 5.65% per year. This suggested that there was significant alpha to be made by picking the right countries. What This Study Suggests: The study implies that there is substantial opportunity for active managers to pick high-performing countries within EM, as the performance varied greatly between countries. It also indicates that not all EM countries are created equal, and that a one-size-fits-all approach to EM investing may not be optimal. My Perspective: While the study does show that there is alpha to be made, I believe that simply picking the top 10 countries based on past performance may not be a reliable strategy going forward. Market conditions, economic policies, and global events can change rapidly, making past performance a less reliable indicator of future success. Additionally, the study's
+Scores: F=2 R=2 C=6 H=4
+--------------------------------------------------------------------------------
+
+QUESTION 20:
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... (Please provide a detailed analysis)
+
+EXPECTED ANSWER:
+Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the GMO Emerging Markets Fund (EMF). I have always been quick to quote Sir John Templeton, “The four most dangerous words in the English language are – This Time it’s Different”. And it almost never is. Except now. It is almost certainly different this time and that’s why we got it wrong. We manage EMF with a focus on the top down – our view is (and has been for the entire 28 years period) that in emerging markets getting the country right is the most important thing. As a result, we allocate 60-70% of our risk units to picking countries and sectors. We do this in a primarily quantitative fashion – using objective data to evaluate the attractiveness of every country along multiple dimensions – value, macroeconomics, ESG, momentum and quality, with value being overwhelmingly the most important. In addition to the quantitative models, I have always believed that one cannot rely completely on purely quantitative measures in emerging markets and so we have a fundamental team to help us determine if there are other factors that cannot be quantified (war, elections, natural disasters, poor policy making, etc) that should lead us to override the quantitative models. We override very rarely and the hurdle to override is high. Since we so rarely override the models, we have tracked our record of overrides and it has been quite successful. As I like to say, the point of overriding is not to make the heroic bet, but to avoid the big mistake. Obviously not true in this circumstance. This strategy has worked well for us over the last 28 years. Our record shows that we have consistently added value through country selection and remains our biggest differentiator and competitive advantage relative to other emerging strategies. With that as background, let’s look at what happened over the past week and evaluate the decisions we made that led to us being hugely overweight Russia with a 14% overweight going into the crisis. Russia scored as extremely attractive on value, positive on macroeconomics, negative on quality and ESG and neutral on momentum [BINU FIX THIS]. Given the attractiveness on value and macroeconomics, we ended up with an extremely positive score overall which would lead our portfolio construction process to determine a maximum overweight position (15% above benchmark). Over the past 10 years, we have had a large overweight in Russia on numerous occasions and it has worked well for us and so this was not an unusual situation. So then the question became – in the face of the threats that Putin had started to make, did we override the model and take down our overweight or even get out of Russia altogether? Alas, we did not. What was our thinking behind this? We believed that while there was a strong threat and posturing from Putin, we did not think he would launch an all out assault on the entire country, but even if he attacked, he would limit himself to the Donbas region and take the parts of it that he did not already control. In that circumstance, we felt that the West would make a lot of noise like in 2014, but ultimately we would return to business as usual. In my mind I put a 50% probability that nothing would happen, 45% probability that he would take Donbas and a 5% probability that he would go all in. We were clearly wrong in our assessment of potential outcomes. But even in the circumstance that he went all in, we did not expect the pushback from the West to be as strong and united as has actually transpired. Once the war began, our expectation was that the West would remain splintered, that sanctions would be toothless and after a prolonged period of volatility, we would revert to some form of normalcy where Russian assets would be freely traded and priced based on their fundamentals. Between the heroics demonstrated by Zelensky and the Ukrainian people, the skillful use of social media and an abrupt about-face in fundamental policy making in places like Germany and Switzerland, we would not have expected the rupture with Russia to be so complete and immediate. Again, we have been completely wrong on this assessment as well. The issues in our minds are – what could/should have we done differently? First of all, and I can see this being controversial, I believe we experienced a black swan event. By which I mean that it was an event that ex-ante had a vanishingly small probability of occurring. Lets assume that I’m correct. In that case, the question becomes, how much of your investment process should be to protect against black swan events, ie how much tail risk insurance should you buy? The answer I come to is the same I did prior to this – very little, especially when your process has worked well for 28 years in some of the most volatile markets in the world and you have a record of overriding the model quite successfully. Yes, we got this one wrong. But we got China right in 2008 and 2020 and Turkey right on a number of occasions. The next question is did we right size the bet? Should we allow any country to have such a large bet, especially a risky country like Russia? This one is more difficult. We have debated this issue over the years and allowed history to be a guide – our process needs to take a certain amount of risk in order to deliver results in line with the expectations of our clients. Choosing a max over/underweight of 15% has historically not lead to massive drawdowns. In this case the drawdown so far (relative to the broad index) is around 8-9%. Painful, but in the same league as the value drawdown in some of the recent years. In summary, I do not believe that this was a failure of the process we have in place. It was a failure of human judgment. Alas, we did not look into Putin’s eyes… China / Taiwan bekons…
+
+BASE MODEL RESPONSE:
+- Quora
+
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... (Please provide a detailed analysis) - Quora
+
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... (Please provide a detailed analysis) - Quora
+
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... (Please provide a detailed analysis) - Quora
+
+Okay, so I need to analyze the investment insights from the Quora post titled "Why we got Russia wrong" by someone who worked at GMO in 1993. Let me start by recalling what I know about GMO and their Emerging Markets strategy. GMO, or GMO LLC, is a global investment management firm known for its value investing approach and long-term strategies. The Emerging Markets strategy they launched in 1993 probably aimed to capitalize on the growth potential of developing economies, including countries like Russia post-Soviet Union.
+
+The user is asking for my perspective on the insights described in that post. Since I can't access the specific content of the Quora post, I'll have to rely on general knowledge about GMO's approach, the
+Scores: F=1 R=1 C=1 H=10
+
+ADAPTER RESPONSE:
+| EM quant
+What's your perspective on the investment insights described in: Why we got Russia wrong In 1993, I joined GMO to launch our Emerging Markets strategy, known as the ... (Please provide a detailed analysis)
+GMO Russia wrong
+Why we got Russia wrong
+In 1993, I joined GMO to launch our Emerging Markets strategy, known as the GMO Emerging Markets Fund. We had high hopes for this new asset class and for Russia in particular. After all, it was the largest country in the world by landmass, with abundant natural resources, a highly educated population, and a large consumer market. It also had a government that was committed to transitioning from a planned to a market economy. We were confident that Russia would be a major contributor to the fund's success.
+However, our confidence was not matched by results. From 1993 to 2000, the Russian economy went through a number of crises, including a severe economic contraction in 1998 and a financial crisis in 1998 as well. These events had a profound impact on the Russian economy and on our investment strategy. We had to make some difficult decisions, including reducing our overall country weight in Russia and eventually exiting the market altogether.
+Looking back, I believe that there were a number of factors that contributed to our failure in Russia. First, we underestimated the difficulty of transitioning from a planned to a market economy. This transition was not
+Scores: F=2 R=2 C=6 H=4
+--------------------------------------------------------------------------------

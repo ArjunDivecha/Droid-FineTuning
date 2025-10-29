@@ -30,6 +30,7 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<SetupPage />} />
           <Route path="/setup" element={<SetupPage />} />
+          <Route path="/enhanced" element={<SetupPage />} />
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/compare" element={<ComparePage />} />
