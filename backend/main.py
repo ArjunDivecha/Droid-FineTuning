@@ -26,7 +26,7 @@ import uuid
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Add the parent directory to path to import existing modules (using original for compatibility)
+# Add the parent directory to path to import existing modules
 sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
 
 app = FastAPI(title="MLX Fine-Tuning GUI API", version="1.0.0")
@@ -46,7 +46,7 @@ class TrainingConfig:
     model_path: str
     train_data_path: str
     val_data_path: str
-    learning_rate: float = 1e-4  # Updated: 10x increase for LoRA (research-backed)
+    learning_rate: float = 1e-5
     batch_size: int = 1
     max_seq_length: int = 32768
     iterations: int = 7329
@@ -56,12 +56,6 @@ class TrainingConfig:
     early_stop: bool = True
     patience: int = 3
     adapter_name: str = "mlx_finetune"
-    # Full-Layer LoRA Configuration
-    fine_tune_type: str = "lora"
-    lora_rank: int = 32
-    lora_alpha: float = 32.0
-    lora_dropout: float = 0.0
-    lora_num_layers: int = -1  # -1 means all layers
 
 class TrainingManager:
     """Manages training processes and state"""
@@ -72,8 +66,6 @@ class TrainingManager:
         self.current_config: Optional[TrainingConfig] = None
         self.training_metrics: Dict[str, Any] = {}
         self.websocket_clients: List[WebSocket] = []
-        self.last_error: Optional[str] = None  # Store last error message
-        # Use the original paths to maintain compatibility with existing MLX setup
         self.output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
         self.log_file = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/logs/gui_training.log"
         self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
@@ -169,32 +161,22 @@ class TrainingManager:
             if not os.path.exists(session_file):
                 logger.warning(f"Session file not found: {session_file}")
                 return False
-
+            
             with open(session_file, 'r') as f:
                 session_data = json.load(f)
-
+            
             # Restore training configuration
             config_data = session_data["config"]
-
-            # Filter config_data to only include fields that TrainingConfig expects
-            # This allows loading both SFT and GRPO sessions
-            valid_fields = {
-                'model_path', 'train_data_path', 'val_data_path', 'learning_rate',
-                'batch_size', 'max_seq_length', 'iterations', 'steps_per_report',
-                'steps_per_eval', 'save_every', 'early_stop', 'patience', 'adapter_name'
-            }
-            filtered_config = {k: v for k, v in config_data.items() if k in valid_fields}
-
-            self.current_config = TrainingConfig(**filtered_config)
-
+            self.current_config = TrainingConfig(**config_data)
+            
             # Restore metrics and state
             self.training_metrics = session_data["metrics"]
             self.training_state = session_data["training_state"]
             self.current_session_id = session_data["session_id"]
-
+            
             logger.info(f"Loaded training session: {session_id}")
             return True
-
+            
         except Exception as e:
             logger.error(f"Failed to load session {session_id}: {e}")
             return False
@@ -215,14 +197,10 @@ class TrainingManager:
                 success = self.load_session(session_id)
                 if success:
                     logger.info(f"Restored previous training session: {session_id}")
-                    # Reset error/stopped states to idle (no active training)
-                    if self.training_state in ["error", "stopped"]:
+                    # Only restore if training was completed
+                    if self.training_state not in ["completed", "error", "stopped"]:
                         self.training_state = "idle"
-                        logger.info(f"Previous session was in {self.training_state} state, reset to idle")
-                    # Keep completed state to show last successful training
-                    elif self.training_state not in ["completed", "idle"]:
-                        self.training_state = "idle"
-                        logger.info("Previous session was interrupted, reset to idle state")
+                        logger.info("Previous session was not completed, reset to idle state")
                 else:
                     logger.warning("Failed to restore previous session")
             
@@ -403,89 +381,6 @@ class TrainingManager:
         # Automatically prepare training data with the correct tokenizer for the selected model
         await self._prepare_training_data(config.model_path, config.train_data_path, config.val_data_path)
         
-        # ============================================================
-        # LoRA Parameter Generation for Full-Layer Training
-        # ============================================================
-        
-        # Extract and validate LoRA parameters
-        lora_rank = max(1, int(getattr(config, "lora_rank", 32) or 32))
-        lora_alpha = float(getattr(config, "lora_alpha", 32.0) or 32.0)
-        lora_dropout = float(getattr(config, "lora_dropout", 0.0) or 0.0)
-        lora_num_layers = getattr(config, "lora_num_layers", -1)
-        
-        # Normalize num_layers (0 → -1, ensure int)
-        try:
-            lora_num_layers = int(lora_num_layers)
-        except (TypeError, ValueError):
-            lora_num_layers = -1
-        if lora_num_layers == 0:
-            lora_num_layers = -1
-        
-        # Detect model architecture
-        model_config_path = os.path.join(config.model_path, "config.json")
-        model_type = "qwen2"  # Default fallback
-        
-        try:
-            if os.path.exists(model_config_path):
-                with open(model_config_path, 'r') as f:
-                    model_config = json.load(f)
-                    model_type = model_config.get("model_type", "qwen2")
-                    logger.info(f"Detected model architecture: {model_type}")
-        except Exception as e:
-            logger.warning(f"Could not read model config: {e}")
-        
-        # Define 7 base matrices for full-layer training
-        lora_keys = [
-            "self_attn.q_proj",
-            "self_attn.k_proj",
-            "self_attn.v_proj",
-            "self_attn.o_proj",
-            "mlp.gate_proj",
-            "mlp.up_proj",
-            "mlp.down_proj",
-        ]
-        
-        # Add architecture-specific keys
-        if model_type in ["mixtral", "phimoe"]:
-            lora_keys.append("block_sparse_moe.gate")
-            logger.info(f"Detected {model_type} - adding MoE routing gate")
-        elif model_type == "qwen2_moe":
-            lora_keys.append("mlp.shared_expert_gate")
-            logger.info(f"Detected {model_type} - adding shared expert gate")
-        elif model_type == "qwen3_next":
-            lora_keys.extend([
-                "mlp.shared_expert_gate",
-                "linear_attn.in_proj_qkvz",
-                "linear_attn.out_proj",
-                "linear_attn.in_proj_ba",
-                "linear_attn.dt_bias"
-            ])
-            logger.info(f"Detected {model_type} - adding shared expert gate and linear attention")
-        elif model_type in ["olmoe", "qwen3_moe"]:
-            logger.info(f"Detected {model_type} - using standard MoE keys")
-        
-        # Create lora_parameters dict for MLX-LM
-        lora_parameters = {
-            "rank": lora_rank,
-            "scale": lora_alpha,
-            "dropout": lora_dropout,
-            "keys": lora_keys,
-        }
-        
-        # Log the complete LoRA configuration
-        logger.info("=" * 60)
-        logger.info("LoRA Configuration:")
-        logger.info(f"  Rank: {lora_rank}")
-        logger.info(f"  Alpha (scale): {lora_alpha}")
-        logger.info(f"  Dropout: {lora_dropout}")
-        logger.info(f"  Layer coverage: {'all transformer layers' if lora_num_layers == -1 else f'last {lora_num_layers} layers'}")
-        logger.info(f"  Target matrices ({len(lora_keys)}): {', '.join(lora_keys)}")
-        logger.info("=" * 60)
-        
-        # ============================================================
-        # END LoRA Parameter Generation
-        # ============================================================
-        
         # Create config file for the training script
         config_data = {
             "venv_python": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python",
@@ -508,14 +403,7 @@ class TrainingManager:
             "resume_adapter_file": None,
             "train_log": self.log_file,
             "enable_early_stop": config.early_stop,
-            "no_improve_patience_evals": config.patience,
-            # Full-layer LoRA configuration
-            "fine_tune_type": getattr(config, "fine_tune_type", "lora") or "lora",
-            "num_layers": lora_num_layers,
-            "lora_parameters": lora_parameters,
-            "lora_rank": lora_rank,
-            "lora_alpha": lora_alpha,
-            "lora_dropout": lora_dropout
+            "no_improve_patience_evals": config.patience
         }
         
         # Write config file
@@ -527,8 +415,7 @@ class TrainingManager:
         # Start training process
         try:
             cmd = [
-                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python",
-                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/run_finetune.py",
+                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Fine Tuner XXX/one_step_finetune/run_finetune.py",
                 "--config", config_path
             ]
             
@@ -554,11 +441,10 @@ class TrainingManager:
             
         except Exception as e:
             self.training_state = "error"
-            self.last_error = f"Failed to start training: {str(e)}"
-            logger.error(self.last_error)
+            logger.error(f"Failed to start training: {e}")
             await self.broadcast({
                 "type": "training_error",
-                "data": {"error": self.last_error}
+                "data": {"error": str(e)}
             })
             return False
     
@@ -605,147 +491,44 @@ class TrainingManager:
             
             # Patterns to extract metrics from training output
             step_pattern = re.compile(r'Iter (\d+):')
-            # Support signed/float/scientific notation losses appearing as "loss -0.018" or "Train loss 0.002"
-            float_capture = r'([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)'
-            loss_pattern = re.compile(
-                rf'Train\s+loss\s+{float_capture}|loss[=\s]+{float_capture}'
-            )
-            val_pattern = re.compile(rf'Val\s+loss\s+{float_capture}')
-            lr_pattern = re.compile(
-                rf'Learning\s+Rate\s+{float_capture}|lr[=\s]+{float_capture}'
-            )
-
-            # GRPO-specific patterns
-            grpo_progress_pattern = re.compile(r'Training:\s+(\d+)%')
-            grpo_iter_pattern = re.compile(r'(\d+)/(\d+)\s+\[')  # e.g., "1/2 ["
-            # RL metric patterns (robust to different trainers)
-            # avg reward / mean reward
-            reward_pattern = re.compile(
-                r'(?:avg(?:erage)?\s*reward|mean\s*reward|reward(?:\s*avg)?|avg_reward|reward_mean)[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
-                re.IGNORECASE,
-            )
-            total_r_pattern = re.compile(
-                r'\btotal[_\s]?r[_\s]?mean[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
-                re.IGNORECASE,
-            )
-            grouped_r_pattern = re.compile(
-                r'\bgroup(?:ed)?[_\s]?r[_\s]?mean[^\d\-+]*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
-                re.IGNORECASE,
-            )
-            reward_json_pattern = re.compile(
-                r'"(train_(?:total|grouped)_rewards_mean)"\s*:\s*([\-+]?\d+(?:\.\d+)?(?:[eE][\-+]?\d+)?)',
-                re.IGNORECASE,
-            )
-            # success rate / pass@1 / accuracy / EM
-            success_rate_pattern = re.compile(
-                r'(?:success\s*rate|pass@1|accuracy|exact\s*match|\bEM\b)[^\d\-+]*([\-+]?\d+(?:\.\d+)?)%?',
-                re.IGNORECASE,
-            )
-            # KL divergence and entropy
-            kl_pattern = re.compile(r'\bKL(?:-?divergence)?[^\d\-+]*([\-+]?\d+(?:\.\d+)?)', re.IGNORECASE)
-            entropy_pattern = re.compile(r'\bentropy[^\d\-+]*([\-+]?\d+(?:\.\d+)?)', re.IGNORECASE)
+            loss_pattern = re.compile(r'Train loss ([0-9.]+)')
+            val_pattern = re.compile(r'Val loss ([0-9.]+)')
+            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)')
             
             while self.current_process and self.current_process.poll() is None:
                 try:
                     output = self.current_process.stdout.readline()
                     if output:
-                        output_stripped = output.strip()
-
                         # Parse metrics from output
                         step_match = step_pattern.search(output)
                         loss_match = loss_pattern.search(output)
                         val_match = val_pattern.search(output)
                         lr_match = lr_pattern.search(output)
-                        grpo_progress_match = grpo_progress_pattern.search(output)
-                        grpo_iter_match = grpo_iter_pattern.search(output)
-                        reward_match = reward_pattern.search(output)
-                        total_r_match = total_r_pattern.search(output)
-                        grouped_r_match = grouped_r_pattern.search(output)
-                        reward_json_matches = list(reward_json_pattern.finditer(output))
-                        success_match = success_rate_pattern.search(output)
-                        kl_match = kl_pattern.search(output)
-                        entropy_match = entropy_pattern.search(output)
-
+                        
                         # Extract metrics
                         if step_match:
                             current_step = int(step_match.group(1))
                             self.training_metrics["current_step"] = current_step
-
-                        # Extract GRPO iteration from progress bar
-                        if grpo_iter_match and not step_match:
-                            current_iter = int(grpo_iter_match.group(1))
-                            total_iters = int(grpo_iter_match.group(2))
-                            self.training_metrics["current_step"] = current_iter
-                            if "total_steps" not in self.training_metrics or self.training_metrics["total_steps"] == 0:
-                                self.training_metrics["total_steps"] = total_iters
-
+                            
                         if loss_match:
-                            # Handle both "Train loss X" and "loss=X" formats
-                            train_loss = float(loss_match.group(1) or loss_match.group(2))
+                            train_loss = float(loss_match.group(1))
                             self.training_metrics["train_loss"] = train_loss
-
+                            
                         if val_match:
                             val_loss = float(val_match.group(1))
                             self.training_metrics["val_loss"] = val_loss
-
+                            
                             # Track best model based on validation loss
                             if self.best_val_loss is None or val_loss < self.best_val_loss:
                                 self.best_val_loss = val_loss
                                 self.best_model_step = current_step
                                 # Copy current checkpoint as best model
                                 await self._save_best_model(current_step)
-
+                            
                         if lr_match:
-                            # Handle both "Learning Rate X" and "lr X" formats
-                            learning_rate = float(lr_match.group(1) or lr_match.group(2))
+                            learning_rate = float(lr_match.group(1))
                             self.training_metrics["learning_rate"] = learning_rate
-
-                        # RL metrics (optional)
-                        reward_value = None
-                        if reward_match:
-                            try:
-                                reward_value = float(reward_match.group(1))
-                            except Exception:
-                                pass
-                        if total_r_match:
-                            try:
-                                reward_value = float(total_r_match.group(1))
-                            except Exception:
-                                pass
-                        if reward_json_matches:
-                            for match in reward_json_matches:
-                                key = match.group(1).lower()
-                                try:
-                                    parsed_value = float(match.group(2))
-                                except Exception:
-                                    continue
-                                if "total" in key:
-                                    reward_value = parsed_value
-                                elif "grouped" in key:
-                                    self.training_metrics["group_reward"] = parsed_value
-                        if reward_value is not None:
-                            self.training_metrics["avg_reward"] = reward_value
-                        if grouped_r_match:
-                            try:
-                                self.training_metrics["group_reward"] = float(grouped_r_match.group(1))
-                            except Exception:
-                                pass
-                        if success_match:
-                            try:
-                                self.training_metrics["success_rate"] = float(success_match.group(1))
-                            except Exception:
-                                pass
-                        if kl_match:
-                            try:
-                                self.training_metrics["kl"] = float(kl_match.group(1))
-                            except Exception:
-                                pass
-                        if entropy_match:
-                            try:
-                                self.training_metrics["entropy"] = float(entropy_match.group(1))
-                            except Exception:
-                                pass
-
+                        
                         # Calculate progress and ETA
                         if "current_step" in self.training_metrics and "total_steps" in self.training_metrics:
                             progress = self.training_metrics["current_step"] / self.training_metrics["total_steps"]
@@ -755,24 +538,17 @@ class TrainingManager:
                                 estimated_total = elapsed / progress
                                 remaining = estimated_total - elapsed
                                 self.training_metrics["estimated_time_remaining"] = remaining
-
-                        # Broadcast and persist ALL non-empty lines (including progress bars, loading messages, etc.)
-                        if output_stripped:  # Only broadcast non-empty lines
-                            await self.broadcast({
-                                "type": "training_progress",
-                                "data": {
-                                    "metrics": self.training_metrics,
-                                    "log_line": output_stripped
-                                }
-                            })
-                            # Append to GUI log file for full trace
-                            try:
-                                with open(self.log_file, 'a') as lf:
-                                    lf.write(output_stripped + "\n")
-                            except Exception:
-                                pass
-
-                    await asyncio.sleep(0.05)  # Faster polling for more responsive logs
+                        
+                        # Broadcast update
+                        await self.broadcast({
+                            "type": "training_progress",
+                            "data": {
+                                "metrics": self.training_metrics,
+                                "log_line": output.strip()
+                            }
+                        })
+                
+                    await asyncio.sleep(0.1)
                     
                 except Exception as e:
                     logger.error(f"Error monitoring training: {e}")
@@ -788,7 +564,7 @@ class TrainingManager:
                     remaining_output = self.current_process.stdout.readline()
                     if not remaining_output:
                         break
-
+                    
                     # Check for early stopping message
                     if "Early stop:" in remaining_output:
                         early_stop_detected = True
@@ -806,25 +582,9 @@ class TrainingManager:
                     val_match = val_pattern.search(remaining_output)
                     if val_match:
                         self.training_metrics["val_loss"] = float(val_match.group(1))
-                    
-                    # Persist remaining output lines to GUI log for full traceback visibility
-                    try:
-                        ro = remaining_output.strip()
-                        if ro:
-                            with open(self.log_file, 'a') as lf:
-                                lf.write(ro + "\n")
-                    except Exception:
-                        pass
             except:
                 pass  # Ignore errors when reading final output
             
-            # Write final status to GUI log
-            try:
-                with open(self.log_file, 'a') as lf:
-                    lf.write(f"\n[TRAINING EXIT] return_code={return_code}\n")
-            except Exception:
-                pass
-
             if return_code == 0:
                 self.training_state = "completed"
                 # Save completed session
@@ -850,12 +610,6 @@ class TrainingManager:
                 self.training_state = "error"
                 # Save error session
                 self.save_session()
-                # Persist error to log
-                try:
-                    with open(self.log_file, 'a') as lf:
-                        lf.write(f"[TRAINING ERROR] Process exited with code {return_code}\n")
-                except Exception:
-                    pass
                 await self.broadcast({
                     "type": "training_error",
                     "data": {"error": f"Training process exited with code {return_code}"}
@@ -869,12 +623,352 @@ class TrainingManager:
                 "data": {"error": str(e)}
             })
 
+class OPDManager:
+    """Manages On-Policy Distillation training processes and state"""
+
+    def __init__(self):
+        self.current_process: Optional[subprocess.Popen] = None
+        self.opd_state = "idle"  # idle, running, completed, error
+        self.current_run_id: Optional[str] = None
+        self.current_config: Optional[Dict[str, Any]] = None
+        self.opd_metrics: Dict[str, Any] = {}
+        self.runs_dir = "./OnPolicyDistill/runs"
+        self.checkpoint_base_dir = "./OnPolicyDistill/checkpoints"
+
+        # Ensure directories exist
+        os.makedirs(self.runs_dir, exist_ok=True)
+        os.makedirs(self.checkpoint_base_dir, exist_ok=True)
+
+    async def start_distillation(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Start distillation training with the given configuration"""
+        if self.current_process and self.current_process.poll() is None:
+            raise HTTPException(status_code=400, detail="Distillation is already running")
+
+        # Generate run_id
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_id = f"distill_{timestamp}"
+
+        self.current_run_id = run_id
+        self.current_config = config
+        self.opd_state = "running"
+        self.opd_metrics = {
+            "step": 0,
+            "total_steps": config.get("num_steps", 1000),
+            "progress_pct": 0.0,
+            "kl_loss": None,
+            "token_agreement_pct": None,
+            "started_at": datetime.now().isoformat()
+        }
+
+        # Save run metadata
+        self._save_run_metadata(run_id, config)
+
+        # Build command
+        cmd = [
+            "python3",
+            "backend/opd/run_distillation.py",
+            "--teacher-path", config["teacher_model_path"],
+            "--student-path", config["base_model_path"],
+            "--adapter-path", config["student_adapter_path"],
+            "--prompts-path", config["validation_prompts_path"],
+            "--output-path", os.path.join(self.checkpoint_base_dir, run_id),
+            "--steps", str(config.get("num_steps", 1000)),
+            "--batch-size", str(config.get("batch_size", 4)),
+            "--temperature", str(config.get("temperature", 2.0)),
+            "--kl-weight", str(config.get("kl_weight", 0.8)),
+            "--learning-rate", str(config.get("learning_rate", 1e-5)),
+            "--run-id", run_id
+        ]
+
+        # Start subprocess
+        try:
+            log_file = os.path.join(self.runs_dir, f"{run_id}.log")
+            log_f = open(log_file, 'w')
+
+            self.current_process = subprocess.Popen(
+                cmd,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                preexec_fn=os.setsid,
+                cwd=os.getcwd()
+            )
+
+            # Start monitoring in background
+            asyncio.create_task(self._monitor_distillation())
+
+            # Estimate duration (rough estimate: ~30 seconds per step for batch_size=4)
+            estimated_minutes = (config.get("num_steps", 1000) * 30) / 60
+
+            # Estimate memory (teacher 4-bit + student + cache)
+            memory_gb = 48  # Conservative estimate
+
+            return {
+                "status": "success",
+                "run_id": run_id,
+                "message": "Distillation training started",
+                "estimated_duration_minutes": int(estimated_minutes),
+                "memory_required_gb": memory_gb
+            }
+
+        except Exception as e:
+            self.opd_state = "error"
+            logger.error(f"Failed to start distillation: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to start distillation: {str(e)}")
+
+    async def stop_distillation(self) -> Dict[str, Any]:
+        """Stop the current distillation process"""
+        if self.current_process and self.current_process.poll() is None:
+            try:
+                # Send SIGTERM to the process group
+                os.killpg(self.current_process.pid, signal.SIGTERM)
+                self.current_process.wait(timeout=10)
+                self.opd_state = "stopped"
+
+                checkpoint_path = self._get_latest_checkpoint()
+
+                return {
+                    "status": "stopped",
+                    "final_step": self.opd_metrics.get("step", 0),
+                    "checkpoint_path": checkpoint_path,
+                    "message": "Distillation stopped by user"
+                }
+            except Exception as e:
+                logger.error(f"Error stopping distillation: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        else:
+            return {
+                "status": "not_running",
+                "message": "No distillation process is running"
+            }
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get current distillation status"""
+        return {
+            "state": self.opd_state,
+            "run_id": self.current_run_id,
+            "metrics": self.opd_metrics,
+            "config": self.current_config
+        }
+
+    def get_metrics(self, run_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get metrics for a specific run"""
+        target_run_id = run_id or self.current_run_id
+
+        if not target_run_id:
+            return {"error": "No run_id specified and no active run"}
+
+        # Read metrics from file (stored in OnPolicyDistill/metrics/)
+        metrics_file = os.path.join("./OnPolicyDistill/metrics", f"{target_run_id}_train.jsonl")
+
+        if not os.path.exists(metrics_file):
+            return {
+                "run_id": target_run_id,
+                "metrics_history": [],
+                "error": "Metrics file not found"
+            }
+
+        try:
+            metrics_history = []
+            with open(metrics_file, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        metrics_history.append(json.loads(line))
+
+            return {
+                "run_id": target_run_id,
+                "total_steps": self.current_config.get("num_steps", 1000) if self.current_config else 1000,
+                "metrics_history": metrics_history
+            }
+        except Exception as e:
+            logger.error(f"Error reading metrics: {e}")
+            return {
+                "run_id": target_run_id,
+                "metrics_history": [],
+                "error": str(e)
+            }
+
+    def get_all_runs(self) -> List[Dict[str, Any]]:
+        """Get list of all distillation runs"""
+        runs = []
+
+        try:
+            for filename in os.listdir(self.runs_dir):
+                if filename.endswith("_metadata.json"):
+                    run_id = filename.replace("_metadata.json", "")
+                    metadata_path = os.path.join(self.runs_dir, filename)
+
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+
+                    runs.append(metadata)
+
+            # Sort by started_at descending
+            runs.sort(key=lambda x: x.get("started_at", ""), reverse=True)
+
+            return runs
+        except Exception as e:
+            logger.error(f"Error getting runs list: {e}")
+            return []
+
+    async def _monitor_distillation(self):
+        """Monitor the distillation process and update metrics"""
+        if not self.current_process:
+            return
+
+        try:
+            log_file = os.path.join(self.runs_dir, f"{self.current_run_id}.log")
+
+            while self.current_process.poll() is None:
+                await asyncio.sleep(2)
+
+                # Parse log file for metrics
+                if os.path.exists(log_file):
+                    self._parse_metrics_from_log(log_file)
+
+                # Broadcast progress
+                await training_manager.broadcast({
+                    "type": "opd_progress",
+                    "data": self.opd_metrics
+                })
+
+            # Process completed
+            return_code = self.current_process.returncode
+
+            if return_code == 0:
+                self.opd_state = "completed"
+                self.opd_metrics["completed_at"] = datetime.now().isoformat()
+
+                # Update metadata
+                self._update_run_metadata(self.current_run_id, {
+                    "status": "completed",
+                    "completed_at": self.opd_metrics["completed_at"],
+                    "final_metrics": self.opd_metrics
+                })
+
+                await training_manager.broadcast({
+                    "type": "opd_completed",
+                    "data": {
+                        "run_id": self.current_run_id,
+                        "final_metrics": self.opd_metrics,
+                        "message": "Distillation completed successfully"
+                    }
+                })
+            else:
+                self.opd_state = "error"
+                self._update_run_metadata(self.current_run_id, {
+                    "status": "error",
+                    "error": f"Process exited with code {return_code}"
+                })
+
+                await training_manager.broadcast({
+                    "type": "opd_error",
+                    "data": {"error": f"Distillation process exited with code {return_code}"}
+                })
+
+        except Exception as e:
+            self.opd_state = "error"
+            logger.error(f"Distillation monitoring error: {e}")
+            await training_manager.broadcast({
+                "type": "opd_error",
+                "data": {"error": str(e)}
+            })
+
+    def _parse_metrics_from_log(self, log_file: str):
+        """Parse metrics from the log file"""
+        try:
+            with open(log_file, 'r') as f:
+                lines = f.readlines()
+
+            # Look for the most recent metrics line
+            for line in reversed(lines[-50:]):  # Check last 50 lines
+                if "Step" in line and "KL Loss" in line:
+                    # Parse: "Step 123/1000 | KL Loss: 0.234 | Token Agr: 78.5% | ETA: 12m"
+                    try:
+                        parts = line.split("|")
+
+                        # Parse step
+                        step_part = parts[0].strip()
+                        if "/" in step_part:
+                            step_str = step_part.split()[1].split("/")[0]
+                            self.opd_metrics["step"] = int(step_str)
+
+                        # Parse KL loss
+                        for part in parts:
+                            if "KL Loss" in part:
+                                kl_str = part.split(":")[1].strip()
+                                self.opd_metrics["kl_loss"] = float(kl_str)
+                            elif "Token Agr" in part:
+                                agr_str = part.split(":")[1].strip().replace("%", "")
+                                self.opd_metrics["token_agreement_pct"] = float(agr_str)
+
+                        # Update progress
+                        total_steps = self.opd_metrics.get("total_steps", 1000)
+                        current_step = self.opd_metrics.get("step", 0)
+                        self.opd_metrics["progress_pct"] = (current_step / total_steps) * 100
+
+                        break
+                    except Exception as e:
+                        logger.debug(f"Error parsing metrics line: {e}")
+                        continue
+        except Exception as e:
+            logger.debug(f"Error parsing log file: {e}")
+
+    def _save_run_metadata(self, run_id: str, config: Dict[str, Any]):
+        """Save run metadata to file"""
+        metadata = {
+            "run_id": run_id,
+            "status": "running",
+            "started_at": datetime.now().isoformat(),
+            "config": config,
+            "teacher_model": os.path.basename(config.get("teacher_model_path", "")),
+            "student_model": os.path.basename(config.get("base_model_path", "")),
+            "student_adapter": os.path.basename(config.get("student_adapter_path", ""))
+        }
+
+        metadata_file = os.path.join(self.runs_dir, f"{run_id}_metadata.json")
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+    def _update_run_metadata(self, run_id: str, updates: Dict[str, Any]):
+        """Update run metadata"""
+        metadata_file = os.path.join(self.runs_dir, f"{run_id}_metadata.json")
+
+        try:
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+
+            metadata.update(updates)
+
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error updating metadata: {e}")
+
+    def _get_latest_checkpoint(self) -> Optional[str]:
+        """Get the latest checkpoint path"""
+        if not self.current_run_id:
+            return None
+
+        checkpoint_dir = os.path.join(self.checkpoint_base_dir, self.current_run_id)
+
+        if not os.path.exists(checkpoint_dir):
+            return None
+
+        try:
+            checkpoints = [f for f in os.listdir(checkpoint_dir) if f.endswith(".safetensors")]
+            if checkpoints:
+                checkpoints.sort()
+                return os.path.join(checkpoint_dir, checkpoints[-1])
+        except Exception as e:
+            logger.error(f"Error finding checkpoint: {e}")
+
+        return None
+
 # Global training manager instance
 training_manager = TrainingManager()
 
-# NEW: Integrate enhanced training methods (GSPO and Dr. GRPO)
-from main_enhancements import integrate_enhanced_training
-enhanced_manager = integrate_enhanced_training(app, training_manager)
+# Global OPD manager instance
+opd_manager = OPDManager()
 
 # REST API endpoints
 @app.get("/health")
@@ -924,8 +1018,7 @@ async def get_training_status():
     return {
         "state": training_manager.training_state,
         "metrics": training_manager.training_metrics,
-        "config": asdict(training_manager.current_config) if training_manager.current_config else None,
-        "error": getattr(training_manager, 'last_error', None)
+        "config": asdict(training_manager.current_config) if training_manager.current_config else None
     }
 
 @app.post("/training/start")
@@ -936,7 +1029,7 @@ async def start_training(config_data: Dict[str, Any], background_tasks: Backgrou
             model_path=config_data["model_path"],
             train_data_path=config_data["train_data_path"],
             val_data_path=config_data.get("val_data_path", ""),
-            learning_rate=config_data.get("learning_rate", 1e-4),  # Updated default
+            learning_rate=config_data.get("learning_rate", 1e-5),
             batch_size=config_data.get("batch_size", 1),
             max_seq_length=config_data.get("max_seq_length", 32768),
             iterations=config_data.get("iterations", 7329),
@@ -945,13 +1038,7 @@ async def start_training(config_data: Dict[str, Any], background_tasks: Backgrou
             save_every=25,  # Force save every 25 steps regardless of frontend input
             early_stop=config_data.get("early_stop", True),
             patience=config_data.get("patience", 3),
-            adapter_name=config_data.get("adapter_name", "mlx_finetune"),
-            # Full-layer LoRA parameters
-            fine_tune_type=config_data.get("fine_tune_type", "lora") or "lora",
-            lora_rank=int(config_data.get("lora_rank", 32) or 32),
-            lora_alpha=float(config_data.get("lora_alpha", 32.0) or 32.0),
-            lora_dropout=float(config_data.get("lora_dropout", 0.0) or 0.0),
-            lora_num_layers=int(config_data.get("lora_num_layers", -1) or -1)
+            adapter_name=config_data.get("adapter_name", "mlx_finetune")
         )
         
         success = await training_manager.start_training(config)
@@ -1063,46 +1150,36 @@ async def test_base_model(request_data: dict):
         cmd = [
             python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load
-from mlx_lm.generate import generate_step
-from mlx_lm.sample_utils import make_sampler
-from mlx_lm.tokenizer_utils import TokenizerWrapper
+from mlx_lm import load, generate
 
+# Load the base model WITHOUT adapter
+model, tokenizer = load("{model_path}")
+
+# Generate text
+prompt = """{prompt}"""
+
+# Try different parameter combinations based on MLX version
+response = None
 try:
-    # Load the base model WITHOUT adapter
-    model, tokenizer = load("{model_path}")
-    
-    if not isinstance(tokenizer, TokenizerWrapper):
-        tokenizer = TokenizerWrapper(tokenizer)
-    
-    prompt = """{prompt}"""
-    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
-    
-    # Create sampler with anti-repetition parameters
-    sampler = make_sampler(
-        temp=0.7,
-        top_p=0.9,
-        min_p=0.05,
-        top_k=40
-    )
-    
-    # Generate tokens
-    detokenizer = tokenizer.detokenizer
-    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
-        token_id = token.item() if hasattr(token, 'item') else token
-        detokenizer.add_token(token_id)
-    detokenizer.finalize()
-    
-    response = detokenizer.text
-    print("RESPONSE_START")
-    print(response)
-    print("RESPONSE_END")
-except Exception as e:
-    print("RESPONSE_START")
-    print(f"Error: {{str(e)}}")
-    print("RESPONSE_END")
-    import traceback
-    traceback.print_exc()
+    # Try with temp parameter
+    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+except TypeError:
+    try:
+        # Try with temperature parameter  
+        response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+    except TypeError:
+        try:
+            # Try with just basic parameters
+            response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+        except Exception as e:
+            print("RESPONSE_START")
+            print(f"Error: Could not generate response - {{str(e)}}")
+            print("RESPONSE_END")
+            exit(1)
+
+print("RESPONSE_START")
+print(response)
+print("RESPONSE_END")
 '''
         ]
         
@@ -1191,46 +1268,36 @@ async def test_model(request_data: dict):
         cmd = [
             python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load
-from mlx_lm.generate import generate_step
-from mlx_lm.sample_utils import make_sampler
-from mlx_lm.tokenizer_utils import TokenizerWrapper
+from mlx_lm import load, generate
 
+# Load the base model and adapter
+model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
+
+# Generate text
+prompt = """{prompt}"""
+
+# Try different parameter combinations based on MLX version
+response = None
 try:
-    # Load the base model and adapter
-    model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
-    
-    if not isinstance(tokenizer, TokenizerWrapper):
-        tokenizer = TokenizerWrapper(tokenizer)
-    
-    prompt = """{prompt}"""
-    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
-    
-    # Create sampler with anti-repetition parameters
-    sampler = make_sampler(
-        temp=0.7,
-        top_p=0.9,
-        min_p=0.05,
-        top_k=40
-    )
-    
-    # Generate tokens
-    detokenizer = tokenizer.detokenizer
-    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
-        token_id = token.item() if hasattr(token, 'item') else token
-        detokenizer.add_token(token_id)
-    detokenizer.finalize()
-    
-    response = detokenizer.text
-    print("RESPONSE_START")
-    print(response)
-    print("RESPONSE_END")
-except Exception as e:
-    print("RESPONSE_START")
-    print(f"Error: {{str(e)}}")
-    print("RESPONSE_END")
-    import traceback
-    traceback.print_exc()
+    # Try with temp parameter
+    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+except TypeError:
+    try:
+        # Try with temperature parameter  
+        response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+    except TypeError:
+        try:
+            # Try with just basic parameters
+            response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
+        except Exception as e:
+            print("RESPONSE_START")
+            print(f"Error: Could not generate response - {{str(e)}}")
+            print("RESPONSE_END")
+            exit(1)
+
+print("RESPONSE_START")
+print(response)
+print("RESPONSE_END")
 '''
         ]
         
@@ -1368,36 +1435,13 @@ async def model_inference(request_data: dict):
             cmd = [
                 python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load
-from mlx_lm.generate import generate_step
-from mlx_lm.sample_utils import make_sampler
-from mlx_lm.tokenizer_utils import TokenizerWrapper
+from mlx_lm import load, generate
 
 try:
     model, tokenizer = load("{model_path}", adapter_path="{adapter_path}")
-    
-    if not isinstance(tokenizer, TokenizerWrapper):
-        tokenizer = TokenizerWrapper(tokenizer)
-    
     prompt = """{prompt}"""
-    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
     
-    # Create sampler with anti-repetition parameters
-    sampler = make_sampler(
-        temp=0.7,
-        top_p=0.9,
-        min_p=0.05,
-        top_k=40
-    )
-    
-    # Generate tokens
-    detokenizer = tokenizer.detokenizer
-    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
-        token_id = token.item() if hasattr(token, 'item') else token
-        detokenizer.add_token(token_id)
-    detokenizer.finalize()
-    
-    response = detokenizer.text
+    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
     print("RESPONSE_START")
     print(response)
     print("RESPONSE_END")
@@ -1412,36 +1456,13 @@ except Exception as e:
             cmd = [
                 python_path, '-c', f'''
 import mlx.core as mx
-from mlx_lm import load
-from mlx_lm.generate import generate_step
-from mlx_lm.sample_utils import make_sampler
-from mlx_lm.tokenizer_utils import TokenizerWrapper
+from mlx_lm import load, generate
 
 try:
     model, tokenizer = load("{model_path}")
-    
-    if not isinstance(tokenizer, TokenizerWrapper):
-        tokenizer = TokenizerWrapper(tokenizer)
-    
     prompt = """{prompt}"""
-    prompt_tokens = mx.array(tokenizer.encode(prompt, add_special_tokens=True))
     
-    # Create sampler with anti-repetition parameters
-    sampler = make_sampler(
-        temp=0.7,
-        top_p=0.9,
-        min_p=0.05,
-        top_k=40
-    )
-    
-    # Generate tokens
-    detokenizer = tokenizer.detokenizer
-    for token, _ in generate_step(prompt_tokens, model, max_tokens={max_tokens}, sampler=sampler):
-        token_id = token.item() if hasattr(token, 'item') else token
-        detokenizer.add_token(token_id)
-    detokenizer.finalize()
-    
-    response = detokenizer.text
+    response = generate(model, tokenizer, prompt=prompt, max_tokens={max_tokens})
     print("RESPONSE_START")
     print(response)
     print("RESPONSE_END")
@@ -1488,6 +1509,137 @@ except Exception as e:
         logger.error(f"Model inference error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ===== On-Policy Distillation (OPD) Endpoints =====
+
+@app.post("/opd/start")
+async def opd_start(config_data: Dict[str, Any]):
+    """
+    Start On-Policy Distillation training.
+
+    Request body:
+    {
+        "base_model_path": "/path/to/qwen2.5-7b",
+        "teacher_model_path": "/path/to/qwen2.5-32b",
+        "student_adapter_path": "/path/to/sft_adapter",
+        "validation_prompts_path": "/path/to/val_prompts.jsonl",
+        "num_steps": 1000,
+        "batch_size": 4,
+        "temperature": 2.0,
+        "kl_weight": 0.8,
+        "learning_rate": 0.00001
+    }
+    """
+    try:
+        result = await opd_manager.start_distillation(config_data)
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"OPD start error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/opd/status")
+async def opd_status():
+    """
+    Get current OPD training status.
+
+    Response:
+    {
+        "state": "running",  // idle, running, completed, error
+        "run_id": "distill_20250128_143022",
+        "metrics": {
+            "step": 450,
+            "total_steps": 1000,
+            "progress_pct": 45.0,
+            "kl_loss": 0.234,
+            "token_agreement_pct": 78.5,
+            "started_at": "2025-01-28T14:30:22"
+        },
+        "config": { ... }
+    }
+    """
+    try:
+        return opd_manager.get_status()
+    except Exception as e:
+        logger.error(f"OPD status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/opd/stop")
+async def opd_stop():
+    """
+    Stop current OPD training.
+
+    Response:
+    {
+        "status": "stopped",
+        "final_step": 450,
+        "checkpoint_path": "/path/to/checkpoint",
+        "message": "Distillation stopped by user"
+    }
+    """
+    try:
+        return await opd_manager.stop_distillation()
+    except Exception as e:
+        logger.error(f"OPD stop error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/opd/metrics")
+async def opd_metrics(run_id: Optional[str] = None):
+    """
+    Get metrics for a specific OPD run.
+
+    Query params:
+        run_id: Optional run ID. If not provided, uses current run.
+
+    Response:
+    {
+        "run_id": "distill_20250128_143022",
+        "total_steps": 1000,
+        "metrics_history": [
+            {
+                "step": 0,
+                "kl_loss": 1.234,
+                "token_agreement_pct": 45.2,
+                "timestamp": "2025-01-28T14:30:22"
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        return opd_manager.get_metrics(run_id)
+    except Exception as e:
+        logger.error(f"OPD metrics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/opd/runs")
+async def opd_runs():
+    """
+    Get list of all OPD training runs.
+
+    Response:
+    {
+        "runs": [
+            {
+                "run_id": "distill_20250128_143022",
+                "status": "completed",
+                "started_at": "2025-01-28T14:30:22",
+                "completed_at": "2025-01-28T15:45:10",
+                "teacher_model": "qwen2.5-32b",
+                "student_model": "qwen2.5-7b",
+                "config": { ... }
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        runs = opd_manager.get_all_runs()
+        return {"runs": runs}
+    except Exception as e:
+        logger.error(f"OPD runs error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time training updates"""
@@ -1500,22 +1652,6 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         training_manager.remove_websocket(websocket)
-
-# Setup evaluation API routes
-try:
-    from evaluation_api import setup_evaluation_routes
-    setup_evaluation_routes(app)
-    logger.info("Evaluation API integrated")
-except Exception as e:
-    logger.warning(f"Evaluation API not available: {e}")
-
-# Setup fusion API routes
-try:
-    from fusion_api import router as fusion_router
-    app.include_router(fusion_router)
-    logger.info("Fusion API integrated")
-except Exception as e:
-    logger.warning(f"Fusion API not available: {e}")
 
 if __name__ == "__main__":
     import uvicorn
