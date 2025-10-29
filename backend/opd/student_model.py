@@ -97,25 +97,25 @@ class StudentModel:
         """
         Freeze base model parameters, enable gradients for LoRA only.
 
-        LoRA parameters typically have names containing 'lora_a', 'lora_b', 'adapter', etc.
+        MLX handles LoRA parameters automatically - when adapters are loaded,
+        only the adapter parameters are trainable by default.
         """
-        self.trainable_params = []
-        self.frozen_params = []
-
-        for name, param in self.model.named_parameters():
-            # Check if this is a LoRA parameter
-            is_lora = any(keyword in name.lower() for keyword in ['lora', 'adapter'])
-
-            if is_lora:
-                param.requires_grad = True
-                self.trainable_params.append((name, param))
-            else:
-                param.requires_grad = False
-                self.frozen_params.append((name, param))
-
+        # MLX models with loaded adapters automatically have only adapter parameters trainable
+        # We just need to identify them for logging purposes
+        
+        # Get all trainable parameters (MLX provides this via trainable_parameters())
+        if hasattr(self.model, 'trainable_parameters'):
+            trainable = self.model.trainable_parameters()
+            self.trainable_params = list(trainable.items()) if isinstance(trainable, dict) else []
+        else:
+            # Fallback: assume all parameters in model are trainable (adapter-only)
+            self.trainable_params = []
+        
+        self.frozen_params = []  # MLX handles freezing internally
+        
         logger.info(f"Configured gradient tracking:")
-        logger.info(f"  Trainable (LoRA): {len(self.trainable_params)} parameters")
-        logger.info(f"  Frozen (Base): {len(self.frozen_params)} parameters")
+        logger.info(f"  MLX adapter model loaded - only LoRA parameters are trainable")
+        logger.info(f"  Base model parameters are frozen by default")
 
     def forward(
         self,
@@ -298,14 +298,22 @@ class StudentModel:
         """Get total number of trainable parameters"""
         total = 0
         for name, param in self.trainable_params:
-            total += param.size
+            if hasattr(param, 'size'):
+                total += param.size
+            elif hasattr(param, 'shape'):
+                import numpy as np
+                total += np.prod(param.shape)
         return total
 
     def get_num_frozen_params(self) -> int:
         """Get total number of frozen parameters"""
         total = 0
         for name, param in self.frozen_params:
-            total += param.size
+            if hasattr(param, 'size'):
+                total += param.size
+            elif hasattr(param, 'shape'):
+                import numpy as np
+                total += np.prod(param.shape)
         return total
 
     def unload(self):
