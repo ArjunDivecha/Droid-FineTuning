@@ -623,8 +623,352 @@ class TrainingManager:
                 "data": {"error": str(e)}
             })
 
+class OPDManager:
+    """Manages On-Policy Distillation training processes and state"""
+
+    def __init__(self):
+        self.current_process: Optional[subprocess.Popen] = None
+        self.opd_state = "idle"  # idle, running, completed, error
+        self.current_run_id: Optional[str] = None
+        self.current_config: Optional[Dict[str, Any]] = None
+        self.opd_metrics: Dict[str, Any] = {}
+        self.runs_dir = "./OnPolicyDistill/runs"
+        self.checkpoint_base_dir = "./OnPolicyDistill/checkpoints"
+
+        # Ensure directories exist
+        os.makedirs(self.runs_dir, exist_ok=True)
+        os.makedirs(self.checkpoint_base_dir, exist_ok=True)
+
+    async def start_distillation(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Start distillation training with the given configuration"""
+        if self.current_process and self.current_process.poll() is None:
+            raise HTTPException(status_code=400, detail="Distillation is already running")
+
+        # Generate run_id
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_id = f"distill_{timestamp}"
+
+        self.current_run_id = run_id
+        self.current_config = config
+        self.opd_state = "running"
+        self.opd_metrics = {
+            "step": 0,
+            "total_steps": config.get("num_steps", 1000),
+            "progress_pct": 0.0,
+            "kl_loss": None,
+            "token_agreement_pct": None,
+            "started_at": datetime.now().isoformat()
+        }
+
+        # Save run metadata
+        self._save_run_metadata(run_id, config)
+
+        # Build command
+        cmd = [
+            "python3",
+            "backend/opd/run_distillation.py",
+            "--teacher-path", config["teacher_model_path"],
+            "--student-path", config["base_model_path"],
+            "--adapter-path", config["student_adapter_path"],
+            "--prompts-path", config["validation_prompts_path"],
+            "--output-path", os.path.join(self.checkpoint_base_dir, run_id),
+            "--steps", str(config.get("num_steps", 1000)),
+            "--batch-size", str(config.get("batch_size", 4)),
+            "--temperature", str(config.get("temperature", 2.0)),
+            "--kl-weight", str(config.get("kl_weight", 0.8)),
+            "--learning-rate", str(config.get("learning_rate", 1e-5)),
+            "--run-id", run_id
+        ]
+
+        # Start subprocess
+        try:
+            log_file = os.path.join(self.runs_dir, f"{run_id}.log")
+            log_f = open(log_file, 'w')
+
+            self.current_process = subprocess.Popen(
+                cmd,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                preexec_fn=os.setsid,
+                cwd=os.getcwd()
+            )
+
+            # Start monitoring in background
+            asyncio.create_task(self._monitor_distillation())
+
+            # Estimate duration (rough estimate: ~30 seconds per step for batch_size=4)
+            estimated_minutes = (config.get("num_steps", 1000) * 30) / 60
+
+            # Estimate memory (teacher 4-bit + student + cache)
+            memory_gb = 48  # Conservative estimate
+
+            return {
+                "status": "success",
+                "run_id": run_id,
+                "message": "Distillation training started",
+                "estimated_duration_minutes": int(estimated_minutes),
+                "memory_required_gb": memory_gb
+            }
+
+        except Exception as e:
+            self.opd_state = "error"
+            logger.error(f"Failed to start distillation: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to start distillation: {str(e)}")
+
+    async def stop_distillation(self) -> Dict[str, Any]:
+        """Stop the current distillation process"""
+        if self.current_process and self.current_process.poll() is None:
+            try:
+                # Send SIGTERM to the process group
+                os.killpg(self.current_process.pid, signal.SIGTERM)
+                self.current_process.wait(timeout=10)
+                self.opd_state = "stopped"
+
+                checkpoint_path = self._get_latest_checkpoint()
+
+                return {
+                    "status": "stopped",
+                    "final_step": self.opd_metrics.get("step", 0),
+                    "checkpoint_path": checkpoint_path,
+                    "message": "Distillation stopped by user"
+                }
+            except Exception as e:
+                logger.error(f"Error stopping distillation: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        else:
+            return {
+                "status": "not_running",
+                "message": "No distillation process is running"
+            }
+
+    def get_status(self) -> Dict[str, Any]:
+        """Get current distillation status"""
+        return {
+            "state": self.opd_state,
+            "run_id": self.current_run_id,
+            "metrics": self.opd_metrics,
+            "config": self.current_config
+        }
+
+    def get_metrics(self, run_id: Optional[str] = None) -> Dict[str, Any]:
+        """Get metrics for a specific run"""
+        target_run_id = run_id or self.current_run_id
+
+        if not target_run_id:
+            return {"error": "No run_id specified and no active run"}
+
+        # Read metrics from file (stored in OnPolicyDistill/metrics/)
+        metrics_file = os.path.join("./OnPolicyDistill/metrics", f"{target_run_id}_train.jsonl")
+
+        if not os.path.exists(metrics_file):
+            return {
+                "run_id": target_run_id,
+                "metrics_history": [],
+                "error": "Metrics file not found"
+            }
+
+        try:
+            metrics_history = []
+            with open(metrics_file, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        metrics_history.append(json.loads(line))
+
+            return {
+                "run_id": target_run_id,
+                "total_steps": self.current_config.get("num_steps", 1000) if self.current_config else 1000,
+                "metrics_history": metrics_history
+            }
+        except Exception as e:
+            logger.error(f"Error reading metrics: {e}")
+            return {
+                "run_id": target_run_id,
+                "metrics_history": [],
+                "error": str(e)
+            }
+
+    def get_all_runs(self) -> List[Dict[str, Any]]:
+        """Get list of all distillation runs"""
+        runs = []
+
+        try:
+            for filename in os.listdir(self.runs_dir):
+                if filename.endswith("_metadata.json"):
+                    run_id = filename.replace("_metadata.json", "")
+                    metadata_path = os.path.join(self.runs_dir, filename)
+
+                    with open(metadata_path, 'r') as f:
+                        metadata = json.load(f)
+
+                    runs.append(metadata)
+
+            # Sort by started_at descending
+            runs.sort(key=lambda x: x.get("started_at", ""), reverse=True)
+
+            return runs
+        except Exception as e:
+            logger.error(f"Error getting runs list: {e}")
+            return []
+
+    async def _monitor_distillation(self):
+        """Monitor the distillation process and update metrics"""
+        if not self.current_process:
+            return
+
+        try:
+            log_file = os.path.join(self.runs_dir, f"{self.current_run_id}.log")
+
+            while self.current_process.poll() is None:
+                await asyncio.sleep(2)
+
+                # Parse log file for metrics
+                if os.path.exists(log_file):
+                    self._parse_metrics_from_log(log_file)
+
+                # Broadcast progress
+                await training_manager.broadcast({
+                    "type": "opd_progress",
+                    "data": self.opd_metrics
+                })
+
+            # Process completed
+            return_code = self.current_process.returncode
+
+            if return_code == 0:
+                self.opd_state = "completed"
+                self.opd_metrics["completed_at"] = datetime.now().isoformat()
+
+                # Update metadata
+                self._update_run_metadata(self.current_run_id, {
+                    "status": "completed",
+                    "completed_at": self.opd_metrics["completed_at"],
+                    "final_metrics": self.opd_metrics
+                })
+
+                await training_manager.broadcast({
+                    "type": "opd_completed",
+                    "data": {
+                        "run_id": self.current_run_id,
+                        "final_metrics": self.opd_metrics,
+                        "message": "Distillation completed successfully"
+                    }
+                })
+            else:
+                self.opd_state = "error"
+                self._update_run_metadata(self.current_run_id, {
+                    "status": "error",
+                    "error": f"Process exited with code {return_code}"
+                })
+
+                await training_manager.broadcast({
+                    "type": "opd_error",
+                    "data": {"error": f"Distillation process exited with code {return_code}"}
+                })
+
+        except Exception as e:
+            self.opd_state = "error"
+            logger.error(f"Distillation monitoring error: {e}")
+            await training_manager.broadcast({
+                "type": "opd_error",
+                "data": {"error": str(e)}
+            })
+
+    def _parse_metrics_from_log(self, log_file: str):
+        """Parse metrics from the log file"""
+        try:
+            with open(log_file, 'r') as f:
+                lines = f.readlines()
+
+            # Look for the most recent metrics line
+            for line in reversed(lines[-50:]):  # Check last 50 lines
+                if "Step" in line and "KL Loss" in line:
+                    # Parse: "Step 123/1000 | KL Loss: 0.234 | Token Agr: 78.5% | ETA: 12m"
+                    try:
+                        parts = line.split("|")
+
+                        # Parse step
+                        step_part = parts[0].strip()
+                        if "/" in step_part:
+                            step_str = step_part.split()[1].split("/")[0]
+                            self.opd_metrics["step"] = int(step_str)
+
+                        # Parse KL loss
+                        for part in parts:
+                            if "KL Loss" in part:
+                                kl_str = part.split(":")[1].strip()
+                                self.opd_metrics["kl_loss"] = float(kl_str)
+                            elif "Token Agr" in part:
+                                agr_str = part.split(":")[1].strip().replace("%", "")
+                                self.opd_metrics["token_agreement_pct"] = float(agr_str)
+
+                        # Update progress
+                        total_steps = self.opd_metrics.get("total_steps", 1000)
+                        current_step = self.opd_metrics.get("step", 0)
+                        self.opd_metrics["progress_pct"] = (current_step / total_steps) * 100
+
+                        break
+                    except Exception as e:
+                        logger.debug(f"Error parsing metrics line: {e}")
+                        continue
+        except Exception as e:
+            logger.debug(f"Error parsing log file: {e}")
+
+    def _save_run_metadata(self, run_id: str, config: Dict[str, Any]):
+        """Save run metadata to file"""
+        metadata = {
+            "run_id": run_id,
+            "status": "running",
+            "started_at": datetime.now().isoformat(),
+            "config": config,
+            "teacher_model": os.path.basename(config.get("teacher_model_path", "")),
+            "student_model": os.path.basename(config.get("base_model_path", "")),
+            "student_adapter": os.path.basename(config.get("student_adapter_path", ""))
+        }
+
+        metadata_file = os.path.join(self.runs_dir, f"{run_id}_metadata.json")
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+    def _update_run_metadata(self, run_id: str, updates: Dict[str, Any]):
+        """Update run metadata"""
+        metadata_file = os.path.join(self.runs_dir, f"{run_id}_metadata.json")
+
+        try:
+            with open(metadata_file, 'r') as f:
+                metadata = json.load(f)
+
+            metadata.update(updates)
+
+            with open(metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error updating metadata: {e}")
+
+    def _get_latest_checkpoint(self) -> Optional[str]:
+        """Get the latest checkpoint path"""
+        if not self.current_run_id:
+            return None
+
+        checkpoint_dir = os.path.join(self.checkpoint_base_dir, self.current_run_id)
+
+        if not os.path.exists(checkpoint_dir):
+            return None
+
+        try:
+            checkpoints = [f for f in os.listdir(checkpoint_dir) if f.endswith(".safetensors")]
+            if checkpoints:
+                checkpoints.sort()
+                return os.path.join(checkpoint_dir, checkpoints[-1])
+        except Exception as e:
+            logger.error(f"Error finding checkpoint: {e}")
+
+        return None
+
 # Global training manager instance
 training_manager = TrainingManager()
+
+# Global OPD manager instance
+opd_manager = OPDManager()
 
 # REST API endpoints
 @app.get("/health")
@@ -1163,6 +1507,137 @@ except Exception as e:
         
     except Exception as e:
         logger.error(f"Model inference error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===== On-Policy Distillation (OPD) Endpoints =====
+
+@app.post("/opd/start")
+async def opd_start(config_data: Dict[str, Any]):
+    """
+    Start On-Policy Distillation training.
+
+    Request body:
+    {
+        "base_model_path": "/path/to/qwen2.5-7b",
+        "teacher_model_path": "/path/to/qwen2.5-32b",
+        "student_adapter_path": "/path/to/sft_adapter",
+        "validation_prompts_path": "/path/to/val_prompts.jsonl",
+        "num_steps": 1000,
+        "batch_size": 4,
+        "temperature": 2.0,
+        "kl_weight": 0.8,
+        "learning_rate": 0.00001
+    }
+    """
+    try:
+        result = await opd_manager.start_distillation(config_data)
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"OPD start error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/opd/status")
+async def opd_status():
+    """
+    Get current OPD training status.
+
+    Response:
+    {
+        "state": "running",  // idle, running, completed, error
+        "run_id": "distill_20250128_143022",
+        "metrics": {
+            "step": 450,
+            "total_steps": 1000,
+            "progress_pct": 45.0,
+            "kl_loss": 0.234,
+            "token_agreement_pct": 78.5,
+            "started_at": "2025-01-28T14:30:22"
+        },
+        "config": { ... }
+    }
+    """
+    try:
+        return opd_manager.get_status()
+    except Exception as e:
+        logger.error(f"OPD status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/opd/stop")
+async def opd_stop():
+    """
+    Stop current OPD training.
+
+    Response:
+    {
+        "status": "stopped",
+        "final_step": 450,
+        "checkpoint_path": "/path/to/checkpoint",
+        "message": "Distillation stopped by user"
+    }
+    """
+    try:
+        return await opd_manager.stop_distillation()
+    except Exception as e:
+        logger.error(f"OPD stop error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/opd/metrics")
+async def opd_metrics(run_id: Optional[str] = None):
+    """
+    Get metrics for a specific OPD run.
+
+    Query params:
+        run_id: Optional run ID. If not provided, uses current run.
+
+    Response:
+    {
+        "run_id": "distill_20250128_143022",
+        "total_steps": 1000,
+        "metrics_history": [
+            {
+                "step": 0,
+                "kl_loss": 1.234,
+                "token_agreement_pct": 45.2,
+                "timestamp": "2025-01-28T14:30:22"
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        return opd_manager.get_metrics(run_id)
+    except Exception as e:
+        logger.error(f"OPD metrics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/opd/runs")
+async def opd_runs():
+    """
+    Get list of all OPD training runs.
+
+    Response:
+    {
+        "runs": [
+            {
+                "run_id": "distill_20250128_143022",
+                "status": "completed",
+                "started_at": "2025-01-28T14:30:22",
+                "completed_at": "2025-01-28T15:45:10",
+                "teacher_model": "qwen2.5-32b",
+                "student_model": "qwen2.5-7b",
+                "config": { ... }
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        runs = opd_manager.get_all_runs()
+        return {"runs": runs}
+    except Exception as e:
+        logger.error(f"OPD runs error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.websocket("/ws")
