@@ -12,6 +12,12 @@ import {
   addLogLine,
   clearLogs,
 } from '../store/slices/trainingSlice';
+import {
+  opdProgress,
+  opdCompleted,
+  opdStopped,
+  opdError,
+} from '../store/slices/opdSlice';
 import { addNotification } from '../store/slices/uiSlice';
 
 const WEBSOCKET_URL = 'ws://localhost:8000/ws';
@@ -72,6 +78,36 @@ export const useWebSocket = () => {
             break;
           case 'training_error':
             dispatch(trainingError(data.data));
+            break;
+          // OPD events
+          case 'opd_progress':
+            dispatch(opdProgress(data.data));
+            break;
+          case 'opd_completed':
+            dispatch(opdCompleted(data.data));
+            dispatch(addNotification({
+              type: 'success',
+              title: 'Distillation Complete',
+              message: data.data.message || 'Distillation training completed successfully',
+              autoHide: true,
+            }));
+            break;
+          case 'opd_stopped':
+            dispatch(opdStopped(data.data));
+            dispatch(addNotification({
+              type: 'info',
+              title: 'Distillation Stopped',
+              message: 'Distillation training was stopped',
+              autoHide: true,
+            }));
+            break;
+          case 'opd_error':
+            dispatch(opdError(data.data));
+            dispatch(addNotification({
+              type: 'error',
+              title: 'Distillation Error',
+              message: data.data.error || 'An error occurred during distillation',
+            }));
             break;
         }
       } catch (error) {

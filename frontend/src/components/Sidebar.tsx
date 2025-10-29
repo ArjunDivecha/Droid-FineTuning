@@ -1,14 +1,15 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Settings, 
-  Play, 
-  BarChart3, 
-  GitCompare, 
+import {
+  Settings,
+  Play,
+  BarChart3,
+  GitCompare,
   ChevronLeft,
   ChevronRight,
-  Zap
+  Zap,
+  Beaker
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { setActiveNavItem, toggleSidebar, type ActivePage } from '../store/slices/uiSlice';
@@ -44,6 +45,13 @@ const navItems: NavItem[] = [
     description: 'View training analytics'
   },
   {
+    id: 'distillation',
+    label: 'Distillation',
+    icon: Beaker,
+    path: '/distillation',
+    description: 'Knowledge distillation'
+  },
+  {
     id: 'compare',
     label: 'Compare',
     icon: GitCompare,
@@ -58,6 +66,7 @@ export const Sidebar: React.FC = () => {
   const location = useLocation();
   const { sidebarCollapsed } = useSelector((state: RootState) => state.ui);
   const { state: trainingState } = useSelector((state: RootState) => state.training);
+  const { state: opdState } = useSelector((state: RootState) => state.opd);
 
   const handleNavItemClick = (item: NavItem) => {
     dispatch(setActiveNavItem(item.id));
@@ -128,6 +137,10 @@ export const Sidebar: React.FC = () => {
                 {/* Training indicator dot */}
                 {item.id === 'training' && trainingState === 'running' && (
                   <div className="absolute -top-1 -right-1 h-3 w-3 bg-success-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
+                )}
+                {/* OPD indicator dot */}
+                {item.id === 'distillation' && opdState === 'running' && (
+                  <div className="absolute -top-1 -right-1 h-3 w-3 bg-purple-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse" />
                 )}
               </div>
               

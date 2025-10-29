@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import { trainingSlice } from './slices/trainingSlice';
 import { modelsSlice } from './slices/modelsSlice';
 import { uiSlice } from './slices/uiSlice';
+import { opdSlice } from './slices/opdSlice';
 
 export const store = configureStore({
   reducer: {
     training: trainingSlice.reducer,
     models: modelsSlice.reducer,
     ui: uiSlice.reducer,
+    opd: opdSlice.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
