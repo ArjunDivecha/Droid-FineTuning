@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File dialogs
   showOpenDialog: (options: any) => ipcRenderer.invoke('show-open-dialog', options),
   showSaveDialog: (options: any) => ipcRenderer.invoke('show-save-dialog', options),
+  selectDirectory: () => ipcRenderer.invoke('show-open-dialog', { 
+    properties: ['openDirectory'] 
+  }),
   
   // Menu events
   onMenuOpenTrainingData: (callback: () => void) => 
@@ -32,6 +35,7 @@ declare global {
     electronAPI: {
       showOpenDialog: (options: any) => Promise<any>;
       showSaveDialog: (options: any) => Promise<any>;
+      selectDirectory: () => Promise<any>;
       onMenuOpenTrainingData: (callback: () => void) => void;
       onMenuStartTraining: (callback: () => void) => void;
       onMenuStopTraining: (callback: () => void) => void;

@@ -20,6 +20,11 @@ export interface ElectronAPI {
     filePath?: string;
   }>;
   
+  selectDirectory: () => Promise<{
+    canceled: boolean;
+    filePaths: string[];
+  }>;
+  
   onMenuOpenTrainingData: (callback: () => void) => void;
   onMenuStartTraining: (callback: () => void) => void;
   onMenuStopTraining: (callback: () => void) => void;

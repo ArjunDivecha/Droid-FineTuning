@@ -34,6 +34,10 @@ export const OPDSetup: React.FC = () => {
   const handleFileSelect = async (field: string) => {
     try {
       // Use Electron file dialog
+      if (!window.electronAPI?.selectDirectory) {
+        console.error('Electron API not available');
+        return;
+      }
       const result = await window.electronAPI.selectDirectory();
       if (result) {
         setConfig(prev => ({
