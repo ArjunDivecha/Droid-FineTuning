@@ -225,9 +225,14 @@ class DistillationLoss:
             # Only compute over valid positions
             valid_kl = kl_per_token * mask
             kl_mean = float(mx.sum(valid_kl) / mx.sum(mask))
-            # For std, need to mask properly
-            kl_values = kl_per_token[mask == 1]
-            kl_std = float(mx.std(kl_values)) if kl_values.size > 0 else 0.0
+            # For std, need to mask properly - use mx.where instead of boolean indexing
+            kl_values = mx.where(mask == 1, kl_per_token, 0.0)
+            # Only compute std over non-zero (valid) positions
+            num_valid = int(mx.sum(mask))
+            if num_valid > 0:
+                kl_std = float(mx.std(kl_values))
+            else:
+                kl_std = 0.0
         else:
             kl_mean = float(mx.mean(kl_per_token))
             kl_std = float(mx.std(kl_per_token))

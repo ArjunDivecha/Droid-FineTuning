@@ -63,7 +63,7 @@ class DistillationTrainer:
         self.metrics_history = []
 
         # Directories
-        self.checkpoint_dir = Path(config.checkpoint_dir) / config.run_id
+        self.checkpoint_dir = Path(config.output_adapter_path).parent / "checkpoints" / config.run_id
         self.metrics_dir = Path("./OnPolicyDistill/metrics")
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
