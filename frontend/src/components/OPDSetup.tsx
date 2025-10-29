@@ -32,25 +32,39 @@ export const OPDSetup: React.FC = () => {
   };
 
   const handleFileSelect = async (field: string) => {
+    console.log('handleFileSelect called for field:', field);
     try {
       // Use Electron file dialog
       if (!window.electronAPI?.selectDirectory) {
         console.error('Electron API not available');
+        alert('Electron API not available - file browser cannot open');
         return;
       }
+      console.log('Calling selectDirectory...');
       const result = await window.electronAPI.selectDirectory();
+      console.log('selectDirectory result:', result);
       if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const selectedPath = result.filePaths[0];
+        console.log('Selected path:', selectedPath);
         setConfig(prev => ({
           ...prev,
-          [field]: result.filePaths[0],
+          [field]: selectedPath,
         }));
+        dispatch(addNotification({
+          type: 'success',
+          title: 'Path Selected',
+          message: `Selected: ${selectedPath}`,
+          autoHide: true,
+        }));
+      } else {
+        console.log('Dialog was canceled or no path selected');
       }
     } catch (err) {
       console.error(`Error selecting ${field}:`, err);
       dispatch(addNotification({
         type: 'error',
         title: 'File Selection Error',
-        message: `Failed to select ${field}`,
+        message: `Failed to select ${field}: ${err}`,
       }));
     }
   };
@@ -259,9 +273,10 @@ export const OPDSetup: React.FC = () => {
               <input
                 type="number"
                 value={config.num_steps}
-                onChange={(e) => handleInputChange('num_steps', parseInt(e.target.value))}
+                onChange={(e) => handleInputChange('num_steps', parseInt(e.target.value) || 1)}
                 className="input w-full"
                 min="1"
+                placeholder="1000"
               />
             </div>
 
@@ -273,10 +288,11 @@ export const OPDSetup: React.FC = () => {
               <input
                 type="number"
                 value={config.batch_size}
-                onChange={(e) => handleInputChange('batch_size', parseInt(e.target.value))}
+                onChange={(e) => handleInputChange('batch_size', parseInt(e.target.value) || 1)}
                 className="input w-full"
                 min="1"
                 max="8"
+                placeholder="4"
               />
             </div>
           </div>
@@ -291,10 +307,11 @@ export const OPDSetup: React.FC = () => {
               <input
                 type="number"
                 value={config.temperature}
-                onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
+                onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value) || 0.1)}
                 className="input w-full"
                 step="0.1"
                 min="0.1"
+                placeholder="2.0"
               />
             </div>
 
@@ -306,11 +323,12 @@ export const OPDSetup: React.FC = () => {
               <input
                 type="number"
                 value={config.kl_weight}
-                onChange={(e) => handleInputChange('kl_weight', parseFloat(e.target.value))}
+                onChange={(e) => handleInputChange('kl_weight', parseFloat(e.target.value) || 0)}
                 className="input w-full"
                 step="0.1"
                 min="0"
                 max="1"
+                placeholder="0.8"
               />
             </div>
 
@@ -322,10 +340,11 @@ export const OPDSetup: React.FC = () => {
               <input
                 type="number"
                 value={config.learning_rate}
-                onChange={(e) => handleInputChange('learning_rate', parseFloat(e.target.value))}
+                onChange={(e) => handleInputChange('learning_rate', parseFloat(e.target.value) || 0.000001)}
                 className="input w-full"
                 step="0.000001"
                 min="0.000001"
+                placeholder="0.00001"
               />
             </div>
           </div>
