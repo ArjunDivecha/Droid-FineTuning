@@ -6,7 +6,8 @@ A streamlined MLX fine-tuning desktop application for Apple Silicon Macs with ad
 
 - 🖥️ **Modern Desktop GUI** - Beautiful dark theme Electron app with React interface
 - 🚀 **MLX Fine-Tuning** - Optimized for Apple Silicon (M1/M2/M3/M4)
-- 🧠 **Advanced Training Methods** - SFT, GSPO, Dr. GRPO, and GRPO support
+- 🧠 **Advanced Training Methods** - SFT, GSPO, Dr. GRPO, GRPO, and On-Policy Distillation
+- 🎓 **Knowledge Distillation** - Transfer knowledge from large teacher models to smaller students
 - 📊 **Real-Time Monitoring** - Live training progress with WebSocket updates
 - 🆚 **Model Comparison** - Test base vs fine-tuned model responses
 - 💾 **Session Management** - Save and load training sessions
@@ -18,6 +19,12 @@ A streamlined MLX fine-tuning desktop application for Apple Silicon Macs with ad
 Droid-FineTuning/
 ├── backend/           # FastAPI server for training management
 │   ├── main.py       # Core training API with WebSocket support
+│   ├── opd/          # On-Policy Distillation module
+│   │   ├── run_distillation.py    # Main distillation script
+│   │   ├── teacher_model.py       # Teacher model wrapper
+│   │   ├── student_model.py       # Student model wrapper
+│   │   ├── distillation_trainer.py # Training orchestration
+│   │   └── distillation_loss.py   # KL divergence loss
 │   └── requirements.txt
 ├── frontend/          # React GUI
 │   ├── src/          # React components and pages
@@ -125,6 +132,28 @@ cd frontend && npm run build && cd .. && npm start
 3. **Configure Training** - Method-specific parameters
 4. **Start Training** - GPU will run at optimal performance
 
+### On-Policy Distillation 🎓
+Transfer knowledge from a large teacher model to a smaller student model:
+
+```bash
+python3 backend/opd/run_distillation.py \
+  --teacher-path /path/to/teacher/model \
+  --student-path /path/to/student/base/model \
+  --adapter-path /path/to/student/lora/adapter \
+  --prompts-path ./prompts.jsonl \
+  --output-path ./output/checkpoints \
+  --steps 1000 \
+  --batch-size 4 \
+  --temperature 2.0
+```
+
+**Key Features:**
+- **Reverse KL Divergence** - Optimized for mode-seeking behavior
+- **Teacher Caching** - Efficient memory usage with output caching
+- **LoRA Training** - Only trains adapter parameters on student model
+- **MLX Optimized** - Full Apple Silicon GPU acceleration
+- **Flexible Architecture** - Works with different model sizes (e.g., 32B → 7B)
+
 ### 📊 Sample Training Data Available
 
 For testing GRPO/GSPO/Dr. GRPO methods, converted training data is ready at:
@@ -215,6 +244,18 @@ killmlxnew
 lsof -ti:8000 | xargs kill -9
 lsof -ti:3000 | xargs kill -9
 ```
+
+### Distillation Issues
+
+**Adapter dimension mismatch:**
+- Ensure the adapter was trained on the same base model as the student
+- Check `adapter_config.json` to verify model compatibility
+- Example: Don't use a 0.5B adapter with a 7B student model
+
+**Out of memory:**
+- Reduce batch size (`--batch-size 1` or `2`)
+- Lower max tokens (`--max-tokens 256`)
+- Use smaller models or enable teacher unloading in config
 
 ## 📚 Data Format
 
