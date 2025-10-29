@@ -39,10 +39,10 @@ export const OPDSetup: React.FC = () => {
         return;
       }
       const result = await window.electronAPI.selectDirectory();
-      if (result) {
+      if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
         setConfig(prev => ({
           ...prev,
-          [field]: result,
+          [field]: result.filePaths[0],
         }));
       }
     } catch (err) {
