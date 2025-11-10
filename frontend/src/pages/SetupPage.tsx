@@ -14,6 +14,14 @@ export const SetupPage: React.FC = () => {
   const { models, selectedModel, isLoading, error } = useSelector((state: RootState) => state.models);
   const { state: trainingState, config } = useSelector((state: RootState) => state.training);
   
+  const [fineTuneType, setFineTuneType] = useState<'lora' | 'full'>('lora');
+  const [loraConfig, setLoraConfig] = useState({
+    rank: 8,
+    alpha: 16,
+    dropout: 0.0,
+    target_modules: 'all'
+  });
+  
   const [formData, setFormData] = useState<Partial<TrainingConfig>>({
     model_path: '',
     train_data_path: '',
@@ -279,6 +287,115 @@ export const SetupPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Fine-Tuning Method */}
+        <div className="card">
+          <div className="card-header">
+            <div className="flex items-center space-x-2">
+              <Cpu className="h-5 w-5 text-primary-600" />
+              <h2 className="text-xl font-semibold">Fine-Tuning Method</h2>
+            </div>
+          </div>
+          <div className="card-body space-y-6">
+            <div>
+              <label className="block text-sm font-medium mb-3">Select Fine-Tuning Type</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setFineTuneType('lora')}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                    fineTuneType === 'lora'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-primary-300'
+                  }`}
+                >
+                  <div className="font-semibold text-lg mb-1">LoRA (Recommended)</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Low-Rank Adaptation - Efficient fine-tuning with small adapter weights
+                  </div>
+                  <div className="mt-2 text-xs text-primary-600 dark:text-primary-400">
+                    ✓ Fast • ✓ Low Memory • ✓ Portable
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFineTuneType('full')}
+                  className={`p-4 rounded-lg border-2 text-left transition-all ${
+                    fineTuneType === 'full'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-primary-300'
+                  }`}
+                >
+                  <div className="font-semibold text-lg mb-1">Full Fine-Tuning</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Train all model weights - Maximum adaptation capability
+                  </div>
+                  <div className="mt-2 text-xs text-warning-600 dark:text-warning-400">
+                    ⚠ Slower • ⚠ High Memory • ⚠ Large Output
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {fineTuneType === 'lora' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    LoRA Rank <span className="text-gray-500 dark:text-gray-400 font-normal">(Higher = More capacity)</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={loraConfig.rank}
+                    onChange={(e) => setLoraConfig(prev => ({ ...prev, rank: parseInt(e.target.value) }))}
+                    min="1"
+                    max="256"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    LoRA Alpha <span className="text-gray-500 dark:text-gray-400 font-normal">(Scaling factor)</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={loraConfig.alpha}
+                    onChange={(e) => setLoraConfig(prev => ({ ...prev, alpha: parseInt(e.target.value) }))}
+                    min="1"
+                    max="512"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    LoRA Dropout <span className="text-gray-500 dark:text-gray-400 font-normal">(Regularization)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    className="input-field"
+                    value={loraConfig.dropout}
+                    onChange={(e) => setLoraConfig(prev => ({ ...prev, dropout: parseFloat(e.target.value) }))}
+                    min="0"
+                    max="0.5"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Target Modules</label>
+                  <select
+                    className="input-field"
+                    value={loraConfig.target_modules}
+                    onChange={(e) => setLoraConfig(prev => ({ ...prev, target_modules: e.target.value }))}
+                  >
+                    <option value="all">All Linear Layers</option>
+                    <option value="attention">Attention Only</option>
+                    <option value="mlp">MLP Only</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Training Parameters */}
         <div className="card">
           <div className="card-header">
@@ -399,7 +516,7 @@ export const SetupPage: React.FC = () => {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={trainingState === 'running' || !formData.model_path || !formData.train_data_path}
+            disabled={!formData.model_path || !formData.train_data_path}
             className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Play className="h-4 w-4" />

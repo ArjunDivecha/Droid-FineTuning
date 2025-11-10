@@ -4,10 +4,12 @@ import { Provider } from 'react-redux';
 import { store } from './store/store';
 import { Layout } from './components/Layout';
 import { SetupPage } from './pages/SetupPage';
+import EnhancedSetupPage from './pages/EnhancedSetupPage';
 import { TrainingPage } from './pages/TrainingPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { ComparePage } from './pages/ComparePage';
-import { OPDPage } from './pages/OPDPage';
+import FusionPage from './pages/FusionPage';
+import { NestedLearningPage } from './pages/NestedLearningPage';
 import { useWebSocket } from './hooks/useWebSocket';
 import './App.css';
 
@@ -30,11 +32,12 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<SetupPage />} />
           <Route path="/setup" element={<SetupPage />} />
-          <Route path="/enhanced" element={<SetupPage />} />
+          <Route path="/enhanced-setup" element={<EnhancedSetupPage />} />
+          <Route path="/nested-learning" element={<NestedLearningPage />} />
           <Route path="/training" element={<TrainingPage />} />
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/compare" element={<ComparePage />} />
-          <Route path="/distillation" element={<OPDPage />} />
+          <Route path="/fusion" element={<FusionPage />} />
         </Routes>
       </Layout>
     </Router>

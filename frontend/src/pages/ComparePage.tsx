@@ -8,6 +8,9 @@ import {
   ArrowRight,
   Star,
   FolderOpen,
+  BarChart3,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { LoadSessionModal } from '../components/LoadSessionModal';
@@ -22,6 +25,20 @@ interface Comparison {
   timestamp: Date;
 }
 
+interface Evaluation {
+  id: string;
+  adapter_name: string;
+  is_base_model: boolean;
+  overall_score: number;
+  faithfulness: number;
+  fact_recall: number;
+  consistency: number;
+  hallucination: number;
+  num_questions: number;
+  timestamp: Date;
+  detailed_results?: any;
+}
+
 export const ComparePage: React.FC = () => {
   const { config } = useSelector((state: RootState) => state.training);
   const [prompt, setPrompt] = useState('');
@@ -31,6 +48,12 @@ export const ComparePage: React.FC = () => {
   const [isLoadSessionOpen, setIsLoadSessionOpen] = useState(false);
   const [loadedSession, setLoadedSession] = useState<any>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Evaluation state
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluationProgress, setEvaluationProgress] = useState(0);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
 
   // Comprehensive clipboard utilities with multiple fallbacks
   const clipboardUtils = {
@@ -303,6 +326,94 @@ export const ComparePage: React.FC = () => {
     console.log('Loaded session:', session);
   };
 
+  const handleStartEvaluation = async () => {
+    if (!loadedSession) {
+      alert('Please load a training session first');
+      return;
+    }
+    
+    // Clear previous evaluation results
+    setEvaluations([]);
+    setIsEvaluating(true);
+    setEvaluationProgress(0);
+    setEvaluationError(null);
+    
+    try {
+      const adapterName = loadedSession.adapter_name || 'mlx_finetune';
+      const newEvaluations: Evaluation[] = [];
+      
+      // Evaluate BOTH base model and adapter
+      for (const isBase of [true, false]) {
+        const response = await axios.post('http://localhost:8000/api/evaluation/start', {
+          adapter_name: adapterName,
+          training_data_path: null,
+          num_questions: 20,
+          evaluate_base_model: isBase
+        });
+        
+        if (!response.data.success) {
+          throw new Error(`Failed to start ${isBase ? 'base model' : 'adapter'} evaluation`);
+        }
+        
+        // Poll for this evaluation to complete
+        let hasAddedResult = false;
+        await new Promise<void>((resolve, reject) => {
+          const pollInterval = setInterval(async () => {
+            try {
+              const statusResponse = await axios.get('http://localhost:8000/api/evaluation/status');
+              const status = statusResponse.data;
+              
+              // Update progress (0-50% for base, 50-100% for adapter)
+              const progressOffset = isBase ? 0 : 50;
+              setEvaluationProgress(progressOffset + (status.progress / 2));
+              
+              if (!status.running && !hasAddedResult) {
+                clearInterval(pollInterval);
+                hasAddedResult = true;
+                
+                if (status.error) {
+                  reject(new Error(status.error));
+                } else {
+                  const resultResponse = await axios.get('http://localhost:8000/api/evaluation/result');
+                  const result = resultResponse.data.result;
+                  
+                  newEvaluations.push({
+                    id: `${Date.now()}-${isBase ? 'base' : 'adapter'}`,
+                    adapter_name: result.adapter_name,
+                    is_base_model: result.is_base_model || false,
+                    overall_score: result.scores.overall,
+                    faithfulness: result.scores.faithfulness,
+                    fact_recall: result.scores.fact_recall,
+                    consistency: result.scores.consistency,
+                    hallucination: result.scores.hallucination,
+                    num_questions: result.num_questions,
+                    timestamp: new Date(),
+                    detailed_results: result.detailed_results
+                  });
+                  
+                  resolve();
+                }
+              }
+            } catch (error) {
+              clearInterval(pollInterval);
+              reject(error);
+            }
+          }, 2000);
+        });
+      }
+      
+      // Add both evaluations at once
+      setEvaluations(prev => [...newEvaluations, ...prev]);
+      setIsEvaluating(false);
+      setEvaluationProgress(100);
+      
+    } catch (error: any) {
+      console.error('Failed to complete evaluation:', error);
+      setEvaluationError(error.message || 'Failed to complete evaluation');
+      setIsEvaluating(false);
+    }
+  };
+
   const selectedComp = comparisons.find(comp => comp.id === selectedComparison);
 
   return (
@@ -420,6 +531,26 @@ export const ComparePage: React.FC = () => {
                   </>
                 )}
               </button>
+              
+              <button
+                type="button"
+                onClick={handleStartEvaluation}
+                disabled={!loadedSession || isEvaluating}
+                className="btn-secondary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Evaluate both base model and adapter for comparison"
+              >
+                {isEvaluating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Evaluating Both...</span>
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Evaluate Base vs Adapter</span>
+                  </>
+                )}
+              </button>
             </div>
           </form>
         </div>
@@ -433,48 +564,156 @@ export const ComparePage: React.FC = () => {
             <div className="card-header">
               <h3 className="text-lg font-semibold">Comparison History</h3>
             </div>
-            <div className="overflow-y-auto">
-              {comparisons.length === 0 ? (
+            <div className="overflow-y-auto max-h-80">
+              {evaluations.length === 0 && comparisons.length === 0 ? (
                 <div className="p-6 text-center text-gray-500 dark:text-gray-400">
+                  <ArrowRight className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>No comparisons yet</p>
                   <p className="text-sm">Generate your first comparison above</p>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {comparisons.map((comparison) => (
-                    <div
-                      key={comparison.id}
-                      onClick={() => setSelectedComparison(comparison.id)}
-                      className={`p-3 cursor-pointer border-l-4 transition-colors ${
-                        selectedComparison === comparison.id
-                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
-                          : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
-                        {comparison.prompt}
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {comparison.timestamp.toLocaleDateString()}
+                <div className="space-y-4">
+                  {/* Evaluations Section */}
+                  {evaluations.length > 0 && (() => {
+                    // Group evaluations by adapter name, find pairs within 5 minutes
+                    const pairs: Array<{base: Evaluation, adapter: Evaluation}> = [];
+                    const baseEvals = evaluations.filter(e => e.is_base_model);
+                    const adapterEvals = evaluations.filter(e => !e.is_base_model);
+                    
+                    for (const base of baseEvals) {
+                      const matchingAdapter = adapterEvals.find(a => 
+                        a.adapter_name === base.adapter_name &&
+                        Math.abs(a.timestamp.getTime() - base.timestamp.getTime()) < 5 * 60 * 1000
+                      );
+                      if (matchingAdapter) {
+                        pairs.push({ base, adapter: matchingAdapter });
+                      }
+                    }
+                    
+                    return (
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-3 py-2 bg-gray-50 dark:bg-gray-800">
+                          Evaluation Results
+                        </h4>
+                        <div className="p-3 space-y-4">
+                          {pairs.map((pair, idx) => {
+                            const baseEval = pair.base;
+                            const adapterEval = pair.adapter;
+                            
+                            const improvement = adapterEval.overall_score - baseEval.overall_score;
+                            
+                            return (
+                              <div key={idx} className="card">
+                                <div className="card-header flex items-center justify-between">
+                                  <div>
+                                    <h5 className="font-semibold text-gray-900 dark:text-gray-100">
+                                      {adapterEval.adapter_name}
+                                    </h5>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                      {adapterEval.num_questions} questions • {adapterEval.timestamp.toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                  <div className={`text-right ${improvement > 0 ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'}`}>
+                                    <div className="text-2xl font-bold">
+                                      {improvement > 0 ? '+' : ''}{improvement.toFixed(1)}
+                                    </div>
+                                    <div className="text-xs">Improvement</div>
+                                  </div>
+                                </div>
+                                <div className="card-body p-0">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-gray-50 dark:bg-gray-800">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Metric</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Base Model</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fine-tuned</th>
+                                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Δ</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                      {[
+                                        { label: 'Overall Score', base: baseEval.overall_score, adapter: adapterEval.overall_score },
+                                        { label: 'Faithfulness', base: baseEval.faithfulness, adapter: adapterEval.faithfulness },
+                                        { label: 'Fact Recall', base: baseEval.fact_recall, adapter: adapterEval.fact_recall },
+                                        { label: 'Consistency', base: baseEval.consistency, adapter: adapterEval.consistency },
+                                      ].map((row, i) => {
+                                        const delta = row.adapter - row.base;
+                                        return (
+                                          <tr key={i} className={i === 0 ? 'bg-primary-50 dark:bg-primary-900/10' : ''}>
+                                            <td className={`px-4 py-3 ${i === 0 ? 'font-semibold' : ''} text-gray-900 dark:text-gray-100`}>
+                                              {row.label}
+                                            </td>
+                                            <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
+                                              {row.base}/100
+                                            </td>
+                                            <td className="px-4 py-3 text-center font-medium text-gray-900 dark:text-gray-100">
+                                              {row.adapter}/100
+                                            </td>
+                                            <td className={`px-4 py-3 text-center font-semibold ${
+                                              delta > 0 ? 'text-success-600 dark:text-success-400' : 
+                                              delta < 0 ? 'text-error-600 dark:text-error-400' : 
+                                              'text-gray-500 dark:text-gray-400'
+                                            }`}>
+                                              {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        {comparison.rating && (
-                          <div className="flex items-center space-x-1">
-                            {Array.from({ length: 5 }, (_, i) => (
-                              <Star
-                                key={i}
-                                className={`h-3 w-3 ${
-                                  i < comparison.rating!
-                                    ? 'text-yellow-400 fill-current'
-                                    : 'text-gray-300'
-                                }`}
-                              />
-                            ))}
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Comparisons Section */}
+                  {comparisons.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 px-3 py-2 bg-gray-50 dark:bg-gray-800">
+                        Response Comparisons
+                      </h4>
+                      <div className="space-y-1">
+                        {comparisons.map((comparison) => (
+                          <div
+                            key={comparison.id}
+                            onClick={() => setSelectedComparison(comparison.id)}
+                            className={`p-3 cursor-pointer border-l-4 transition-colors ${
+                              selectedComparison === comparison.id
+                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30'
+                                : 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
+                              {comparison.prompt}
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                {comparison.timestamp.toLocaleDateString()}
+                              </div>
+                              {comparison.rating && (
+                                <div className="flex items-center space-x-1">
+                                  {Array.from({ length: 5 }, (_, i) => (
+                                    <Star
+                                      key={i}
+                                      className={`h-3 w-3 ${
+                                        i < comparison.rating!
+                                          ? 'text-yellow-400 fill-current'
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
             </div>
@@ -604,6 +843,60 @@ export const ComparePage: React.FC = () => {
         onClose={() => setIsLoadSessionOpen(false)}
         onSessionLoaded={handleSessionLoaded}
       />
+      
+      {/* Evaluation Progress Modal */}
+      {isEvaluating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Evaluating Base Model vs Adapter...
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  <span>Progress</span>
+                  <span>{Math.round(evaluationProgress)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${evaluationProgress}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Evaluating both base model and fine-tuned adapter using Cerebras AI...
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                This should take 2-3 minutes for 40 questions total.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Evaluation Error Modal */}
+      {evaluationError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-error-500" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Evaluation Failed
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {evaluationError}
+            </p>
+            <button
+              onClick={() => setEvaluationError(null)}
+              className="btn-primary w-full"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

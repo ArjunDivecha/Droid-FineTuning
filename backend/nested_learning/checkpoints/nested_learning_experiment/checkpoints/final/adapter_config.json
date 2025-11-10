@@ -1,0 +1,14 @@
+{
+  "adapter_type": "lora",
+  "lora_rank": 8,
+  "lora_alpha": 16,
+  "lora_dropout": 0.0,
+  "lora_parameters": {
+    "rank": 8,
+    "dropout": 0.0,
+    "scale": 10.0
+  },
+  "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+  "num_layers": 24,
+  "model": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/Qwen2.5-0.5B-Instruct"
+}

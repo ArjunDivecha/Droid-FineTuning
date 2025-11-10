@@ -1,0 +1,16 @@
+============================================================
+ADAPTER EVALUATION REPORT
+============================================================
+
+Adapter: fused_bf16_bf16-full
+Evaluated: 2025-11-07T19:39:40.299091
+Test Questions: 20
+
+SCORES:
+  Overall:       0.0/100
+  Faithfulness:  0.0/100
+  Fact Recall:   0.0/100
+  Consistency:   0.0/100
+  Hallucination: 0.0/100
+
+============================================================

@@ -21,6 +21,14 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 import logging
 import uuid
+import random
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables from .env won't be loaded")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -70,6 +78,7 @@ class TrainingManager:
         self.log_file = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/logs/gui_training.log"
         self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
         self.current_session_id: Optional[str] = None
+        self.current_adapter_path: Optional[str] = None  # Full path to adapter directory
         
         # Best model tracking
         self.best_val_loss: Optional[float] = None
@@ -161,22 +170,56 @@ class TrainingManager:
             if not os.path.exists(session_file):
                 logger.warning(f"Session file not found: {session_file}")
                 return False
-            
+
             with open(session_file, 'r') as f:
                 session_data = json.load(f)
-            
-            # Restore training configuration
+
+            # Check if this is a nested learning session
             config_data = session_data["config"]
-            self.current_config = TrainingConfig(**config_data)
-            
+            if config_data.get("training_type") == "nested_learning":
+                # For nested learning, create a compatible TrainingConfig with defaults
+                self.current_config = TrainingConfig(
+                    model_path=config_data["model_path"],
+                    train_data_path=config_data["train_data"],
+                    val_data_path=config_data.get("val_data", ""),
+                    learning_rate=config_data.get("learning_rate", 1e-5),
+                    batch_size=config_data.get("batch_size", 1),
+                    max_seq_length=2048,
+                    iterations=config_data.get("num_steps", 1000),
+                    steps_per_report=10,
+                    steps_per_eval=100,
+                    save_every=100,
+                    early_stop=False,
+                    patience=3,
+                    adapter_name=config_data["adapter_name"]
+                )
+            else:
+                # Regular training session
+                self.current_config = TrainingConfig(**config_data)
+
             # Restore metrics and state
             self.training_metrics = session_data["metrics"]
             self.training_state = session_data["training_state"]
             self.current_session_id = session_data["session_id"]
-            
+
+            # Get adapter path from session data
+            if "adapter_path" in session_data:
+                adapter_path = session_data["adapter_path"]
+                # Convert relative path to absolute path
+                if not os.path.isabs(adapter_path):
+                    # Remove the filename if present (e.g., adapters.safetensors)
+                    if adapter_path.endswith(".safetensors"):
+                        adapter_path = os.path.dirname(adapter_path)
+                    adapter_path = os.path.abspath(adapter_path)
+                self.current_adapter_path = adapter_path
+            else:
+                # Fallback to old behavior for regular training sessions
+                self.current_adapter_path = os.path.join(self.output_dir, self.current_config.adapter_name)
+
             logger.info(f"Loaded training session: {session_id}")
+            logger.info(f"Adapter path: {self.current_adapter_path}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to load session {session_id}: {e}")
             return False
@@ -312,7 +355,7 @@ class TrainingManager:
             chat_val_path = val_data_path
             data_prep_script = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/scripts/prepare_chat_template_dataset.py"
             output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/data"
-            venv_python = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python"
+            venv_python = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python"
             
             # Create output directory if it doesn't exist
             os.makedirs(output_dir, exist_ok=True)
@@ -383,7 +426,7 @@ class TrainingManager:
         
         # Create config file for the training script
         config_data = {
-            "venv_python": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python",
+            "venv_python": "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python",
             "base_model_dir": config.model_path,
             "prepared_data_dir": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/data",
             "prepare_from_chat": False,  # Disable chat preparation since script is missing
@@ -395,7 +438,7 @@ class TrainingManager:
             "iters": config.iterations,
             "steps_per_report": config.steps_per_report,
             "steps_per_eval": config.steps_per_eval,
-            "val_batches": -1,
+            "val_batches": 25,
             "max_seq_length": config.max_seq_length,
             "grad_checkpoint": True,
             "mask_prompt": False,
@@ -970,6 +1013,133 @@ training_manager = TrainingManager()
 # Global OPD manager instance
 opd_manager = OPDManager()
 
+# Evaluation Manager
+class EvaluationManager:
+    """Manages model evaluation processes"""
+    
+    def __init__(self):
+        self.current_process: Optional[subprocess.Popen] = None
+        self.evaluation_state = "idle"  # idle, running, completed, error
+        self.progress = 0
+        self.total_questions = 0
+        self.current_question = 0
+        self.adapter_name: Optional[str] = None
+        self.is_base_model = False
+        self.result: Optional[Dict] = None
+        self.error: Optional[str] = None
+    
+    async def start_evaluation(self, adapter_name: str, training_data_path: Optional[str], 
+                               num_questions: int = 20, evaluate_base_model: bool = False) -> bool:
+        """Start evaluation process"""
+        if self.evaluation_state == "running":
+            raise HTTPException(status_code=400, detail="Evaluation already running")
+        
+        try:
+            self.evaluation_state = "running"
+            self.progress = 0
+            self.total_questions = num_questions
+            self.current_question = 0
+            self.adapter_name = adapter_name
+            self.is_base_model = evaluate_base_model
+            self.result = None
+            self.error = None
+            
+            # Build command to run evaluation script
+            python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
+            script_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/evaluate_adapters.py'
+            
+            cmd = [
+                python_path,
+                script_path,
+                '--adapter', adapter_name,
+                '--num-questions', str(num_questions)
+            ]
+            
+            if evaluate_base_model:
+                cmd.append('--base-model')
+            
+            if training_data_path:
+                cmd.extend(['--training-data', training_data_path])
+            
+            # Run in background
+            self.current_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Start monitoring in background
+            asyncio.create_task(self._monitor_evaluation())
+            
+            return True
+            
+        except Exception as e:
+            self.evaluation_state = "error"
+            self.error = str(e)
+            logger.error(f"Failed to start evaluation: {e}")
+            return False
+    
+    async def _monitor_evaluation(self):
+        """Monitor evaluation process"""
+        try:
+            if not self.current_process:
+                return
+            
+            # Wait for process to complete
+            stdout, stderr = self.current_process.communicate(timeout=600)
+            
+            if self.current_process.returncode == 0:
+                # Parse result from stdout
+                try:
+                    # Look for JSON result in output
+                    import re
+                    # Try to find JSON between markers first
+                    json_match = re.search(r'JSON_RESULT_START\s*\n(.*?)\n\s*JSON_RESULT_END', stdout, re.DOTALL)
+                    if json_match:
+                        self.result = json.loads(json_match.group(1))
+                    else:
+                        # Fallback to searching for scores object
+                        json_match = re.search(r'\{.*"scores".*\}', stdout, re.DOTALL)
+                        if json_match:
+                            self.result = json.loads(json_match.group())
+                        else:
+                            raise ValueError("No valid JSON result found in output")
+                    
+                    self.evaluation_state = "completed"
+                    self.progress = 100
+                except Exception as e:
+                    self.evaluation_state = "error"
+                    self.error = f"Failed to parse result: {str(e)}"
+            else:
+                self.evaluation_state = "error"
+                self.error = stderr or "Evaluation failed"
+                
+        except subprocess.TimeoutExpired:
+            self.evaluation_state = "error"
+            self.error = "Evaluation timed out"
+        except Exception as e:
+            self.evaluation_state = "error"
+            self.error = str(e)
+    
+    def get_status(self) -> Dict:
+        """Get current evaluation status"""
+        return {
+            "running": self.evaluation_state == "running",
+            "progress": self.progress,
+            "current_question": self.current_question,
+            "total_questions": self.total_questions,
+            "adapter_name": self.adapter_name,
+            "error": self.error
+        }
+    
+    def get_result(self) -> Optional[Dict]:
+        """Get evaluation result"""
+        return self.result
+
+# Global evaluation manager instance
+evaluation_manager = EvaluationManager()
+
 # REST API endpoints
 @app.get("/health")
 async def health_check():
@@ -1011,6 +1181,79 @@ async def list_models():
         logger.error(f"Error listing models: {e}")
     
     return {"models": models}
+
+@app.get("/adapters")
+async def list_adapters():
+    """List available LoRA adapters (both regular and nested learning)"""
+    adapters_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
+    nested_learning_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+    adapters = []
+
+    try:
+        # Scan regular LoRA adapters
+        if os.path.exists(adapters_dir):
+            for item in os.listdir(adapters_dir):
+                item_path = os.path.join(adapters_dir, item)
+                if os.path.isdir(item_path):
+                    # Check if directory contains adapter files
+                    has_adapters = False
+                    for file in os.listdir(item_path):
+                        if file.endswith(('.safetensors', '.npz', '.bin')):
+                            has_adapters = True
+                            break
+
+                    if has_adapters:
+                        # Try to read adapter config
+                        metadata = {}
+                        adapter_config = os.path.join(item_path, "adapter_config.json")
+                        if os.path.exists(adapter_config):
+                            try:
+                                with open(adapter_config, 'r') as f:
+                                    metadata = json.load(f)
+                            except Exception as e:
+                                logger.warning(f"Could not read adapter config for {item}: {e}")
+
+                        adapters.append({
+                            "name": item,
+                            "path": item_path,
+                            "type": "standard",
+                            "lora_rank": metadata.get("r", "unknown"),
+                            "lora_alpha": metadata.get("lora_alpha", "unknown")
+                        })
+
+        # Scan nested learning adapters
+        if os.path.exists(nested_learning_dir):
+            for item in os.listdir(nested_learning_dir):
+                if item.startswith('.'):  # Skip hidden files
+                    continue
+                item_path = os.path.join(nested_learning_dir, item)
+                if os.path.isdir(item_path):
+                    # Check for best checkpoint
+                    best_checkpoint = os.path.join(item_path, "checkpoints", "best")
+                    if os.path.exists(best_checkpoint):
+                        adapter_file = os.path.join(best_checkpoint, "adapters.safetensors")
+                        if os.path.exists(adapter_file):
+                            # Try to read adapter config
+                            metadata = {}
+                            adapter_config = os.path.join(best_checkpoint, "adapter_config.json")
+                            if os.path.exists(adapter_config):
+                                try:
+                                    with open(adapter_config, 'r') as f:
+                                        metadata = json.load(f)
+                                except Exception as e:
+                                    logger.warning(f"Could not read adapter config for {item}: {e}")
+
+                            adapters.append({
+                                "name": f"{item} (nested)",
+                                "path": best_checkpoint,
+                                "type": "nested_learning",
+                                "lora_rank": metadata.get("lora_rank", "unknown"),
+                                "lora_alpha": metadata.get("lora_alpha", "unknown")
+                            })
+    except Exception as e:
+        logger.error(f"Error listing adapters: {e}")
+
+    return {"adapters": adapters}
 
 @app.get("/training/status")
 async def get_training_status():
@@ -1144,7 +1387,7 @@ async def test_base_model(request_data: dict):
         model_path = config.model_path
         
         # Use MLX to generate text with the base model only (no adapter)
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python'
+        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
         
         # Create a simple inference command using mlx-lm for base model only
         cmd = [
@@ -1236,18 +1479,36 @@ async def test_model(request_data: dict):
         # Get the model and adapter paths from the latest training config
         if not training_manager.current_config:
             raise HTTPException(status_code=400, detail="No training session found. Please complete a training session first.")
-        
+
         config = training_manager.current_config
         model_path = config.model_path
-        adapter_name = config.adapter_name
-        
-        # Determine adapter path - MLX expects directory path, not file path
-        adapter_dir = os.path.join("/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters", adapter_name)
-        best_adapter_file = os.path.join(adapter_dir, "best_adapters.safetensors")
-        latest_adapter_file = os.path.join(adapter_dir, "adapters.safetensors")
-        
-        # Use best model if available, otherwise fall back to latest
-        if os.path.exists(best_adapter_file):
+
+        # Use the stored adapter path if available, otherwise construct it
+        if training_manager.current_adapter_path:
+            adapter_path = training_manager.current_adapter_path
+            adapter_name = "current"
+        else:
+            adapter_name = config.adapter_name
+            # Check if this is a nested learning adapter
+            nested_learning_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+            nested_adapter_path = os.path.join(nested_learning_dir, adapter_name, "checkpoints", "best")
+
+            if os.path.exists(nested_adapter_path):
+                # It's a nested learning adapter
+                adapter_path = nested_adapter_path
+            else:
+                # Regular adapter
+                adapter_path = os.path.join("/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters", adapter_name)
+
+        # Verify adapter exists
+        if not os.path.exists(adapter_path):
+            raise HTTPException(status_code=404, detail=f"Fine-tuned adapter not found at {adapter_path}")
+
+        # For regular training, check for best model
+        best_adapter_file = os.path.join(adapter_path, "best_adapters.safetensors")
+        latest_adapter_file = os.path.join(adapter_path, "adapters.safetensors")
+
+        if os.path.exists(best_adapter_file) and not os.path.exists(latest_adapter_file):
             # Copy best model to adapters.safetensors so MLX can find it
             import shutil
             shutil.copy2(best_adapter_file, latest_adapter_file)
@@ -1255,14 +1516,9 @@ async def test_model(request_data: dict):
         else:
             model_type = "latest"
         
-        # MLX expects the directory path, not the file path
-        adapter_path = adapter_dir
-        if not os.path.exists(adapter_path):
-            raise HTTPException(status_code=404, detail=f"Fine-tuned adapter not found at {adapter_path}")
-        
         # Use MLX to generate text with the fine-tuned model
         # This is a simplified implementation - you might want to use a proper MLX inference script
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python'
+        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
         
         # Create a simple inference command using mlx-lm
         cmd = [
@@ -1409,26 +1665,40 @@ async def model_inference(request_data: dict):
         adapter_path = None
         adapter_type = "none"
         if adapter_name:
-            adapter_base_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
-            adapter_dir = os.path.join(adapter_base_dir, adapter_name)
-            
-            if os.path.exists(adapter_dir):
-                best_adapter_file = os.path.join(adapter_dir, "best_adapters.safetensors")
-                latest_adapter_file = os.path.join(adapter_dir, "adapters.safetensors")
-                
-                # Use best model if available, otherwise latest
-                if os.path.exists(best_adapter_file):
-                    import shutil
-                    shutil.copy2(best_adapter_file, latest_adapter_file)
-                    adapter_type = "best"
-                elif os.path.exists(latest_adapter_file):
-                    adapter_type = "latest"
-                
-                if os.path.exists(latest_adapter_file):
-                    adapter_path = adapter_dir
+            # Check if this is a nested learning adapter
+            if "(nested)" in adapter_name:
+                # Extract the base name without the "(nested)" suffix
+                base_name = adapter_name.replace(" (nested)", "")
+                nested_learning_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+                adapter_dir = os.path.join(nested_learning_dir, base_name, "checkpoints", "best")
+
+                if os.path.exists(adapter_dir):
+                    adapter_file = os.path.join(adapter_dir, "adapters.safetensors")
+                    if os.path.exists(adapter_file):
+                        adapter_path = adapter_dir
+                        adapter_type = "nested_learning"
+            else:
+                # Regular adapter
+                adapter_base_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
+                adapter_dir = os.path.join(adapter_base_dir, adapter_name)
+
+                if os.path.exists(adapter_dir):
+                    best_adapter_file = os.path.join(adapter_dir, "best_adapters.safetensors")
+                    latest_adapter_file = os.path.join(adapter_dir, "adapters.safetensors")
+
+                    # Use best model if available, otherwise latest
+                    if os.path.exists(best_adapter_file):
+                        import shutil
+                        shutil.copy2(best_adapter_file, latest_adapter_file)
+                        adapter_type = "best"
+                    elif os.path.exists(latest_adapter_file):
+                        adapter_type = "latest"
+
+                    if os.path.exists(latest_adapter_file):
+                        adapter_path = adapter_dir
         
         # Use MLX to generate text
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python'
+        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
         
         if adapter_path:
             # Fine-tuned model inference
@@ -1640,6 +1910,49 @@ async def opd_runs():
         logger.error(f"OPD runs error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/evaluation/start")
+async def start_evaluation(request_data: Dict[str, Any]):
+    """Start model evaluation"""
+    try:
+        adapter_name = request_data.get("adapter_name")
+        training_data_path = request_data.get("training_data_path")
+        num_questions = request_data.get("num_questions", 20)
+        evaluate_base_model = request_data.get("evaluate_base_model", False)
+        
+        if not adapter_name:
+            raise HTTPException(status_code=400, detail="adapter_name is required")
+        
+        success = await evaluation_manager.start_evaluation(
+            adapter_name, training_data_path, num_questions, evaluate_base_model
+        )
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Evaluation started",
+                "adapter_name": adapter_name
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to start evaluation")
+            
+    except Exception as e:
+        logger.error(f"Evaluation start error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/evaluation/status")
+async def get_evaluation_status():
+    """Get evaluation status"""
+    return evaluation_manager.get_status()
+
+@app.get("/api/evaluation/result")
+async def get_evaluation_result():
+    """Get evaluation result"""
+    result = evaluation_manager.get_result()
+    if result:
+        return {"success": True, "result": result}
+    else:
+        raise HTTPException(status_code=404, detail="No evaluation result available")
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time training updates"""
@@ -1652,6 +1965,22 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         training_manager.remove_websocket(websocket)
+
+# Register fusion API router
+try:
+    from fusion_api import router as fusion_router
+    app.include_router(fusion_router)
+    logger.info("Fusion API router registered")
+except ImportError as e:
+    logger.warning(f"Could not load fusion API: {e}")
+
+# Register nested learning API router
+try:
+    from nested_learning_api import router as nested_learning_router
+    app.include_router(nested_learning_router)
+    logger.info("Nested Learning API router registered")
+except ImportError as e:
+    logger.warning(f"Could not load nested learning API: {e}")
 
 if __name__ == "__main__":
     import uvicorn
