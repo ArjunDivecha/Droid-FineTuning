@@ -2,8 +2,8 @@
 ADAPTER EVALUATION REPORT
 ============================================================
 
-Adapter: 4b-nested
-Evaluated: 2025-11-10T12:14:11.289343
+Adapter: 4B=full
+Evaluated: 2025-11-10T12:10:59.107563
 Test Questions: 20
 
 SCORES:
