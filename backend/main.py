@@ -1912,7 +1912,7 @@ async def opd_runs():
 
 @app.post("/api/evaluation/start")
 async def start_evaluation(request_data: Dict[str, Any]):
-    """Start model evaluation"""
+    """Start model evaluation using LLM-as-judge (Cerebras-based system)"""
     try:
         adapter_name = request_data.get("adapter_name")
         training_data_path = request_data.get("training_data_path")
@@ -1952,6 +1952,82 @@ async def get_evaluation_result():
         return {"success": True, "result": result}
     else:
         raise HTTPException(status_code=404, detail="No evaluation result available")
+
+# New Tier 0+1 Evaluation Endpoints
+@app.post("/api/evaluate/adapter")
+async def evaluate_adapter(request_data: Dict[str, Any]):
+    """Evaluate adapter using Tier 0 + Tier 1"""
+    try:
+        from combined_evaluator import CombinedEvaluator
+        
+        adapter_name = request_data.get("adapter_name")
+        max_samples = request_data.get("max_samples", 20)
+        
+        if not adapter_name:
+            raise HTTPException(status_code=400, detail="adapter_name is required")
+        
+        evaluator = CombinedEvaluator()
+        try:
+            report = evaluator.evaluate_adapter(
+                adapter_name,
+                include_base=False,
+                max_samples=max_samples
+            )
+            return {"success": True, "result": report}
+        finally:
+            evaluator.cleanup()
+            
+    except Exception as e:
+        logger.error(f"Adapter evaluation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/evaluate/base-model")
+async def evaluate_base_model(request_data: Dict[str, Any]):
+    """Evaluate base model using Tier 1 only"""
+    try:
+        from combined_evaluator import CombinedEvaluator
+        
+        max_samples = request_data.get("max_samples", 20)
+        
+        evaluator = CombinedEvaluator()
+        try:
+            report = evaluator.evaluate_base_model(max_samples=max_samples)
+            return {"success": True, "result": report}
+        finally:
+            evaluator.cleanup()
+            
+    except Exception as e:
+        logger.error(f"Base model evaluation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/evaluate/compare")
+async def compare_adapters(request_data: Dict[str, Any]):
+    """Compare two adapters using Tier 0 + Tier 1"""
+    try:
+        from combined_evaluator import CombinedEvaluator
+        
+        adapter1 = request_data.get("adapter1")
+        adapter2 = request_data.get("adapter2")
+        max_samples = request_data.get("max_samples", 20)
+        
+        if not adapter1 or not adapter2:
+            raise HTTPException(status_code=400, detail="adapter1 and adapter2 are required")
+        
+        evaluator = CombinedEvaluator()
+        try:
+            comparison = evaluator.compare_adapters(
+                adapter1,
+                adapter2,
+                include_base=False,
+                max_samples=max_samples
+            )
+            return {"success": True, "result": comparison}
+        finally:
+            evaluator.cleanup()
+            
+    except Exception as e:
+        logger.error(f"Adapter comparison error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

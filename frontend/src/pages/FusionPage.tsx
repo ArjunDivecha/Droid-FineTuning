@@ -10,7 +10,9 @@ import {
   Info,
   Zap,
   GitMerge,
+  BarChart3,
 } from 'lucide-react';
+import { EvaluationCard } from '../components/EvaluationCard';
 import axios from 'axios';
 
 interface AdapterInfo {
@@ -37,6 +39,25 @@ interface EvaluationResult {
   hallucination: number;
 }
 
+interface TierEvaluationResult {
+  id: string;
+  adapter_name: string;
+  is_base_model: boolean;
+  tier0?: {
+    quality_score: number;
+    grade: string;
+    time_seconds: number;
+  } | null;
+  tier1: {
+    quality_score: number;
+    grade: string;
+    perplexity: number;
+    avg_loss: number;
+    time_seconds: number;
+  };
+  total_time_seconds: number;
+}
+
 interface FusionResult {
   base_model_result: EvaluationResult;
   individual_results: EvaluationResult[];
@@ -60,6 +81,11 @@ const FusionPage: React.FC = () => {
   const [fusionStatus, setFusionStatus] = useState('');
   const [fusionResult, setFusionResult] = useState<FusionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Tier 0+1 Evaluation state
+  const [tierEvaluations, setTierEvaluations] = useState<Map<string, TierEvaluationResult>>(new Map());
+  const [isEvaluatingTiers, setIsEvaluatingTiers] = useState(false);
+  const [evaluatingAdapter, setEvaluatingAdapter] = useState<string | null>(null);
 
   // Load available adapters on mount
   useEffect(() => {
@@ -161,6 +187,91 @@ const FusionPage: React.FC = () => {
     setError(null);
     setFusionProgress(0);
     setFusionStatus('');
+    setTierEvaluations(new Map());
+  };
+
+  const handleEvaluateAdapter = async (adapterName: string) => {
+    setIsEvaluatingTiers(true);
+    setEvaluatingAdapter(adapterName);
+    setError(null);
+    
+    try {
+      const response = await axios.post('http://localhost:8000/api/evaluate/adapter', {
+        adapter_name: adapterName,
+        max_samples: 20
+      });
+      
+      if (response.data.success) {
+        const result = response.data.result;
+        setTierEvaluations(prev => {
+          const newMap = new Map(prev);
+          newMap.set(adapterName, {
+            id: `tier-${Date.now()}-${adapterName}`,
+            adapter_name: adapterName,
+            is_base_model: false,
+            tier0: result.tier0,
+            tier1: result.tier1,
+            total_time_seconds: result.total_time_seconds
+          });
+          return newMap;
+        });
+      }
+    } catch (err: any) {
+      setError(`Failed to evaluate ${adapterName}: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setIsEvaluatingTiers(false);
+      setEvaluatingAdapter(null);
+    }
+  };
+
+  const handleEvaluateSelected = async () => {
+    if (selectedAdapters.length === 0) {
+      setError('Please select adapters to evaluate');
+      return;
+    }
+    
+    setIsEvaluatingTiers(true);
+    setError(null);
+    
+    // Evaluate base model first (Tier 1 only)
+    try {
+      setEvaluatingAdapter('base_model');
+      const baseResponse = await axios.post('http://localhost:8000/api/evaluate/base-model', {
+        max_samples: 20
+      });
+      
+      if (baseResponse.data.success) {
+        const result = baseResponse.data.result;
+        setTierEvaluations(prev => {
+          const newMap = new Map(prev);
+          newMap.set('base_model', {
+            id: `tier-${Date.now()}-base`,
+            adapter_name: 'base_model',
+            is_base_model: true,
+            tier0: null,
+            tier1: result.tier1,
+            total_time_seconds: result.total_time_seconds
+          });
+          return newMap;
+        });
+      }
+    } catch (err: any) {
+      console.error('Base model evaluation error:', err);
+      setError(`Base model evaluation failed: ${err.response?.data?.detail || err.message}`);
+    }
+    
+    // Evaluate each selected adapter (Tier 0 + Tier 1)
+    for (const adapterName of selectedAdapters) {
+      try {
+        setEvaluatingAdapter(adapterName);
+        await handleEvaluateAdapter(adapterName);
+      } catch (err) {
+        console.error(`Error evaluating ${adapterName}:`, err);
+      }
+    }
+    
+    setIsEvaluatingTiers(false);
+    setEvaluatingAdapter(null);
   };
 
   const getDeltaColor = (delta: number) => {
@@ -311,8 +422,26 @@ const FusionPage: React.FC = () => {
                               className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                             />
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                {adapter.name}
+                              <div className="flex items-center justify-between">
+                                <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                  {adapter.name}
+                                </div>
+                                {tierEvaluations.has(adapter.name) && (
+                                  <div className="flex items-center space-x-1 ml-2">
+                                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                      tierEvaluations.get(adapter.name)!.tier1.quality_score >= 80 ? 'bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-300' :
+                                      tierEvaluations.get(adapter.name)!.tier1.quality_score >= 60 ? 'bg-warning-100 dark:bg-warning-900/30 text-warning-700 dark:text-warning-300' :
+                                      'bg-error-100 dark:bg-error-900/30 text-error-700 dark:text-error-300'
+                                    }`}>
+                                      T1: {tierEvaluations.get(adapter.name)!.tier1.quality_score.toFixed(0)}
+                                    </span>
+                                    {tierEvaluations.get(adapter.name)!.tier0 && (
+                                      <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                        T0: {tierEvaluations.get(adapter.name)!.tier0!.quality_score.toFixed(0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400 space-y-0.5 mt-1">
                                 {adapter.iterations && (
@@ -327,6 +456,26 @@ const FusionPage: React.FC = () => {
                                   </div>
                                 )}
                               </div>
+                              {!tierEvaluations.has(adapter.name) && !isSelected && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEvaluateAdapter(adapter.name);
+                                  }}
+                                  disabled={isEvaluatingTiers || evaluatingAdapter === adapter.name}
+                                  className="mt-2 text-xs btn-secondary py-1 px-2"
+                                  title="Quick evaluate this adapter"
+                                >
+                                  {evaluatingAdapter === adapter.name ? (
+                                    <span className="flex items-center space-x-1">
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                      <span>Evaluating...</span>
+                                    </span>
+                                  ) : (
+                                    'Evaluate'
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </label>
                         );
@@ -356,14 +505,32 @@ const FusionPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={handleReset}
-                    disabled={isFusing}
+                    disabled={isFusing || isEvaluatingTiers}
                     className="btn-secondary text-sm"
                   >
                     Reset
                   </button>
                   <button
+                    onClick={handleEvaluateSelected}
+                    disabled={selectedAdapters.length === 0 || isEvaluatingTiers || isFusing}
+                    className="btn-secondary flex items-center space-x-2"
+                    title="Evaluate base model and selected adapters using Tier 0+1 (Fast & Deterministic)"
+                  >
+                    {isEvaluatingTiers ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Evaluating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="w-4 h-4" />
+                        <span>Evaluate Base + Selected</span>
+                      </>
+                    )}
+                  </button>
+                  <button
                     onClick={handleStartFusion}
-                    disabled={selectedAdapters.length < 2 || isFusing}
+                    disabled={selectedAdapters.length < 2 || isFusing || isEvaluatingTiers}
                     className="btn-primary flex items-center space-x-2"
                   >
                     <GitMerge className="w-4 h-4" />
@@ -375,6 +542,93 @@ const FusionPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Tier Evaluation Results */}
+      {tierEvaluations.size > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="text-xl font-semibold">Tier 0+1 Evaluation Results</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Separate Tier 0 (Mathematical) and Tier 1 (Perplexity) scores for base model and adapters
+            </p>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from(tierEvaluations.values()).map((evaluation) => (
+                <EvaluationCard key={evaluation.id} result={evaluation} compact={true} />
+              ))}
+            </div>
+            
+            {/* Comparison Summary */}
+            {(() => {
+              const baseModelEval = tierEvaluations.get('base_model');
+              const adapterEvals = selectedAdapters
+                .map(name => tierEvaluations.get(name))
+                .filter(Boolean);
+              
+              if (adapterEvals.length >= 1 || baseModelEval) {
+                const allEvals: TierEvaluationResult[] = [
+                  ...(baseModelEval ? [baseModelEval] : []),
+                  ...adapterEvals.filter((e): e is TierEvaluationResult => e !== undefined)
+                ].sort((a, b) => b.tier1.quality_score - a.tier1.quality_score);
+                
+                return (
+                  <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                      Comparison (by Tier 1 Score)
+                    </h3>
+                    <div className="space-y-2">
+                      {allEvals.map((evaluation, idx) => {
+                        const isBaseModel = evaluation.is_base_model;
+                        const isBest = idx === 0;
+                        const improvement = baseModelEval && !isBaseModel 
+                          ? evaluation.tier1.quality_score - baseModelEval.tier1.quality_score
+                          : null;
+                        
+                        return (
+                          <div key={evaluation.id} className={`flex items-center justify-between p-2 rounded ${
+                            isBaseModel ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-700'
+                          }`}>
+                            <div className="flex items-center space-x-2">
+                              {isBest && <span className="text-success-600 dark:text-success-400 font-bold">🏆</span>}
+                              <span className={`font-medium ${isBaseModel ? 'text-blue-700 dark:text-blue-300' : ''}`}>
+                                {isBaseModel ? 'Base Model' : evaluation.adapter_name}
+                              </span>
+                              {isBaseModel && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">BASE</span>}
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                T1: <span className="font-semibold">{evaluation.tier1.quality_score.toFixed(1)}</span>
+                              </span>
+                              {evaluation.tier0 && (
+                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                  T0: <span className="font-semibold">{evaluation.tier0.quality_score.toFixed(1)}</span>
+                                </span>
+                              )}
+                              {improvement !== null && (
+                                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                  improvement > 0 
+                                    ? 'bg-success-100 dark:bg-success-900/30 text-success-700 dark:text-success-300'
+                                    : improvement < 0
+                                    ? 'bg-error-100 dark:bg-error-900/30 text-error-700 dark:text-error-300'
+                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                                }`}>
+                                  {improvement > 0 ? '+' : ''}{improvement.toFixed(1)} vs base
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Fusion Progress */}
       {isFusing && (

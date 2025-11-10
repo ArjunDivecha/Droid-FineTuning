@@ -1,0 +1,42 @@
+{
+  "test_timestamp": "2025-11-10T13:00:29.173824",
+  "total_time_seconds": 30.19,
+  "num_adapters_tested": 4,
+  "num_successful": 1,
+  "include_base_comparison": true,
+  "max_samples": 20,
+  "reports": [
+    {
+      "adapter_name": "4b-nested",
+      "evaluation_method": "combined_tier0_tier1",
+      "timestamp": "2025-11-10T13:00:28.190193",
+      "combined_score": 76.9,
+      "grade": "C",
+      "tier0": {
+        "quality_score": 60.0,
+        "spectral_norm": 0.3432770043921967,
+        "effective_rank": 8.0,
+        "concentration": 0.7022183531148475,
+        "l2_norm": 14.06273365020752,
+        "sparsity": 0.047551133897569445,
+        "warnings": [
+          "Low loss improvement - training may not be effective"
+        ],
+        "time_seconds": 0.15390515327453613
+      },
+      "tier1": {
+        "quality_score": 88.2,
+        "perplexity": 12.76,
+        "avg_loss": 2.5466,
+        "time_seconds": 11.82
+      },
+      "total_time_seconds": 11.97,
+      "base_model_comparison": {
+        "base_perplexity": 16.65,
+        "adapter_perplexity": 12.76,
+        "perplexity_reduction_pct": 23.4,
+        "quality_improvement": 3.8
+      }
+    }
+  ]
+}

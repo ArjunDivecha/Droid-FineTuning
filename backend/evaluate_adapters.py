@@ -344,7 +344,7 @@ Provide your evaluation in JSON format:
 
         try:
             response = self.cerebras_client.chat.completions.create(
-                model="llama-4-scout-17b-16e-instruct",
+                model="gpt-oss-120b",
                 messages=[
                     {"role": "system", "content": "You are an expert evaluator. Always respond with valid JSON."},
                     {"role": "user", "content": prompt}

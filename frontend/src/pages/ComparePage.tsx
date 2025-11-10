@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { LoadSessionModal } from '../components/LoadSessionModal';
+import { EvaluationCard } from '../components/EvaluationCard';
 import axios from 'axios';
 
 interface Comparison {
@@ -39,6 +40,27 @@ interface Evaluation {
   detailed_results?: any;
 }
 
+interface TierEvaluation {
+  id: string;
+  adapter_name?: string;
+  model_name?: string;
+  is_base_model: boolean;
+  tier0?: {
+    quality_score: number;
+    grade: string;
+    time_seconds: number;
+  } | null;
+  tier1: {
+    quality_score: number;
+    grade: string;
+    perplexity: number;
+    avg_loss: number;
+    time_seconds: number;
+  };
+  total_time_seconds: number;
+  timestamp: Date;
+}
+
 export const ComparePage: React.FC = () => {
   const { config } = useSelector((state: RootState) => state.training);
   const [prompt, setPrompt] = useState('');
@@ -54,6 +76,13 @@ export const ComparePage: React.FC = () => {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationProgress, setEvaluationProgress] = useState(0);
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  
+  // New Tier 0+1 Evaluation state
+  const [tierEvaluations, setTierEvaluations] = useState<TierEvaluation[]>([]);
+  const [isTierEvaluating, setIsTierEvaluating] = useState(false);
+  const [tierEvaluationError, setTierEvaluationError] = useState<string | null>(null);
+  const [tierEvaluationProgress, setTierEvaluationProgress] = useState(0);
+  const [tierEvaluationStatus, setTierEvaluationStatus] = useState<string>('');
 
   // Comprehensive clipboard utilities with multiple fallbacks
   const clipboardUtils = {
@@ -326,6 +355,102 @@ export const ComparePage: React.FC = () => {
     console.log('Loaded session:', session);
   };
 
+  const handleStartTierEvaluation = async () => {
+    if (!loadedSession && !config?.adapter_name) {
+      alert('Please load a training session or have a trained adapter available');
+      return;
+    }
+    
+    setIsTierEvaluating(true);
+    setTierEvaluationError(null);
+    setTierEvaluationProgress(0);
+    setTierEvaluationStatus('Starting evaluation...');
+    
+    try {
+      const adapterName = loadedSession?.adapter_name || config?.adapter_name;
+      const newEvaluations: TierEvaluation[] = [];
+      
+      // Evaluate base model (Tier 1 only)
+      setTierEvaluationStatus('Evaluating base model (Tier 1: Perplexity Analysis)...');
+      setTierEvaluationProgress(10);
+      
+      try {
+        const baseResponse = await axios.post('http://localhost:8000/api/evaluate/base-model', {
+          max_samples: 20
+        }, {
+          timeout: 60000 // 60 second timeout
+        });
+        
+        if (baseResponse.data.success) {
+          const baseResult = baseResponse.data.result;
+          newEvaluations.push({
+            id: `tier-${Date.now()}-base`,
+            model_name: 'base_model',
+            is_base_model: true,
+            tier0: null,
+            tier1: baseResult.tier1,
+            total_time_seconds: baseResult.total_time_seconds,
+            timestamp: new Date()
+          });
+          setTierEvaluationProgress(50);
+          setTierEvaluationStatus('Base model evaluation complete. Evaluating adapter...');
+        }
+      } catch (error: any) {
+        console.error('Base model evaluation error:', error);
+        setTierEvaluationError(`Base model evaluation failed: ${error.response?.data?.detail || error.message}`);
+        setTierEvaluationProgress(50); // Continue anyway
+      }
+      
+      // Evaluate adapter (Tier 0 + Tier 1)
+      if (adapterName) {
+        setTierEvaluationStatus(`Evaluating adapter "${adapterName}" (Tier 0: Mathematical + Tier 1: Perplexity)...`);
+        setTierEvaluationProgress(60);
+        
+        try {
+          const adapterResponse = await axios.post('http://localhost:8000/api/evaluate/adapter', {
+            adapter_name: adapterName,
+            max_samples: 20
+          }, {
+            timeout: 60000 // 60 second timeout
+          });
+          
+          if (adapterResponse.data.success) {
+            const adapterResult = adapterResponse.data.result;
+            newEvaluations.push({
+              id: `tier-${Date.now()}-adapter`,
+              adapter_name: adapterName,
+              is_base_model: false,
+              tier0: adapterResult.tier0,
+              tier1: adapterResult.tier1,
+              total_time_seconds: adapterResult.total_time_seconds,
+              timestamp: new Date()
+            });
+            setTierEvaluationProgress(100);
+            setTierEvaluationStatus('Evaluation complete!');
+          }
+        } catch (error: any) {
+          console.error('Adapter evaluation error:', error);
+          setTierEvaluationError(`Adapter evaluation failed: ${error.response?.data?.detail || error.message}`);
+        }
+      }
+      
+      if (newEvaluations.length > 0) {
+        setTierEvaluations(prev => [...newEvaluations, ...prev]);
+      }
+      
+      // Small delay to show completion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error: any) {
+      console.error('Tier evaluation error:', error);
+      setTierEvaluationError(error.message || 'Failed to complete evaluation');
+    } finally {
+      setIsTierEvaluating(false);
+      setTierEvaluationProgress(0);
+      setTierEvaluationStatus('');
+    }
+  };
+
   const handleStartEvaluation = async () => {
     if (!loadedSession) {
       alert('Please load a training session first');
@@ -534,10 +659,30 @@ export const ComparePage: React.FC = () => {
               
               <button
                 type="button"
+                onClick={handleStartTierEvaluation}
+                disabled={(!loadedSession && !config?.adapter_name) || isTierEvaluating}
+                className="btn-primary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Evaluate using Tier 0 (Mathematical) + Tier 1 (Perplexity) - Fast & Deterministic"
+              >
+                {isTierEvaluating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Evaluating...</span>
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Evaluate (Tier 0+1)</span>
+                  </>
+                )}
+              </button>
+              
+              <button
+                type="button"
                 onClick={handleStartEvaluation}
                 disabled={!loadedSession || isEvaluating}
                 className="btn-secondary flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Evaluate both base model and adapter for comparison"
+                title="Evaluate both base model and adapter using LLM-as-judge (slower)"
               >
                 {isEvaluating ? (
                   <>
@@ -547,7 +692,7 @@ export const ComparePage: React.FC = () => {
                 ) : (
                   <>
                     <BarChart3 className="h-4 w-4" />
-                    <span>Evaluate Base vs Adapter</span>
+                    <span>Evaluate (LLM Judge)</span>
                   </>
                 )}
               </button>
@@ -555,6 +700,75 @@ export const ComparePage: React.FC = () => {
           </form>
         </div>
       </div>
+
+      {/* Tier Evaluation Results */}
+      {tierEvaluations.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              Tier 0+1 Evaluation Results
+            </h2>
+            {tierEvaluationError && (
+              <div className="text-sm text-error-600 dark:text-error-400 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>{tierEvaluationError}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {tierEvaluations.map((evaluation) => (
+              <EvaluationCard key={evaluation.id} result={evaluation} compact={false} />
+            ))}
+          </div>
+          
+          {/* Comparison Summary */}
+          {tierEvaluations.length >= 2 && (() => {
+            const baseEval = tierEvaluations.find(e => e.is_base_model);
+            const adapterEval = tierEvaluations.find(e => !e.is_base_model);
+            
+            if (baseEval && adapterEval) {
+              const tier1Improvement = adapterEval.tier1.quality_score - baseEval.tier1.quality_score;
+              return (
+                <div className="card bg-primary-50 dark:bg-primary-900/20">
+                  <div className="card-body">
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                      Comparison Summary
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Tier 1 Score Improvement</div>
+                        <div className={`text-2xl font-bold ${
+                          tier1Improvement > 0 ? 'text-success-600 dark:text-success-400' : 
+                          tier1Improvement < 0 ? 'text-error-600 dark:text-error-400' : 
+                          'text-gray-600 dark:text-gray-400'
+                        }`}>
+                          {tier1Improvement > 0 ? '+' : ''}{tier1Improvement.toFixed(1)} points
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                          Base: {baseEval.tier1.quality_score.toFixed(1)} → Adapter: {adapterEval.tier1.quality_score.toFixed(1)}
+                        </div>
+                      </div>
+                      {adapterEval.tier0 && (
+                        <div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400">Tier 0 Score (Adapter Only)</div>
+                          <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            {adapterEval.tier0.quality_score.toFixed(1)}/100
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            Grade: {adapterEval.tier0.grade}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
+      )}
 
       {/* Comparison Results */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -844,6 +1058,39 @@ export const ComparePage: React.FC = () => {
         onSessionLoaded={handleSessionLoaded}
       />
       
+      {/* Tier Evaluation Progress Modal */}
+      {isTierEvaluating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Evaluating with Tier 0+1 System...
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  <span>Progress</span>
+                  <span>{Math.round(tierEvaluationProgress)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${tierEvaluationProgress}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {tierEvaluationStatus || 'Starting evaluation...'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                Tier 0: Mathematical Analysis (~5s) • Tier 1: Perplexity Analysis (~15s)
+                <br />
+                Total time: ~15-25 seconds
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Evaluation Progress Modal */}
       {isEvaluating && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -865,10 +1112,12 @@ export const ComparePage: React.FC = () => {
                 </div>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Evaluating both base model and fine-tuned adapter using Cerebras AI...
+                Evaluating both base model and fine-tuned adapter using Tier 0+1 system...
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-500">
-                This should take 2-3 minutes for 40 questions total.
+                Tier 0: Mathematical Analysis (~5s) • Tier 1: Perplexity Analysis (~15s)
+                <br />
+                Total time: ~15-25 seconds per model
               </p>
             </div>
           </div>

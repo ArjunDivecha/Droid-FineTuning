@@ -1,0 +1,23 @@
+================================================================================
+COMBINED EVALUATION TEST RESULTS
+================================================================================
+
+Test Date: 2025-11-10T13:00:29.173824
+Total Time: 30.2 seconds
+Adapters Tested: 4
+Successful Evaluations: 1
+
+
+================================================================================
+ADAPTER: 4b-nested
+================================================================================
+Combined Score: 76.9/100 (Grade: C)
+Tier 0 Score: 60.0/100
+Tier 1 Score: 88.2/100
+Tier 0 Weighted: 24.0
+Tier 1 Weighted: 52.9
+Total Time: 12.0s
+
+Base Model Comparison:
+  Perplexity Reduction: 23.4%
+  Quality Increase: +3.8 points

@@ -83,12 +83,34 @@ class Tier0Evaluator:
         # Load using safetensors
         try:
             from safetensors import safe_open
-            weights = {}
-            with safe_open(adapter_file, framework="numpy") as f:
-                for key in f.keys():
-                    weights[key] = f.get_tensor(key)
-            logger.info(f"Loaded {len(weights)} weight tensors")
-            return weights
+            import numpy as np
+            
+            # Try PyTorch first (better bfloat16 support)
+            try:
+                import torch
+                weights = {}
+                with safe_open(adapter_file, framework="pt") as f:
+                    for key in f.keys():
+                        tensor = f.get_tensor(key)
+                        # Convert bfloat16 to float32
+                        if tensor.dtype == torch.bfloat16:
+                            tensor = tensor.float()
+                        weights[key] = tensor.numpy().astype(np.float32)
+                logger.info(f"Loaded {len(weights)} weight tensors using PyTorch")
+                return weights
+            except (ImportError, Exception) as pt_error:
+                # Fallback to numpy
+                logger.debug(f"PyTorch loading failed, using numpy: {pt_error}")
+                weights = {}
+                with safe_open(adapter_file, framework="numpy") as f:
+                    for key in f.keys():
+                        tensor = f.get_tensor(key)
+                        # Convert float16 to float32 if needed
+                        if tensor.dtype == np.float16:
+                            tensor = tensor.astype(np.float32)
+                        weights[key] = tensor
+                logger.info(f"Loaded {len(weights)} weight tensors using numpy")
+                return weights
         except Exception as e:
             logger.error(f"Failed to load weights: {e}")
             raise
