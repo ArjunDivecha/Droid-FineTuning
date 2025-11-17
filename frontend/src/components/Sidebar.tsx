@@ -11,7 +11,8 @@ import {
   Zap,
   Sparkles,
   Layers,
-  Network
+  Network,
+  Cloud
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { setActiveNavItem, toggleSidebar, type ActivePage } from '../store/slices/uiSlice';
@@ -45,6 +46,13 @@ const navItems: NavItem[] = [
     icon: Network,
     path: '/nested-learning',
     description: 'Multi-frequency parameter updates'
+  },
+  {
+    id: 'tinker' as ActivePage,
+    label: 'Tinker',
+    icon: Cloud,
+    path: '/tinker',
+    description: 'Cloud fine-tuning with Tinker'
   },
   {
     id: 'training',

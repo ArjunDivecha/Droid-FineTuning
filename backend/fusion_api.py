@@ -99,7 +99,32 @@ class FusionEvaluationResult(BaseModel):
 def get_session_info(adapter_name: str) -> Dict[str, Any]:
     """Get session information for an adapter to determine base model."""
 
-    # First check if this is a nested learning adapter
+    # First check if this is a Tinker model (has model_info.json)
+    adapter_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
+    tinker_info_path = os.path.join(adapter_dir, adapter_name, "model_info.json")
+    if os.path.exists(tinker_info_path):
+        try:
+            with open(tinker_info_path, 'r') as f:
+                tinker_info = json.load(f)
+                # Convert Tinker info to session-like format
+                return {
+                    'config': {
+                        'model_path': tinker_info.get('base_model'),
+                        'train_data_path': tinker_info.get('train_data_path'),
+                        'iterations': tinker_info.get('num_epochs', 0) * 1000,  # Approximate
+                        'adapter_name': adapter_name
+                    },
+                    'model_path': tinker_info.get('base_model'),
+                    'model_name': tinker_info.get('base_model'),
+                    'train_data_path': tinker_info.get('train_data_path'),
+                    'num_iters': tinker_info.get('num_epochs', 0) * 1000,
+                    'timestamp': tinker_info.get('completed_at'),
+                    'training_source': 'tinker'
+                }
+        except Exception as e:
+            logger.warning(f"Error reading Tinker model info for {adapter_name}: {e}")
+
+    # Check if this is a nested learning adapter
     nested_config_path = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}/config.json"
     if os.path.exists(nested_config_path):
         try:

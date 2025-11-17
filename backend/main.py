@@ -2051,6 +2051,123 @@ async def compare_adapters(request_data: Dict[str, Any]):
         logger.error(f"Adapter comparison error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================================================================
+# TINKER CLOUD FINE-TUNING ENDPOINTS
+# ============================================================================
+
+# Initialize Tinker client
+tinker_client = None
+
+def get_tinker_client():
+    """Get or create Tinker client instance"""
+    global tinker_client
+    if tinker_client is None:
+        from tinker_client import TinkerTrainingClient
+        tinker_client = TinkerTrainingClient()
+    return tinker_client
+
+@app.post("/api/tinker/start-training")
+async def start_tinker_training(request_data: Dict[str, Any]):
+    """
+    Start a Tinker cloud fine-tuning job.
+    
+    Request body:
+    {
+        "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+        "train_data_path": "/path/to/train.jsonl",
+        "val_data_path": "/path/to/val.jsonl",  // optional
+        "adapter_name": "my_adapter",
+        "learning_rate": 1e-5,
+        "batch_size": 1,
+        "num_epochs": 3,
+        "lora_rank": 64,
+        "max_seq_length": 2048
+    }
+    """
+    try:
+        client = get_tinker_client()
+        result = await client.start_training(**request_data)
+        return result
+    except Exception as e:
+        logger.error(f"Tinker training start error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tinker/status/{job_id}")
+async def get_tinker_status(job_id: str):
+    """
+    Get status of a Tinker training job.
+    
+    Returns:
+    {
+        "status": "training" | "completed" | "error",
+        "job_id": "...",
+        "message": "...",
+        "ready_for_download": true/false
+    }
+    """
+    try:
+        client = get_tinker_client()
+        status = await client.get_training_status(job_id)
+        return status
+    except Exception as e:
+        logger.error(f"Tinker status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/tinker/download")
+async def download_tinker_model(request_data: Dict[str, Any]):
+    """
+    Download trained model from Tinker to local artifacts.
+    
+    Request body:
+    {
+        "job_id": "tinker_...",
+        "adapter_name": "my_adapter"
+    }
+    """
+    try:
+        job_id = request_data.get("job_id")
+        adapter_name = request_data.get("adapter_name")
+        
+        if not job_id or not adapter_name:
+            raise HTTPException(status_code=400, detail="job_id and adapter_name are required")
+        
+        client = get_tinker_client()
+        result = await client.download_model(job_id, adapter_name)
+        return result
+    except Exception as e:
+        logger.error(f"Tinker download error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tinker/models")
+async def list_tinker_models():
+    """
+    List all Tinker-trained models in artifacts directory.
+    
+    Returns:
+    {
+        "models": [
+            {
+                "adapter_name": "...",
+                "base_model": "...",
+                "training_source": "tinker",
+                "completed_at": "...",
+                ...
+            }
+        ]
+    }
+    """
+    try:
+        client = get_tinker_client()
+        models = client.list_trained_models()
+        return {"models": models}
+    except Exception as e:
+        logger.error(f"Tinker models list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# WEBSOCKET ENDPOINT
+# ============================================================================
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time training updates"""

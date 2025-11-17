@@ -80,7 +80,9 @@ class AdapterFusion:
                     # Check if it has adapter files
                     best_file = os.path.join(adapter_path, "best_adapters.safetensors")
                     latest_file = os.path.join(adapter_path, "adapters.safetensors")
-                    if os.path.exists(best_file) or os.path.exists(latest_file):
+                    model_info_file = os.path.join(adapter_path, "model_info.json")
+                    # Include if it has safetensors OR model_info.json (Tinker models)
+                    if os.path.exists(best_file) or os.path.exists(latest_file) or os.path.exists(model_info_file):
                         adapters.append(item)
 
         # Check nested learning checkpoints directory
