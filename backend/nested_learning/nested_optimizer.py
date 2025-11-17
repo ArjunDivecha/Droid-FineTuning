@@ -6,11 +6,16 @@ Each parameter tier updates at a different frequency based on the tier schedule.
 """
 
 import mlx.core as mx
-import mlx.optimizers as optim
+import mlx.nn as nn
+from mlx.utils import tree_flatten, tree_map
 from typing import Dict, List, Any, Optional
+import logging
+import copy
+
+logger = logging.getLogger(__name__)
 
 
-class NestedAdam(optim.Adam):
+class NestedAdam:
     """
     Adam optimizer with nested learning support.
 
@@ -35,7 +40,9 @@ class NestedAdam(optim.Adam):
         betas: List[float] = [0.9, 0.999],
         eps: float = 1e-8
     ):
-        super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
+        self.learning_rate = learning_rate
+        self.betas = betas
+        self.eps = eps
 
         self.tier_update_frequencies = tier_update_frequencies
         self.parameter_tier_map = parameter_tier_map
@@ -47,6 +54,9 @@ class NestedAdam(optim.Adam):
         # Global step counter
         self.global_step = 0
 
+        # Adam state: stores m, v, and step for each parameter
+        self.state = {}
+
     def apply_gradients(self, gradients: Dict[str, mx.array], model: Any) -> None:
         """
         Apply gradients with tier-based update scheduling.
@@ -54,7 +64,7 @@ class NestedAdam(optim.Adam):
         Only updates parameters in tiers that are scheduled to update at this step.
 
         Args:
-            gradients: Dictionary of parameter gradients
+            gradients: Dictionary of parameter gradients (may be nested PyTree)
             model: Model to update
         """
         self.global_step += 1
@@ -62,48 +72,161 @@ class NestedAdam(optim.Adam):
         # Determine which tiers should update at this step
         active_tiers = self._get_active_tiers()
 
-        # Filter gradients to:
-        # 1. Only LoRA parameters (.lora_a, .lora_b)
-        # 2. Only parameters from active tiers
-        filtered_gradients = {}
-        discarded_gradients = {}
-
-        for param_name, grad in gradients.items():
-            # First check: Is this a LoRA parameter?
-            is_lora = '.lora_a' in param_name or '.lora_b' in param_name
-
-            if not is_lora:
-                # Not LoRA - always discard (don't update base model weights)
-                discarded_gradients[param_name] = grad
-                continue
-
-            # Second check: Is this LoRA param in an active tier?
-            tier_idx = self.parameter_tier_map.get(param_name, 0)  # Default to tier 0
-            if tier_idx in active_tiers:
-                filtered_gradients[param_name] = grad
-            else:
-                discarded_gradients[param_name] = grad
-
-        # CRITICAL: Force evaluation of discarded gradients to free computation graphs
-        # This is the main memory leak - unevaluated gradients keep their entire
-        # computation graph in memory, including activations and intermediate tensors
-        if discarded_gradients:
-            mx.eval(discarded_gradients)
-            del discarded_gradients
-
-        # Force evaluation of filtered gradients before update
-        mx.eval(filtered_gradients)
-
         # Update tier counters for active tiers
         for tier_idx in active_tiers:
             self.tier_update_counts[tier_idx] += 1
 
-        # Apply gradients only for active parameters
-        if filtered_gradients:
-            super().apply_gradients(filtered_gradients, model)
+        # Get trainable parameters as flat dict
+        trainable_params = tree_flatten(model.trainable_parameters(), destination={})
+
+        # Flatten gradients to flat dict
+        flat_gradients = tree_flatten(gradients, destination={})
+
+        # Build updates dict with Adam-updated parameters
+        updates = {}
+
+        for param_name in trainable_params.keys():
+            # Skip if no gradient for this parameter
+            if param_name not in flat_gradients:
+                continue
+
+            param = trainable_params[param_name]
+            grad = flat_gradients[param_name]
+
+            # Filter 1: Only update LoRA parameters
+            param_name_lower = param_name.lower()
+            is_lora = ('lora_a' in param_name_lower or
+                      'lora_b' in param_name_lower or
+                      'adapter' in param_name_lower)
+
+            if not is_lora:
+                # Not LoRA - skip update (keep original param)
+                continue
+
+            # Filter 2: Only update parameters in active tiers
+            if param_name not in self.parameter_tier_map:
+                tier_idx = self.num_tiers - 1  # Slowest tier
+                logger.warning(f"Parameter {param_name} not in tier map, assigning to slowest tier {tier_idx}")
+            else:
+                tier_idx = self.parameter_tier_map[param_name]
+
+            if tier_idx not in active_tiers:
+                # Not in active tier - skip update
+                continue
+
+            # Initialize Adam state if needed
+            if param_name not in self.state:
+                self.state[param_name] = {
+                    'm': mx.zeros_like(param),
+                    'v': mx.zeros_like(param),
+                    'step': 0
+                }
+
+            state = self.state[param_name]
+            state['step'] += 1
+
+            # Adam update
+            beta1, beta2 = self.betas
+            m = beta1 * state['m'] + (1 - beta1) * grad
+            v = beta2 * state['v'] + (1 - beta2) * (grad * grad)
+
+            # Bias correction
+            m_hat = m / (1 - beta1 ** state['step'])
+            v_hat = v / (1 - beta2 ** state['step'])
+
+            # Compute parameter update
+            param_update = self.learning_rate * m_hat / (mx.sqrt(v_hat) + self.eps)
+            new_param = param - param_update
+
+            # Update state
+            state['m'] = m
+            state['v'] = v
+
+            # Store updated parameter
+            updates[param_name] = new_param
+
+        # Evaluate all updates
+        if updates:
+            mx.eval(updates)
+
+            logger.info(f"Applying {len(updates)} parameter updates via model.update()")
+            if len(updates) > 0:
+                sample_key = list(updates.keys())[0]
+                sample_before = tree_flatten(model.trainable_parameters(), destination={})[sample_key]
+                sample_update = updates[sample_key]
+                logger.info(f"Sample param '{sample_key}': before_mean={float(mx.mean(sample_before)):.8f}, update_mean={float(mx.mean(sample_update)):.8f}, max_diff={float(mx.max(mx.abs(sample_before - sample_update))):.8f}")
+
+            # CRITICAL FIX: Rebuild nested PyTree structure using deepcopy + manual assignment
+            # tree_map_with_path does NOT properly reconstruct the nested structure for model.update()
+            updated_params = self._apply_flat_updates_to_nested(
+                model.trainable_parameters(),
+                updates
+            )
+
+            # Evaluate all parameters
+            mx.eval(updated_params)
+
+            # Update model with new parameters
+            model.update(updated_params)
+
+            # Verify update worked
+            sample_after = tree_flatten(model.trainable_parameters(), destination={})[sample_key]
+            logger.info(f"After model.update(): mean={float(mx.mean(sample_after)):.8f}, matches_update={float(mx.max(mx.abs(sample_after - sample_update))) < 1e-10}")
 
         # Clear MLX cache after gradient application
-        mx.metal.clear_cache()
+        mx.clear_cache()
+
+    def _apply_flat_updates_to_nested(
+        self,
+        nested_params: Any,
+        flat_updates: Dict[str, mx.array]
+    ) -> Any:
+        """
+        Apply flat updates dict to nested parameter structure.
+
+        CRITICAL: This is the correct way to update MLX models. tree_map_with_path
+        does NOT properly reconstruct the nested structure needed by model.update().
+
+        Args:
+            nested_params: Nested dict/list structure from trainable_parameters()
+            flat_updates: Flat dict mapping 'path.to.param' -> updated_value
+
+        Returns:
+            Updated nested structure suitable for model.update()
+        """
+        # Deep copy to avoid modifying original structure
+        updated = copy.deepcopy(nested_params)
+
+        # Apply each update by navigating the nested structure
+        for param_path, new_value in flat_updates.items():
+            parts = param_path.split('.')
+
+            # Navigate to the parent container
+            current = updated
+            for part in parts[:-1]:
+                if isinstance(current, dict):
+                    current = current[part]
+                elif isinstance(current, list):
+                    current = current[int(part)]
+                else:
+                    raise ValueError(
+                        f"Cannot navigate to {param_path}: "
+                        f"unexpected type {type(current)} at part '{part}'"
+                    )
+
+            # Set the final value
+            final_key = parts[-1]
+            if isinstance(current, dict):
+                current[final_key] = new_value
+            elif isinstance(current, list):
+                current[int(final_key)] = new_value
+            else:
+                raise ValueError(
+                    f"Cannot set {param_path}: "
+                    f"parent is {type(current)}, expected dict or list"
+                )
+
+        return updated
 
     def _get_active_tiers(self) -> List[int]:
         """
@@ -190,15 +313,22 @@ class NestedAdamW(NestedAdam):
         Apply gradients with weight decay and tier-based scheduling.
 
         Args:
-            gradients: Dictionary of parameter gradients
+            gradients: Dictionary of parameter gradients (may be nested PyTree)
             model: Model to update
         """
-        # Add weight decay to gradients
+        # Apply weight decay to gradients
         if self.weight_decay > 0:
-            for param_name in gradients:
-                param = getattr(model, param_name, None)
-                if param is not None:
-                    gradients[param_name] = gradients[param_name] + self.weight_decay * param
+            flat_gradients = tree_flatten(gradients, destination={})
+            flat_params = tree_flatten(model.trainable_parameters(), destination={})
+
+            for param_name in flat_gradients:
+                if param_name in flat_params:
+                    flat_gradients[param_name] = (
+                        flat_gradients[param_name] + self.weight_decay * flat_params[param_name]
+                    )
+
+            # Update gradients dict with weight decay applied
+            gradients = flat_gradients
 
         # Call parent's apply_gradients with tier scheduling
         super().apply_gradients(gradients, model)

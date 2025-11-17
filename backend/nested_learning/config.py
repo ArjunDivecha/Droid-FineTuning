@@ -46,6 +46,11 @@ class NestedLearningConfig:
     eval_every: int = 100
     max_grad_norm: float = 1.0
 
+    # Early stopping
+    early_stop: bool = True
+    patience: int = 5  # Number of eval cycles without improvement before stopping
+    min_delta: float = 0.0001  # Minimum change to qualify as improvement
+
     # Output configuration
     output_path: str = './nested_learning/checkpoints'
     experiment_name: str = 'nested_learning_experiment'
@@ -107,6 +112,9 @@ class NestedLearningConfig:
             'checkpoint_every': self.checkpoint_every,
             'eval_every': self.eval_every,
             'max_grad_norm': self.max_grad_norm,
+            'early_stop': self.early_stop,
+            'patience': self.patience,
+            'min_delta': self.min_delta,
             'output_path': self.output_path,
             'experiment_name': self.experiment_name,
             'save_best_only': self.save_best_only,

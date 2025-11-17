@@ -101,16 +101,16 @@ class Tier0Evaluator:
             except (ImportError, Exception) as pt_error:
                 # Fallback to numpy
                 logger.debug(f"PyTorch loading failed, using numpy: {pt_error}")
-                weights = {}
-                with safe_open(adapter_file, framework="numpy") as f:
-                    for key in f.keys():
+            weights = {}
+            with safe_open(adapter_file, framework="numpy") as f:
+                for key in f.keys():
                         tensor = f.get_tensor(key)
                         # Convert float16 to float32 if needed
                         if tensor.dtype == np.float16:
                             tensor = tensor.astype(np.float32)
                         weights[key] = tensor
                 logger.info(f"Loaded {len(weights)} weight tensors using numpy")
-                return weights
+            return weights
         except Exception as e:
             logger.error(f"Failed to load weights: {e}")
             raise

@@ -169,24 +169,23 @@ class ParameterTierScheduler:
         Returns:
             List of trainable parameter names
         """
-        trainable = []
+        # CRITICAL FIX: Use tree_flatten on trainable_parameters()
+        # The old manual recursion approach didn't work correctly with MLX models
+        from mlx.utils import tree_flatten
 
-        def _recurse(module, prefix=''):
-            if hasattr(module, 'parameters'):
-                params = module.parameters()
-                for name, param in params.items():
-                    full_name = f"{prefix}.{name}" if prefix else name
-                    # Check if parameter is trainable (LoRA adapters)
-                    if 'lora' in name.lower():
-                        trainable.append(full_name)
+        # Get all trainable parameters (LoRA adapters)
+        trainable_params = tree_flatten(model.trainable_parameters(), destination={})
 
-            if hasattr(module, 'children'):
-                for child_name, child in module.children().items():
-                    child_prefix = f"{prefix}.{child_name}" if prefix else child_name
-                    _recurse(child, child_prefix)
+        # Filter to only LoRA parameters (lora_a, lora_b, adapter)
+        lora_params = []
+        for param_name in trainable_params.keys():
+            param_name_lower = param_name.lower()
+            if ('lora_a' in param_name_lower or
+                'lora_b' in param_name_lower or
+                'adapter' in param_name_lower):
+                lora_params.append(param_name)
 
-        _recurse(model)
-        return trainable
+        return lora_params
 
     def _extract_layer_number(self, param_name: str) -> Optional[int]:
         """

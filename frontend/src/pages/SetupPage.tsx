@@ -8,6 +8,7 @@ import { addNotification } from '../store/slices/uiSlice';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
+const STORAGE_KEY = 'setup_page_last_config';
 
 export const SetupPage: React.FC = () => {
   const dispatch = useDispatch();
@@ -22,21 +23,80 @@ export const SetupPage: React.FC = () => {
     target_modules: 'all'
   });
   
-  const [formData, setFormData] = useState<Partial<TrainingConfig>>({
+  // Default configuration
+  const getDefaultConfig = (): Partial<TrainingConfig> => ({
     model_path: '',
     train_data_path: '',
     val_data_path: '',
     learning_rate: 1e-5,
     batch_size: 1,
-    max_seq_length: 32768,
+    max_seq_length: 1024,
     iterations: 7329,
     steps_per_report: 25,
     steps_per_eval: 200,
-    save_every: 1000,
+    save_every: 100,
     early_stop: true,
     patience: 3,
     adapter_name: 'mlx_finetune'
   });
+
+  // Load saved config from localStorage or use defaults
+  const loadSavedConfig = (): Partial<TrainingConfig> => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('Loaded saved configuration:', parsed);
+        return parsed;
+      }
+    } catch (error) {
+      console.error('Failed to load saved config:', error);
+    }
+    return getDefaultConfig();
+  };
+  
+  const [formData, setFormData] = useState<Partial<TrainingConfig>>(loadSavedConfig);
+  const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
+
+  // Show notification after component mounts (not during initialization)
+  useEffect(() => {
+    if (!hasLoadedConfig) {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          JSON.parse(saved); // Verify it's valid JSON
+          dispatch(addNotification({
+            type: 'info',
+            title: 'Configuration Restored',
+            message: 'Previous training configuration has been loaded.',
+            autoHide: true,
+          }));
+        } catch (error) {
+          // Invalid JSON, ignore
+        }
+      }
+      setHasLoadedConfig(true);
+    }
+  }, [dispatch, hasLoadedConfig]);
+
+  // Save configuration to localStorage
+  const saveConfig = (config: Partial<TrainingConfig>) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      console.log('Configuration saved to localStorage');
+    } catch (error) {
+      console.error('Failed to save config:', error);
+    }
+  };
+
+  // Save config whenever formData changes (debounced to avoid excessive saves)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveConfig(formData);
+    }, 500); // Debounce saves by 500ms
+    
+    return () => clearTimeout(timeoutId);
+  }, [formData]);
 
   useEffect(() => {
     fetchModels();
@@ -143,6 +203,9 @@ export const SetupPage: React.FC = () => {
     };
 
     dispatch(setTrainingConfig(trainingConfig));
+    
+    // Save config before starting training
+    saveConfig(formData);
     
     try {
       await axios.post(`${BACKEND_URL}/training/start`, trainingConfig);
@@ -475,6 +538,17 @@ export const SetupPage: React.FC = () => {
                   className="input-field"
                   value={formData.steps_per_eval}
                   onChange={(e) => setFormData(prev => ({ ...prev, steps_per_eval: parseInt(e.target.value) }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Save Checkpoint Every (steps)</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={formData.save_every}
+                  onChange={(e) => setFormData(prev => ({ ...prev, save_every: parseInt(e.target.value) }))}
+                  placeholder="25"
                 />
               </div>
 

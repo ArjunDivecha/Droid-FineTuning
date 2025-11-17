@@ -3,14 +3,14 @@ ADAPTER EVALUATION REPORT
 ============================================================
 
 Adapter: 4B=full
-Evaluated: 2025-11-10T15:29:34.671236
+Evaluated: 2025-11-11T10:13:11.908723
 Test Questions: 20
 
 SCORES:
-  Overall:       22.8/100
-  Faithfulness:  16.5/100
-  Fact Recall:   19.0/100
-  Consistency:   32.0/100
-  Hallucination: 23.5/100
+  Overall:       21.0/100
+  Faithfulness:  15.0/100
+  Fact Recall:   17.5/100
+  Consistency:   33.0/100
+  Hallucination: 18.5/100
 
 ============================================================

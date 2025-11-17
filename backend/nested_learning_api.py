@@ -35,9 +35,9 @@ class NestedLearningRequest(BaseModel):
 
     # Training parameters
     learning_rate: float = 1e-5
-    batch_size: int = 4
+    batch_size: int = 1  # Reduced to prevent memory explosion
     num_steps: int = 1000
-    max_seq_length: int = 2048
+    max_seq_length: int = 128  # CRITICAL: Must be 128 or less for nested learning memory management
 
     # LoRA config
     lora_rank: int = 8
@@ -49,6 +49,11 @@ class NestedLearningRequest(BaseModel):
     gradient_accumulation_steps: int = 2
     checkpoint_every: int = 100
     eval_every: int = 100
+
+    # Early stopping
+    early_stop: bool = True
+    patience: int = 5
+    min_delta: float = 0.0001
 
     output_path: str = './nested_learning/checkpoints'
     experiment_name: str = 'nested_learning_experiment'
@@ -62,6 +67,8 @@ class NestedLearningStatus(BaseModel):
     experiment_name: Optional[str] = None
     tier_stats: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
+    metrics_history: Optional[List[Dict[str, Any]]] = None  # For graphs
+    recent_logs: Optional[List[str]] = None  # For log display
 
 
 class NestedLearningManager:
@@ -82,6 +89,65 @@ class NestedLearningManager:
         self.current_config = None
         self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
         os.makedirs(self.sessions_dir, exist_ok=True)
+
+        # Try to load metrics from last training session on startup
+        self._load_last_metrics()
+
+    def _load_last_metrics(self):
+        """Load metrics from the most recent training run's metrics file."""
+        try:
+            # Look for the most recent experiment directory
+            checkpoints_base = Path("/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints")
+            if not checkpoints_base.exists():
+                return
+
+            # Find the most recent experiment directory
+            experiment_dirs = [d for d in checkpoints_base.iterdir() if d.is_dir()]
+            if not experiment_dirs:
+                return
+
+            # Get the most recently modified experiment
+            latest_experiment = max(experiment_dirs, key=lambda x: x.stat().st_mtime)
+            metrics_file = latest_experiment / "metrics" / "train_metrics.jsonl"
+            eval_metrics_file = latest_experiment / "metrics" / "eval_metrics.jsonl"
+
+            if not metrics_file.exists():
+                return
+
+            # Load all training metrics from JSONL file
+            metrics_list = []
+            with open(metrics_file, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        metrics_list.append(json.loads(line))
+
+            # Load validation metrics if they exist
+            val_metrics_dict = {}
+            if eval_metrics_file.exists():
+                with open(eval_metrics_file, 'r') as f:
+                    for line in f:
+                        if line.strip():
+                            val_metric = json.loads(line)
+                            # Map validation loss to step number
+                            val_metrics_dict[val_metric['step']] = val_metric['loss']
+
+            # Merge validation losses into training metrics
+            for metric in metrics_list:
+                step = metric['step']
+                if step in val_metrics_dict:
+                    metric['val_loss'] = val_metrics_dict[step]
+
+            if metrics_list:
+                self.metrics_history = metrics_list
+                self.experiment_name = latest_experiment.name
+                # Get the last metrics to set current state
+                last_metric = metrics_list[-1]
+                self.current_step = last_metric.get('step', 0)
+                self.tier_stats = last_metric.get('tier_stats')
+                logger.info(f"Loaded {len(metrics_list)} train metrics and {len(val_metrics_dict)} validation metrics from {latest_experiment.name}")
+
+        except Exception as e:
+            logger.warning(f"Failed to load previous metrics: {e}")
 
     def save_session(self, training_config, final_metrics):
         """Save nested learning session to match regular training format."""
@@ -145,13 +211,18 @@ class NestedLearningManager:
 
     def get_status(self) -> NestedLearningStatus:
         """Get current training status."""
+        # Get last 100 metrics for graph (keep memory usage reasonable)
+        recent_metrics = self.metrics_history[-100:] if self.metrics_history else None
+
         return NestedLearningStatus(
             status=self.current_status,
             current_step=self.current_step,
             total_steps=self.total_steps,
             experiment_name=self.experiment_name,
             tier_stats=self.tier_stats,
-            message=self.error_message
+            message=self.error_message,
+            metrics_history=recent_metrics,
+            recent_logs=None  # TODO: Add log capture if needed
         )
 
     def _training_step_callback(self, step: int, total_steps: int, metrics: Dict[str, Any]):

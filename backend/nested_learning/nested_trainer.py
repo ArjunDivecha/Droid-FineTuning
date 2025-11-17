@@ -57,12 +57,25 @@ class NestedLoRATrainer:
 
         # Training state
         self.current_step = 0
+        self.stop_requested = False  # FIX #6: Add stop flag
 
         # Callback for status updates (set by API if needed)
         self.step_callback = None
         self.current_epoch = 0
         self.best_val_loss = float('inf')
         self.metrics_history = []
+
+        # FIX #7: Add current metric fields for API
+        self.current_train_loss = None
+        self.current_val_loss = None
+
+        # Early stopping state
+        self.patience_counter = 0
+        self.early_stopped = False
+
+        # FIX #4: Gradient accumulation state
+        self.accumulated_gradients = None
+        self.accumulation_steps = 0
 
         # Data
         self.train_data = []
@@ -103,27 +116,28 @@ class NestedLoRATrainer:
             logger.info("No adapter specified - will train from base model")
         start_time = time.time()
 
-        # Load model - always use adapter-path approach to ensure LoRA is applied
+        # Load model with adapter
         if not self.config.adapter_path:
             raise ValueError(
-                "Nested learning requires an existing LoRA adapter to start from. "
-                "Please train a regular LoRA adapter first, then use nested learning on it. "
-                "The reason: nested learning needs the LoRA layers to already be set up in the model."
+                "Nested learning requires an existing LoRA adapter. "
+                "Please train a regular LoRA adapter first using the 'Fine-Tuning' page, "
+                "then use that adapter path here for nested learning. "
+                "Nested learning trains the EXISTING adapter using multi-frequency updates."
             )
 
-        # Load base model with adapter - this ensures LoRA layers exist
+        logger.info(f"Loading model with adapter: {self.config.adapter_path}")
         self.model, self.tokenizer = load(
             self.config.base_model_path,
             adapter_path=self.config.adapter_path
         )
 
-        # Set to training mode - this makes parameters available for gradient computation
-        # The issue: calling train() makes ALL params trainable (including base model)
-        # But we need it for gradient computation to work
-        # We'll filter to only save/update LoRA params later
-        self.model.train()
+        # CRITICAL FIX: mlx_lm.load() makes EVERYTHING trainable (base model + adapters)
+        # We need to ensure only LoRA adapters are trainable
+        # In MLX, we control this through trainable_parameters() which already filters to LoRA
+        # BUT we need gradients for the full model for backprop
+        # Solution: Keep model as-is, but optimizer only updates LoRA parameters
 
-        logger.info("Model loaded in training mode (will filter to LoRA-only during save)")
+        logger.info("Model loaded - will compute gradients for all parameters but only update LoRA adapters")
 
         # Count trainable parameters
         from mlx.utils import tree_flatten
@@ -191,6 +205,34 @@ class NestedLoRATrainer:
         logger.info("Setup complete! Ready to train.")
         logger.info("=" * 60)
 
+    def stop_training(self):
+        """
+        Request training to stop gracefully.
+
+        FIX #6: API stop semantics - sets flag that's checked in training loop.
+        """
+        self.stop_requested = True
+        logger.info("Training stop requested by user")
+
+    def _get_learning_rate(self, step: int) -> float:
+        """
+        Get learning rate for current step with warmup.
+
+        FIX #4: Implement linear warmup schedule.
+
+        Args:
+            step: Current training step
+
+        Returns:
+            Learning rate for this step
+        """
+        if step < self.config.warmup_steps:
+            # Linear warmup
+            return self.config.learning_rate * (step + 1) / self.config.warmup_steps
+        else:
+            # Base learning rate after warmup
+            return self.config.learning_rate
+
     def train(self):
         """
         Main training loop with nested learning.
@@ -213,6 +255,11 @@ class NestedLoRATrainer:
 
         try:
             for step in range(self.config.num_steps):
+                # FIX #6: Check stop flag
+                if self.stop_requested:
+                    logger.info("Training stopped by user request")
+                    break
+
                 self.current_step = step
                 step_start = time.time()
 
@@ -225,8 +272,75 @@ class NestedLoRATrainer:
                 # 3. CRITICAL: Force evaluation of loss BEFORE optimizer
                 mx.eval(loss)
 
-                # 4. Update parameters (optimizer now handles gradient cleanup)
-                self.optimizer.apply_gradients(gradients, self.model)
+                # FIX #7: Store current train loss for API
+                self.current_train_loss = float(loss)
+
+                # FIX #4: Apply gradient clipping
+                if self.config.max_grad_norm > 0:
+                    # Flatten gradients for clipping
+                    from mlx.utils import tree_flatten
+                    flat_grads = tree_flatten(gradients, destination={})
+
+                    # Compute global norm
+                    grad_norm = mx.sqrt(sum(mx.sum(g * g) for g in flat_grads.values()))
+                    mx.eval(grad_norm)
+                    grad_norm_value = float(grad_norm)
+
+                    # Clip if necessary
+                    if grad_norm_value > self.config.max_grad_norm:
+                        scale = self.config.max_grad_norm / grad_norm_value
+                        clipped_grads = {k: v * scale for k, v in flat_grads.items()}
+                        gradients = clipped_grads
+                        logger.debug(f"Gradient clipped: norm {grad_norm_value:.2f} -> {self.config.max_grad_norm}")
+
+                # FIX #4: Gradient accumulation
+                if self.config.gradient_accumulation_steps > 1:
+                    # Accumulate gradients
+                    if self.accumulated_gradients is None:
+                        self.accumulated_gradients = gradients
+                    else:
+                        # Add to accumulated gradients
+                        from mlx.utils import tree_flatten
+                        flat_accumulated = tree_flatten(self.accumulated_gradients, destination={})
+                        flat_new = tree_flatten(gradients, destination={})
+                        for k in flat_new:
+                            if k in flat_accumulated:
+                                flat_accumulated[k] = flat_accumulated[k] + flat_new[k]
+                        self.accumulated_gradients = flat_accumulated
+
+                    self.accumulation_steps += 1
+
+                    # Only update when we've accumulated enough steps
+                    if self.accumulation_steps >= self.config.gradient_accumulation_steps:
+                        # Average accumulated gradients
+                        from mlx.utils import tree_flatten
+                        flat_accumulated = tree_flatten(self.accumulated_gradients, destination={})
+                        averaged_grads = {
+                            k: v / self.config.gradient_accumulation_steps
+                            for k, v in flat_accumulated.items()
+                        }
+
+                        # FIX #4: Update learning rate with warmup
+                        current_lr = self._get_learning_rate(step)
+                        self.optimizer.learning_rate = current_lr
+
+                        # Update parameters
+                        self.optimizer.apply_gradients(averaged_grads, self.model)
+
+                        # Reset accumulation
+                        self.accumulated_gradients = None
+                        self.accumulation_steps = 0
+                    else:
+                        # Skip parameter update - still accumulating
+                        pass
+                else:
+                    # No gradient accumulation - standard update
+                    # FIX #4: Update learning rate with warmup
+                    current_lr = self._get_learning_rate(step)
+                    self.optimizer.learning_rate = current_lr
+
+                    # 4. Update parameters (optimizer now handles gradient cleanup)
+                    self.optimizer.apply_gradients(gradients, self.model)
 
                 # 5. CRITICAL: Explicitly delete gradients dict to break references
                 del gradients
@@ -259,19 +373,12 @@ class NestedLoRATrainer:
                     'step': step,
                     'loss': float(loss),
                     'step_time': step_time,
-                    'learning_rate': self.config.learning_rate
+                    'learning_rate': self._get_learning_rate(step)  # FIX #4: Use actual LR with warmup
                 }
 
                 # Add tier statistics
                 tier_stats = self.optimizer.get_tier_stats()
                 metrics['tier_stats'] = tier_stats
-
-                # 5. Call step callback if registered (for API status updates)
-                if self.step_callback:
-                    try:
-                        self.step_callback(step + 1, self.config.num_steps, metrics)
-                    except Exception as e:
-                        logger.warning(f"Step callback failed: {e}")
 
                 # 6. Log metrics
                 self._log_step_metrics(metrics)
@@ -281,11 +388,37 @@ class NestedLoRATrainer:
                     val_metrics = self.evaluate()
                     self._log_eval_metrics(step, val_metrics)
 
+                    # FIX #7: Store current val loss for API and in metrics dict
+                    self.current_val_loss = val_metrics['loss']
+                    metrics['val_loss'] = val_metrics['loss']  # Add to metrics for callback
+
                     # Check for best model
-                    if val_metrics['loss'] < self.best_val_loss:
+                    if val_metrics['loss'] < self.best_val_loss - self.config.min_delta:
+                        # Significant improvement
                         self.best_val_loss = val_metrics['loss']
+                        self.patience_counter = 0
                         self.save_checkpoint(step, is_best=True)
                         logger.info(f"  🎉 New best model! Val loss: {self.best_val_loss:.4f}")
+                    else:
+                        # No improvement
+                        self.patience_counter += 1
+                        logger.info(f"  No improvement. Patience: {self.patience_counter}/{self.config.patience}")
+
+                        # Check early stopping
+                        if self.config.early_stop and self.patience_counter >= self.config.patience:
+                            logger.info(f"\n⛔ Early stopping triggered after {self.patience_counter} evaluations without improvement")
+                            logger.info(f"  Best val loss: {self.best_val_loss:.4f}")
+                            logger.info(f"  Stopping at step {step + 1}/{self.config.num_steps}")
+                            self.early_stopped = True
+                            break
+
+                # 5. Call step callback if registered (for API status updates)
+                # NOTE: Placed after validation so val_loss is included in metrics if available
+                if self.step_callback:
+                    try:
+                        self.step_callback(step + 1, self.config.num_steps, metrics)
+                    except Exception as e:
+                        logger.warning(f"Step callback failed: {e}")
 
                 # 8. Checkpoint (skip intermediate checkpoints to save disk space)
                 # Only save best and final checkpoints
@@ -311,8 +444,11 @@ class NestedLoRATrainer:
                     )
 
             # Final checkpoint
-            logger.info("\nTraining complete! Saving final checkpoint...")
-            self.save_checkpoint(self.config.num_steps, is_final=True)
+            if self.early_stopped:
+                logger.info("\n✅ Training stopped early! Best model already saved.")
+            else:
+                logger.info("\nTraining complete! Saving final checkpoint...")
+                self.save_checkpoint(self.config.num_steps, is_final=True)
 
             # Training summary
             total_time = time.time() - start_time

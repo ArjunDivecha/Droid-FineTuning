@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Upload, Settings, Play, Database, Cpu, Layers, Zap, Info } from 'lucide-react';
 import { RootState } from '../store/store';
 import { addNotification } from '../store/slices/uiSlice';
+import { trainingProgress, trainingStarted } from '../store/slices/trainingSlice';
+import { TrainingChart } from '../components/TrainingChart';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
@@ -36,6 +38,11 @@ interface NestedLearningConfig {
   checkpoint_every: number;
   eval_every: number;
 
+  // Early stopping
+  early_stop: boolean;
+  patience: number;
+  min_delta: number;
+
   output_path: string;
   experiment_name: string;
 }
@@ -57,9 +64,9 @@ export const NestedLearningPage: React.FC = () => {
 
     // Training defaults
     learning_rate: 1e-5,
-    batch_size: 4,
+    batch_size: 1,  // Reduced to prevent memory explosion
     num_steps: 1000,
-    max_seq_length: 2048,
+    max_seq_length: 128,  // CRITICAL: Must be 128 or less for nested learning memory management
 
     // LoRA defaults
     lora_rank: 8,
@@ -71,6 +78,11 @@ export const NestedLearningPage: React.FC = () => {
     gradient_accumulation_steps: 2,
     checkpoint_every: 100,
     eval_every: 100,
+
+    // Early stopping defaults
+    early_stop: true,
+    patience: 5,
+    min_delta: 0.0001,
 
     output_path: './nested_learning/checkpoints',
     experiment_name: 'nested_learning_experiment'
@@ -132,6 +144,26 @@ export const NestedLearningPage: React.FC = () => {
         } else if (response.data.status === 'completed' || response.data.status === 'error') {
           setIsTraining(false);
         }
+
+        // CRITICAL FIX: Update Redux store with nested learning metrics for TrainingChart
+        // Dispatch ALL metrics from metrics_history array to build the chart
+        if (response.data.metrics_history && response.data.metrics_history.length > 0) {
+          // Dispatch all metrics to Redux so TrainingChart can render them
+          response.data.metrics_history.forEach((metric: any) => {
+            dispatch(trainingProgress({
+              metrics: {
+                current_step: metric.step,
+                total_steps: response.data.total_steps || 1000,
+                train_loss: metric.loss,
+                val_loss: metric.val_loss || null,  // Include validation loss if present
+                learning_rate: metric.learning_rate,
+                start_time: new Date().toISOString(),
+                estimated_time_remaining: null
+              },
+              log_line: '' // No log spam
+            }));
+          });
+        }
       } catch (error) {
         console.error('Failed to fetch status:', error);
       }
@@ -142,7 +174,7 @@ export const NestedLearningPage: React.FC = () => {
     pollStatus(); // Initial fetch
 
     return () => clearInterval(interval);
-  }, []);
+  }, [dispatch]);
 
   const fetchAvailableModels = async () => {
     try {
@@ -405,6 +437,17 @@ export const NestedLearningPage: React.FC = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Training Chart */}
+      {trainingStatus && trainingStatus.metrics_history && trainingStatus.metrics_history.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h2 className="text-xl font-semibold">Training Metrics</h2>
+          </div>
+          <div className="card-body">
+            <TrainingChart />
+          </div>        </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -718,12 +761,16 @@ export const NestedLearningPage: React.FC = () => {
                   value={formData.max_seq_length}
                   onChange={(e) => setFormData(prev => ({ ...prev, max_seq_length: parseInt(e.target.value) }))}
                 >
+                  <option value={128}>128 (Recommended for Nested Learning)</option>
                   <option value={512}>512</option>
                   <option value={1024}>1024</option>
                   <option value={2048}>2048</option>
                   <option value={4096}>4096</option>
                   <option value={8192}>8192</option>
                 </select>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  ⚠️ Values above 128 may cause significant memory usage in nested learning
+                </p>
               </div>
 
               <div>
@@ -788,6 +835,31 @@ export const NestedLearningPage: React.FC = () => {
                   value={formData.eval_every}
                   onChange={(e) => setFormData(prev => ({ ...prev, eval_every: parseInt(e.target.value) }))}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Early Stop Patience</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  value={formData.patience}
+                  onChange={(e) => setFormData(prev => ({ ...prev, patience: parseInt(e.target.value) }))}
+                  placeholder="5"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Eval cycles without improvement before stopping
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="early_stop"
+                  checked={formData.early_stop}
+                  onChange={(e) => setFormData(prev => ({ ...prev, early_stop: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                <label htmlFor="early_stop" className="text-sm font-medium">Enable Early Stopping</label>
               </div>
 
               <div className="md:col-span-2">

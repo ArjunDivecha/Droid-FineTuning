@@ -35,9 +35,20 @@ interface DataPoint {
 export const TrainingChart: React.FC = () => {
   const { metrics, state: trainingState } = useSelector((state: RootState) => state.training);
   const dataPointsRef = useRef<DataPoint[]>([]);
+  const lastStepRef = useRef<number>(-1);
+
+  // Only reset data when a NEW training starts (detected by step regression)
+  // DO NOT clear when state is 'idle' - preserve completed training graphs
+  useEffect(() => {
+    // Reset if step regressed significantly (new training started)
+    if (metrics && lastStepRef.current !== -1 && metrics.current_step < lastStepRef.current - 10) {
+      dataPointsRef.current = [];
+      lastStepRef.current = -1;
+    }
+  }, [metrics]);
 
   useEffect(() => {
-    if (metrics && (trainingState === 'running' || trainingState === 'completed')) {
+    if (metrics) {
       // Only add data points when we have actual loss values (not null)
       if (metrics.train_loss != null || metrics.val_loss != null) {
         const newPoint: DataPoint = {
@@ -47,10 +58,16 @@ export const TrainingChart: React.FC = () => {
           learningRate: metrics.learning_rate
         };
 
-        // Avoid duplicate points
+        // Avoid duplicate points and ensure steps are sequential
         const lastPoint = dataPointsRef.current[dataPointsRef.current.length - 1];
         if (!lastPoint || lastPoint.step !== newPoint.step) {
+          // If step regressed significantly, clear and start fresh
+          if (lastPoint && newPoint.step < lastPoint.step - 10) {
+            dataPointsRef.current = [];
+          }
+          
           dataPointsRef.current.push(newPoint);
+          lastStepRef.current = metrics.current_step;
           
           // Keep only last 1000 points for performance
           if (dataPointsRef.current.length > 1000) {
@@ -70,15 +87,9 @@ export const TrainingChart: React.FC = () => {
         learningRate: metrics.learning_rate
       };
       dataPointsRef.current = [finalPoint];
+      lastStepRef.current = metrics.current_step;
     }
   }, [metrics, trainingState]);
-
-  // Reset data when training starts fresh
-  useEffect(() => {
-    if (trainingState === 'idle') {
-      dataPointsRef.current = [];
-    }
-  }, [trainingState]);
 
   const data = {
     labels: dataPointsRef.current.map(point => point.step.toString()),

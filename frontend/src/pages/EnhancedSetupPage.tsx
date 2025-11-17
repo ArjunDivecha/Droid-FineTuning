@@ -10,6 +10,7 @@ import { setTrainingConfig } from '../store/slices/trainingSlice';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
+const STORAGE_KEY = 'enhanced_setup_page_last_config';
 
 // Training method types
 enum TrainingMethod {
@@ -113,25 +114,18 @@ const EnhancedSetupPage: React.FC = () => {
     }
   });
 
-  const [selectedMethod, setSelectedMethod] = useState<TrainingMethod>(TrainingMethod.SFT);
-  const [resourceEstimation, setResourceEstimation] = useState<ResourceEstimation | null>(null);
-  const [dataValidation, setDataValidation] = useState<ValidationResult | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const [isEstimating, setIsEstimating] = useState(false);
-  const [availableModels, setAvailableModels] = useState<Array<{name: string, path: string}>>([]);
-  
-  // Form state matching your existing design
-  const [formData, setFormData] = useState<Partial<EnhancedTrainingConfig>>({
+  // Default configuration
+  const getDefaultConfig = (): Partial<EnhancedTrainingConfig> => ({
     model_path: '',
     train_data_path: '',
     val_data_path: '',
     learning_rate: 1e-5,
     batch_size: 1,
-    max_seq_length: 32768,
+    max_seq_length: 1024,
     iterations: 7329,
     steps_per_report: 25,
     steps_per_eval: 200,
-    save_every: 1000,
+    save_every: 100,
     early_stop: true,
     patience: 3,
     adapter_name: 'mlx_finetune',
@@ -145,6 +139,82 @@ const EnhancedSetupPage: React.FC = () => {
     reasoning_steps: 8,
     multi_step_training: true
   });
+
+  // Load saved config from localStorage or use defaults
+  const loadSavedConfig = (): { formData: Partial<EnhancedTrainingConfig>, selectedMethod: TrainingMethod } => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        console.log('Loaded saved configuration:', parsed);
+        return {
+          formData: parsed.formData || getDefaultConfig(),
+          selectedMethod: parsed.selectedMethod || TrainingMethod.SFT
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load saved config:', error);
+    }
+    return {
+      formData: getDefaultConfig(),
+      selectedMethod: TrainingMethod.SFT
+    };
+  };
+
+  const savedConfig = loadSavedConfig();
+  const [selectedMethod, setSelectedMethod] = useState<TrainingMethod>(savedConfig.selectedMethod);
+  const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
+
+  // Show notification after component mounts (not during initialization)
+  useEffect(() => {
+    if (!hasLoadedConfig) {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          JSON.parse(saved); // Verify it's valid JSON
+          dispatch(addNotification({
+            type: 'info',
+            title: 'Configuration Restored',
+            message: 'Previous training configuration has been loaded.',
+            autoHide: true,
+          }));
+        } catch (error) {
+          // Invalid JSON, ignore
+        }
+      }
+      setHasLoadedConfig(true);
+    }
+  }, [dispatch, hasLoadedConfig]);
+  const [resourceEstimation, setResourceEstimation] = useState<ResourceEstimation | null>(null);
+  const [dataValidation, setDataValidation] = useState<ValidationResult | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [availableModels, setAvailableModels] = useState<Array<{name: string, path: string}>>([]);
+  
+  // Form state matching your existing design
+  const [formData, setFormData] = useState<Partial<EnhancedTrainingConfig>>(savedConfig.formData);
+
+  // Save configuration to localStorage
+  const saveConfig = (config: Partial<EnhancedTrainingConfig>, method: TrainingMethod) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        formData: config,
+        selectedMethod: method
+      }));
+      console.log('Configuration saved to localStorage');
+    } catch (error) {
+      console.error('Failed to save config:', error);
+    }
+  };
+
+  // Save config whenever formData or selectedMethod changes (debounced to avoid excessive saves)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveConfig(formData, selectedMethod);
+    }, 500); // Debounce saves by 500ms
+    
+    return () => clearTimeout(timeoutId);
+  }, [formData, selectedMethod]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -260,6 +330,9 @@ const EnhancedSetupPage: React.FC = () => {
         }));
         return;
       }
+
+      // Save config before starting training
+      saveConfig(formData, selectedMethod);
 
       // Start training via backend API
       const response = await axios.post(`${BACKEND_URL}/training/start`, formData);
@@ -566,6 +639,19 @@ const EnhancedSetupPage: React.FC = () => {
                   value={formData.steps_per_eval || ''}
                   onChange={(e) => handleInputChange('steps_per_eval', parseInt(e.target.value))}
                   className="input-field"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Save Checkpoint Every (steps)
+                </label>
+                <input
+                  type="number"
+                  value={formData.save_every || ''}
+                  onChange={(e) => handleInputChange('save_every', parseInt(e.target.value))}
+                  className="input-field"
+                  placeholder="25"
                 />
               </div>
 

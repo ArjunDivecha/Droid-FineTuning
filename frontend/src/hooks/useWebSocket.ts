@@ -13,6 +13,10 @@ import {
   clearLogs,
 } from '../store/slices/trainingSlice';
 import {
+  setTrainingState,
+  setTrainingMetrics,
+} from '../store/slices/trainingSlice';
+import {
   opdProgress,
   opdCompleted,
   opdStopped,
@@ -20,7 +24,7 @@ import {
 } from '../store/slices/opdSlice';
 import { addNotification } from '../store/slices/uiSlice';
 
-const WEBSOCKET_URL = 'ws://localhost:8000/ws';
+const WEBSOCKET_URL = 'ws://127.0.0.1:8000/ws';
 
 export const useWebSocket = () => {
   const dispatch = useDispatch();
@@ -61,6 +65,42 @@ export const useWebSocket = () => {
         const data = JSON.parse(event.data);
         
         switch (data.type) {
+          case 'training_state': {
+            const wsState = data.data?.state;
+            const wsMetrics = data.data?.metrics;
+            if (wsState === 'running') {
+              // Only clear logs if this is a NEW training session (start_time changed)
+              const startTimeChanged = wsMetrics?.start_time && wsMetrics.start_time !== lastRunStartTime.current;
+              if (startTimeChanged) {
+                dispatch(trainingStarted()); // This clears logs - only for NEW training
+                lastRunStartTime.current = wsMetrics.start_time as string;
+              } else {
+                // Same training session - just update state without clearing
+                dispatch(setTrainingState('running'));
+              }
+              if (wsMetrics) {
+                dispatch(trainingProgress({ metrics: wsMetrics, log_line: '' }));
+              }
+            } else if (wsState === 'completed') {
+              if (wsMetrics) {
+                dispatch(trainingCompleted({ final_metrics: wsMetrics }));
+              } else {
+                dispatch(setTrainingState('completed'));
+              }
+            } else if (wsState === 'error') {
+              if (wsMetrics) {
+                dispatch(setTrainingMetrics(wsMetrics));
+              }
+              dispatch(trainingError({ error: 'Training failed' }));
+            } else {
+              // idle or unknown: reflect state and surface metrics without forcing 'running'
+              dispatch(setTrainingState('idle'));
+              if (wsMetrics) {
+                dispatch(setTrainingMetrics(wsMetrics));
+              }
+            }
+            break;
+          }
           case 'training_started':
             dispatch(clearLogs()); // Clear previous logs when new training starts
             lastLoggedStep.current = -1; // Reset step tracking
@@ -68,7 +108,8 @@ export const useWebSocket = () => {
             dispatch(trainingStarted());
             break;
           case 'training_progress':
-            // Ignore WebSocket training progress - using polling instead
+            // Accept real-time progress over WebSocket; polling remains as fallback
+            dispatch(trainingProgress(data.data));
             break;
           case 'training_completed':
             dispatch(trainingCompleted(data.data));
@@ -148,14 +189,10 @@ export const useWebSocket = () => {
   useEffect(() => {
     connect();
     
-    // Initial status and logs fetch
+    // Initial status fetch - DO NOT clear logs here, preserve existing data
     const fetchInitialData = async () => {
       try {
-        // Clear logs when page loads - force complete reset
-        dispatch(clearLogs());
-        lastLoggedStep.current = -1;
-        
-        const response = await fetch('http://localhost:8000/training/status');
+        const response = await fetch('http://127.0.0.1:8000/training/status');
         if (response.ok) {
           const status = await response.json();
           
@@ -163,18 +200,54 @@ export const useWebSocket = () => {
           if (status.config) {
             dispatch(setTrainingConfig(status.config));
           }
-          // Track current run start time if available
-          if (status.metrics && status.metrics.start_time) {
+          
+          // Check if this is a NEW training session (start_time changed)
+          const startTimeChanged = status.metrics?.start_time && 
+            status.metrics.start_time !== lastRunStartTime.current;
+          
+          if (startTimeChanged) {
+            // NEW training session - clear logs and reset step tracking
+            dispatch(clearLogs());
+            lastLoggedStep.current = -1;
+            lastRunStartTime.current = status.metrics.start_time as string;
+          } else if (status.metrics?.start_time) {
+            // Same training session - just update tracking
             lastRunStartTime.current = status.metrics.start_time as string;
           }
           
           if (status.state === 'completed') {
             dispatch(trainingCompleted({ final_metrics: status.metrics }));
           } else if (status.state === 'error') {
+            // Set metrics even for error state so UI can display data
+            if (status.metrics) {
+              dispatch(trainingProgress({
+                metrics: status.metrics,
+                log_line: ''
+              }));
+            }
             dispatch(trainingError({ error: 'Training failed' }));
           } else if (status.state === 'running') {
-            // If training is running, start fresh
-            lastLoggedStep.current = -1;
+            // Update state without clearing logs (logs only cleared for NEW training above)
+            if (startTimeChanged) {
+              dispatch(trainingStarted());
+            } else {
+              dispatch(setTrainingState('running'));
+            }
+            if (status.metrics) {
+              dispatch(trainingProgress({
+                metrics: status.metrics,
+                log_line: ''
+              }));
+            }
+          } else if (status.state === 'idle' && status.metrics) {
+            // Handle idle state with existing metrics (from previous run)
+            if (status.config) {
+              dispatch(setTrainingConfig(status.config));
+            }
+            dispatch(trainingProgress({
+              metrics: status.metrics,
+              log_line: ''
+            }));
           }
         }
       } catch (error) {
@@ -187,7 +260,7 @@ export const useWebSocket = () => {
     // Poll training status every 2 seconds as fallback
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch('http://localhost:8000/training/status');
+        const response = await fetch('http://127.0.0.1:8000/training/status');
         if (response.ok) {
           const status = await response.json();
           
@@ -230,7 +303,27 @@ export const useWebSocket = () => {
             }
             dispatch(trainingCompleted({ final_metrics: status.metrics }));
           } else if (status.state === 'error') {
+            // Set config and metrics even for error state so UI can display data
+            if (status.config) {
+              dispatch(setTrainingConfig(status.config));
+            }
+            if (status.metrics) {
+              dispatch(trainingProgress({
+                metrics: status.metrics,
+                log_line: ''
+              }));
+            }
             dispatch(trainingError({ error: 'Training failed' }));
+          } else if (status.state === 'idle' && status.metrics) {
+            // Handle idle state with existing metrics (from previous completed/error run)
+            if (status.config) {
+              dispatch(setTrainingConfig(status.config));
+            }
+            // Show the metrics from the previous run
+            dispatch(trainingProgress({
+              metrics: status.metrics,
+              log_line: ''
+            }));
           }
         }
       } catch (error) {

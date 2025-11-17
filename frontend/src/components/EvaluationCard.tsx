@@ -209,3 +209,13 @@ export const EvaluationCard: React.FC<EvaluationCardProps> = ({ result, compact 
   );
 };
 
+
+
+
+
+
+
+
+
+
+

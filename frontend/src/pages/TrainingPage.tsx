@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { RootState } from '../store/store';
 import { setShowLogs, addNotification } from '../store/slices/uiSlice';
+import { resetTraining, clearLogs } from '../store/slices/trainingSlice';
 import { TrainingChart } from '../components/TrainingChart';
 import { LogViewer } from '../components/LogViewer';
 import axios from 'axios';
@@ -23,6 +24,9 @@ export const TrainingPage: React.FC = () => {
   const dispatch = useDispatch();
   const { state: trainingState, metrics, config, logs } = useSelector((state: RootState) => state.training);
   const { showLogs } = useSelector((state: RootState) => state.ui);
+
+  // DO NOT clear data on mount - preserve logs and graphs when navigating between tabs
+  // Data is only cleared when a NEW training session starts (handled in useWebSocket hook)
 
   const handleStopTraining = async () => {
     try {
@@ -59,7 +63,8 @@ export const TrainingPage: React.FC = () => {
     dispatch(setShowLogs(!showLogs));
   };
 
-  if (trainingState === 'idle') {
+  // Only show "No Training Session" if idle AND no metrics/logs
+  if (trainingState === 'idle' && !metrics && logs.length === 0) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">

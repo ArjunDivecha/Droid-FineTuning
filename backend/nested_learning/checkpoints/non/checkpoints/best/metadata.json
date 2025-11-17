@@ -1,0 +1,72 @@
+{
+  "step": 9,
+  "experiment_name": "non",
+  "is_best": true,
+  "is_final": false,
+  "best_val_loss": 2.6354166666666665,
+  "config": {
+    "base_model_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/qwen3-4b-mlx",
+    "adapter_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters/4B=full",
+    "train_data_path": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/Nested.jsonl",
+    "val_data_path": "",
+    "num_tiers": 3,
+    "tier_update_frequencies": [
+      1,
+      2,
+      4
+    ],
+    "tier_assignment_strategy": "layer_depth",
+    "learning_rate": 1e-05,
+    "batch_size": 1,
+    "num_steps": 100,
+    "max_seq_length": 1024,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.0,
+    "warmup_steps": 5,
+    "gradient_accumulation_steps": 1,
+    "checkpoint_every": 10,
+    "eval_every": 10,
+    "max_grad_norm": 1.0,
+    "early_stop": false,
+    "patience": 5,
+    "min_delta": 0.0001,
+    "output_path": "./nested_learning/checkpoints",
+    "experiment_name": "non",
+    "save_best_only": false,
+    "keep_last_n_checkpoints": 5,
+    "seed": 42,
+    "mixed_precision": true
+  },
+  "tier_stats": {
+    "global_step": 10,
+    "tier_update_counts": [
+      10,
+      5,
+      2
+    ],
+    "tier_update_frequencies": [
+      1,
+      2,
+      4
+    ],
+    "tier_parameters": {
+      "tier_0": {
+        "frequency": 1,
+        "update_count": 10,
+        "parameter_count": 0
+      },
+      "tier_1": {
+        "frequency": 2,
+        "update_count": 5,
+        "parameter_count": 0
+      },
+      "tier_2": {
+        "frequency": 4,
+        "update_count": 2,
+        "parameter_count": 0
+      }
+    }
+  },
+  "timestamp": "2025-11-11T09:55:20.323662"
+}

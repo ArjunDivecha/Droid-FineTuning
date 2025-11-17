@@ -56,11 +56,11 @@ class TrainingConfig:
     val_data_path: str
     learning_rate: float = 1e-5
     batch_size: int = 1
-    max_seq_length: int = 32768
+    max_seq_length: int = 1024
     iterations: int = 7329
     steps_per_report: int = 25
     steps_per_eval: int = 200
-    save_every: int = 25
+    save_every: int = 100
     early_stop: bool = True
     patience: int = 3
     adapter_name: str = "mlx_finetune"
@@ -537,61 +537,69 @@ class TrainingManager:
             loss_pattern = re.compile(r'Train loss ([0-9.]+)')
             val_pattern = re.compile(r'Val loss ([0-9.]+)')
             lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)')
+            early_stop_detected = False
             
             while self.current_process and self.current_process.poll() is None:
                 try:
                     output = self.current_process.stdout.readline()
-                    if output:
-                        # Parse metrics from output
-                        step_match = step_pattern.search(output)
-                        loss_match = loss_pattern.search(output)
-                        val_match = val_pattern.search(output)
-                        lr_match = lr_pattern.search(output)
+                    if not output:
+                        # Empty readline means no data available yet, sleep and continue
+                        await asyncio.sleep(0.1)
+                        continue
+                    
+                    # Check for early stopping message
+                    if "Early stop:" in output:
+                        early_stop_detected = True
+                        logger.info(f"Early stopping detected: {output.strip()}")
+                    
+                    # Parse metrics from output
+                    step_match = step_pattern.search(output)
+                    loss_match = loss_pattern.search(output)
+                    val_match = val_pattern.search(output)
+                    lr_match = lr_pattern.search(output)
+                    
+                    # Extract metrics
+                    if step_match:
+                        current_step = int(step_match.group(1))
+                        self.training_metrics["current_step"] = current_step
                         
-                        # Extract metrics
-                        if step_match:
-                            current_step = int(step_match.group(1))
-                            self.training_metrics["current_step"] = current_step
-                            
-                        if loss_match:
-                            train_loss = float(loss_match.group(1))
-                            self.training_metrics["train_loss"] = train_loss
-                            
-                        if val_match:
-                            val_loss = float(val_match.group(1))
-                            self.training_metrics["val_loss"] = val_loss
-                            
-                            # Track best model based on validation loss
-                            if self.best_val_loss is None or val_loss < self.best_val_loss:
-                                self.best_val_loss = val_loss
-                                self.best_model_step = current_step
-                                # Copy current checkpoint as best model
-                                await self._save_best_model(current_step)
-                            
-                        if lr_match:
-                            learning_rate = float(lr_match.group(1))
-                            self.training_metrics["learning_rate"] = learning_rate
+                    if loss_match:
+                        train_loss = float(loss_match.group(1))
+                        self.training_metrics["train_loss"] = train_loss
                         
-                        # Calculate progress and ETA
-                        if "current_step" in self.training_metrics and "total_steps" in self.training_metrics:
-                            progress = self.training_metrics["current_step"] / self.training_metrics["total_steps"]
-                            if progress > 0 and "start_time" in self.training_metrics:
-                                start_time = datetime.fromisoformat(self.training_metrics["start_time"])
-                                elapsed = (datetime.now() - start_time).total_seconds()
-                                estimated_total = elapsed / progress
-                                remaining = estimated_total - elapsed
-                                self.training_metrics["estimated_time_remaining"] = remaining
+                    if val_match:
+                        val_loss = float(val_match.group(1))
+                        self.training_metrics["val_loss"] = val_loss
                         
-                        # Broadcast update
-                        await self.broadcast({
-                            "type": "training_progress",
-                            "data": {
-                                "metrics": self.training_metrics,
-                                "log_line": output.strip()
-                            }
-                        })
-                
-                    await asyncio.sleep(0.1)
+                        # Track best model based on validation loss
+                        if self.best_val_loss is None or val_loss < self.best_val_loss:
+                            self.best_val_loss = val_loss
+                            self.best_model_step = current_step
+                            # Copy current checkpoint as best model
+                            await self._save_best_model(current_step)
+                        
+                    if lr_match:
+                        learning_rate = float(lr_match.group(1))
+                        self.training_metrics["learning_rate"] = learning_rate
+                    
+                    # Calculate progress and ETA
+                    if "current_step" in self.training_metrics and "total_steps" in self.training_metrics:
+                        progress = self.training_metrics["current_step"] / self.training_metrics["total_steps"]
+                        if progress > 0 and "start_time" in self.training_metrics:
+                            start_time = datetime.fromisoformat(self.training_metrics["start_time"])
+                            elapsed = (datetime.now() - start_time).total_seconds()
+                            estimated_total = elapsed / progress
+                            remaining = estimated_total - elapsed
+                            self.training_metrics["estimated_time_remaining"] = remaining
+                    
+                    # Broadcast update
+                    await self.broadcast({
+                        "type": "training_progress",
+                        "data": {
+                            "metrics": self.training_metrics,
+                            "log_line": output.strip()
+                        }
+                    })
                     
                 except Exception as e:
                     logger.error(f"Error monitoring training: {e}")
@@ -601,7 +609,6 @@ class TrainingManager:
             return_code = self.current_process.wait()
             
             # Read any remaining output after process completion
-            early_stop_detected = False
             try:
                 while True:
                     remaining_output = self.current_process.stdout.readline()
@@ -628,15 +635,7 @@ class TrainingManager:
             except:
                 pass  # Ignore errors when reading final output
             
-            if return_code == 0:
-                self.training_state = "completed"
-                # Save completed session
-                self.save_session()
-                await self.broadcast({
-                    "type": "training_completed",
-                    "data": {"final_metrics": self.training_metrics}
-                })
-            elif early_stop_detected:
+            if early_stop_detected:
                 # Early stopping is a successful completion, not an error
                 self.training_state = "completed"
                 # Save completed session
@@ -648,6 +647,14 @@ class TrainingManager:
                         "early_stopped": True,
                         "message": "Training completed via early stopping"
                     }
+                })
+            elif return_code == 0:
+                self.training_state = "completed"
+                # Save completed session
+                self.save_session()
+                await self.broadcast({
+                    "type": "training_completed",
+                    "data": {"final_metrics": self.training_metrics}
                 })
             else:
                 self.training_state = "error"
@@ -1268,21 +1275,36 @@ async def get_training_status():
 async def start_training(config_data: Dict[str, Any], background_tasks: BackgroundTasks):
     """Start training with given configuration"""
     try:
-        config = TrainingConfig(
-            model_path=config_data["model_path"],
-            train_data_path=config_data["train_data_path"],
-            val_data_path=config_data.get("val_data_path", ""),
-            learning_rate=config_data.get("learning_rate", 1e-5),
-            batch_size=config_data.get("batch_size", 1),
-            max_seq_length=config_data.get("max_seq_length", 32768),
-            iterations=config_data.get("iterations", 7329),
-            steps_per_report=config_data.get("steps_per_report", 25),
-            steps_per_eval=config_data.get("steps_per_eval", 25),
-            save_every=25,  # Force save every 25 steps regardless of frontend input
-            early_stop=config_data.get("early_stop", True),
-            patience=config_data.get("patience", 3),
-            adapter_name=config_data.get("adapter_name", "mlx_finetune")
-        )
+        # Build config dict - only include values that were provided by GUI
+        config_dict = {
+            "model_path": config_data["model_path"],
+            "train_data_path": config_data["train_data_path"],
+            "val_data_path": config_data.get("val_data_path", ""),
+        }
+
+        # Add optional parameters only if provided (to use GUI values, not backend defaults)
+        if "learning_rate" in config_data:
+            config_dict["learning_rate"] = config_data["learning_rate"]
+        if "batch_size" in config_data:
+            config_dict["batch_size"] = config_data["batch_size"]
+        if "max_seq_length" in config_data:
+            config_dict["max_seq_length"] = config_data["max_seq_length"]
+        if "iterations" in config_data:
+            config_dict["iterations"] = config_data["iterations"]
+        if "steps_per_report" in config_data:
+            config_dict["steps_per_report"] = config_data["steps_per_report"]
+        if "steps_per_eval" in config_data:
+            config_dict["steps_per_eval"] = config_data["steps_per_eval"]
+        if "save_every" in config_data:
+            config_dict["save_every"] = config_data["save_every"]
+        if "early_stop" in config_data:
+            config_dict["early_stop"] = config_data["early_stop"]
+        if "patience" in config_data:
+            config_dict["patience"] = config_data["patience"]
+        if "adapter_name" in config_data:
+            config_dict["adapter_name"] = config_data["adapter_name"]
+
+        config = TrainingConfig(**config_dict)
         
         success = await training_manager.start_training(config)
         if success:

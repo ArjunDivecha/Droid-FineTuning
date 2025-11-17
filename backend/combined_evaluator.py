@@ -43,7 +43,7 @@ class CombinedEvaluator:
         self.tier0 = Tier0Evaluator()
         self.tier1 = Tier1Evaluator()
         self.base_model_path = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/qwen3-4b-mlx"
-    
+
     @staticmethod
     def print_score_card(report: Dict, show_details: bool = True):
         """
@@ -252,10 +252,10 @@ class CombinedEvaluator:
                 'time_seconds': tier1_report['time_taken_seconds']
             },
             'total_time_seconds': round(tier1_report['time_taken_seconds'], 2)
-        }
-        
+            }
+
         return report
-    
+
     def compare_adapters(self, adapter1: str, adapter2: str,
                         include_base: bool = False, max_samples: int = 20) -> Dict:
         """Compare two adapters using Tier 1 scores (since that's comparable)."""
