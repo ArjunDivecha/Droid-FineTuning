@@ -43,15 +43,22 @@ const createWindow = (): void => {
   // Load the frontend
   const isDev = process.env.NODE_ENV === 'development';
   
-  // Always load from the built frontend dist folder
-  const frontendPath = `file://${path.join(__dirname, '../frontend/dist/index.html')}`;
-  console.log('🔗 Loading frontend from:', frontendPath);
-  
-  // Check if the file exists
-  if (require('fs').existsSync(path.join(__dirname, '../frontend/dist/index.html'))) {
-    console.log('✅ Frontend index.html exists');
+  let frontendPath: string;
+  if (isDev) {
+    // In development, load from Vite dev server
+    frontendPath = 'http://localhost:3000';
+    console.log('🔗 Loading frontend from dev server:', frontendPath);
   } else {
-    console.error('❌ Frontend index.html NOT FOUND!');
+    // In production, load from built dist folder
+    frontendPath = `file://${path.join(__dirname, '../frontend/dist/index.html')}`;
+    console.log('🔗 Loading frontend from:', frontendPath);
+    
+    // Check if the file exists
+    if (require('fs').existsSync(path.join(__dirname, '../frontend/dist/index.html'))) {
+      console.log('✅ Frontend index.html exists');
+    } else {
+      console.error('❌ Frontend index.html NOT FOUND!');
+    }
   }
   
   mainWindow.loadURL(frontendPath);
