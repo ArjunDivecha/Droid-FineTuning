@@ -2181,6 +2181,24 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         training_manager.remove_websocket(websocket)
 
+@app.get("/api/datasets")
+async def list_datasets():
+    """List available JSONL datasets."""
+    try:
+        datasets_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/datasets"
+        datasets = []
+        
+        if os.path.exists(datasets_dir):
+            for file in os.listdir(datasets_dir):
+                if file.endswith('.jsonl'):
+                    full_path = os.path.join(datasets_dir, file)
+                    datasets.append(full_path)
+        
+        return {"datasets": sorted(datasets)}
+    except Exception as e:
+        logger.error(f"Error listing datasets: {e}")
+        return {"datasets": []}
+
 # Register fusion API router
 try:
     from fusion_api import router as fusion_router
