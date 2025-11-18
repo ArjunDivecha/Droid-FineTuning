@@ -2185,16 +2185,25 @@ async def websocket_endpoint(websocket: WebSocket):
 async def list_datasets():
     """List available JSONL datasets."""
     try:
-        datasets_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/datasets"
+        # Check multiple possible dataset locations
+        dataset_dirs = [
+            "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/gspo_voice",
+            "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/grpo_test_data",
+            "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning",
+            "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/datasets"
+        ]
+        
         datasets = []
+        for datasets_dir in dataset_dirs:
+            if os.path.exists(datasets_dir):
+                for file in os.listdir(datasets_dir):
+                    if file.endswith('.jsonl') and not file.startswith('.'):
+                        full_path = os.path.join(datasets_dir, file)
+                        # Skip debug/log files
+                        if 'debug_runs' not in full_path and 'steps.jsonl' not in file and 'events.jsonl' not in file:
+                            datasets.append(full_path)
         
-        if os.path.exists(datasets_dir):
-            for file in os.listdir(datasets_dir):
-                if file.endswith('.jsonl'):
-                    full_path = os.path.join(datasets_dir, file)
-                    datasets.append(full_path)
-        
-        return {"datasets": sorted(datasets)}
+        return {"datasets": sorted(list(set(datasets)))}  # Remove duplicates
     except Exception as e:
         logger.error(f"Error listing datasets: {e}")
         return {"datasets": []}
