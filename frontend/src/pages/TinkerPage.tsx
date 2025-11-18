@@ -63,6 +63,7 @@ export const TinkerPage: React.FC = () => {
   const [currentJob, setCurrentJob] = useState<TinkerJob | null>(null);
   const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
   const [tinkerModels, setTinkerModels] = useState<any[]>([]);
+  const [availableDatasets, setAvailableDatasets] = useState<string[]>([]);
 
   // Save config to localStorage
   useEffect(() => {
@@ -77,9 +78,10 @@ export const TinkerPage: React.FC = () => {
     return () => clearTimeout(timeoutId);
   }, [formData]);
 
-  // Load Tinker models on mount
+  // Load Tinker models and datasets on mount
   useEffect(() => {
     fetchTinkerModels();
+    fetchAvailableDatasets();
   }, []);
 
   // Cleanup interval on unmount
@@ -97,6 +99,19 @@ export const TinkerPage: React.FC = () => {
       setTinkerModels(response.data.models || []);
     } catch (error) {
       console.error('Failed to fetch Tinker models:', error);
+    }
+  };
+
+  const fetchAvailableDatasets = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/datasets`);
+      if (response.data.datasets) {
+        // Filter for .jsonl files only
+        const jsonlFiles = response.data.datasets.filter((file: string) => file.endsWith('.jsonl'));
+        setAvailableDatasets(jsonlFiles);
+      }
+    } catch (error) {
+      console.error('Failed to fetch datasets:', error);
     }
   };
 
@@ -346,23 +361,19 @@ export const TinkerPage: React.FC = () => {
               <Database className="w-4 h-4 inline mr-2" />
               Training Data (JSONL)
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={formData.train_data_path}
-                onChange={(e) => handleInputChange('train_data_path', e.target.value)}
-                placeholder="/path/to/train.jsonl"
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                disabled={isTraining}
-              />
-              <button
-                onClick={() => handleFileSelect('train')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                disabled={isTraining}
-              >
-                <Upload className="w-4 h-4" />
-              </button>
-            </div>
+            <select
+              value={formData.train_data_path}
+              onChange={(e) => handleInputChange('train_data_path', e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              disabled={isTraining}
+            >
+              <option value="">Select training dataset...</option>
+              {availableDatasets.map((dataset) => (
+                <option key={dataset} value={dataset}>
+                  {dataset.split('/').pop()}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Validation Data */}
@@ -371,23 +382,19 @@ export const TinkerPage: React.FC = () => {
               <Database className="w-4 h-4 inline mr-2" />
               Validation Data (Optional)
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={formData.val_data_path}
-                onChange={(e) => handleInputChange('val_data_path', e.target.value)}
-                placeholder="/path/to/val.jsonl"
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                disabled={isTraining}
-              />
-              <button
-                onClick={() => handleFileSelect('val')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                disabled={isTraining}
-              >
-                <Upload className="w-4 h-4" />
-              </button>
-            </div>
+            <select
+              value={formData.val_data_path}
+              onChange={(e) => handleInputChange('val_data_path', e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              disabled={isTraining}
+            >
+              <option value="">None (optional)</option>
+              {availableDatasets.map((dataset) => (
+                <option key={dataset} value={dataset}>
+                  {dataset.split('/').pop()}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Adapter Name */}
