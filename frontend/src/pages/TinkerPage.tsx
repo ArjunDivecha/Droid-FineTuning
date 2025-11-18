@@ -311,11 +311,33 @@ export const TinkerPage: React.FC = () => {
               className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
               disabled={isTraining}
             >
-              <option value="Qwen/Qwen3-4B-Instruct-2507">Qwen3-4B-Instruct-2507</option>
-              <option value="Qwen/Qwen2.5-7B-Instruct">Qwen2.5-7B-Instruct</option>
-              <option value="Qwen/Qwen2.5-14B-Instruct">Qwen2.5-14B-Instruct</option>
-              <option value="Qwen/Qwen2.5-32B-Instruct">Qwen2.5-32B-Instruct</option>
+              <optgroup label="🦖 Large Models (70B+)">
+                <option value="Qwen/Qwen3-235B-A22B-Instruct-2507">Qwen3-235B-A22B-Instruct (235B/22B active) - MoE ⭐</option>
+                <option value="deepseek-ai/DeepSeek-V3.1">DeepSeek-V3.1 - MoE</option>
+                <option value="meta-llama/Llama-3.3-70B-Instruct">Llama-3.3-70B-Instruct</option>
+                <option value="meta-llama/Llama-3.1-70B">Llama-3.1-70B (Base)</option>
+              </optgroup>
+              <optgroup label="🦅 Medium Models (30B-32B)">
+                <option value="Qwen/Qwen3-30B-A3B-Instruct-2507">Qwen3-30B-A3B-Instruct (30B/3B active) - MoE ⭐</option>
+                <option value="Qwen/Qwen3-30B-A3B">Qwen3-30B-A3B (30B/3B active) - MoE</option>
+                <option value="Qwen/Qwen3-32B">Qwen3-32B</option>
+                <option value="openai/gpt-oss-120b">GPT-OSS-120B - MoE Reasoning</option>
+              </optgroup>
+              <optgroup label="🦆 Small Models (8B)">
+                <option value="Qwen/Qwen3-8B">Qwen3-8B</option>
+                <option value="meta-llama/Llama-3.1-8B">Llama-3.1-8B (Base)</option>
+                <option value="meta-llama/Llama-3.1-8B-Instruct">Llama-3.1-8B-Instruct</option>
+                <option value="openai/gpt-oss-20b">GPT-OSS-20B - MoE Reasoning</option>
+              </optgroup>
+              <optgroup label="🐣 Compact Models (1B-4B)">
+                <option value="Qwen/Qwen3-4B-Instruct-2507">Qwen3-4B-Instruct-2507 ⭐</option>
+                <option value="meta-llama/Llama-3.2-3B">Llama-3.2-3B (Base)</option>
+                <option value="meta-llama/Llama-3.2-1B">Llama-3.2-1B (Base)</option>
+              </optgroup>
             </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              ⭐ = Recommended | MoE = Mixture of Experts (cost-effective)
+            </p>
           </div>
 
           {/* Training Data */}
