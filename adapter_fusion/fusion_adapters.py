@@ -163,6 +163,10 @@ class AdapterFusion:
                 if key in key_dimensions:
                     # Check dimension consistency for overlapping keys
                     if key_dimensions[key] != shape:
+                        # Allow different LoRA ranks - we'll pad during fusion
+                        if 'lora_a' in key or 'lora_b' in key:
+                            logger.info(f"Different LoRA rank for key '{key}': {key_dimensions[key]} vs {shape}. Will pad during fusion.")
+                            continue
                         logger.error(f"Shape mismatch for key '{key}': {key_dimensions[key]} vs {shape}")
                         return False
                 else:
@@ -222,8 +226,11 @@ class AdapterFusion:
             # Renormalize weights for this layer
             total_layer_weight = sum(weight for _, weight in available_adapters)
             
-            # Weighted sum for this layer
-            fused[key] = sum((weight / total_layer_weight) * adapter[key] 
+            # Get target dtype from first available adapter
+            target_dtype = available_adapters[0][0][key].dtype
+            
+            # Weighted sum for this layer (with dtype casting)
+            fused[key] = sum((weight / total_layer_weight) * adapter[key].astype(target_dtype) 
                            for adapter, weight in available_adapters)
             
             if len(available_adapters) < len(adapters):
@@ -240,10 +247,41 @@ class AdapterFusion:
         
         logger.info(f"SLERP fusion with interpolation factor t={t}")
         
-        fused = {}
-        for key in adapter1.keys():
-            w1 = torch.from_numpy(adapter1[key]).float()
-            w2 = torch.from_numpy(adapter2[key]).float()
+        fused: Dict[str, np.ndarray] = {}
+        all_keys = set(adapter1.keys()) | set(adapter2.keys())
+
+        for key in all_keys:
+            if key in adapter1:
+                w1_np = adapter1[key]
+            elif key in adapter2:
+                w1_np = np.zeros_like(adapter2[key])
+            else:
+                continue
+
+            if key in adapter2:
+                w2_np = adapter2[key]
+            else:
+                w2_np = np.zeros_like(w1_np)
+
+            # Handle different shapes (different LoRA ranks) by padding
+            if w1_np.shape != w2_np.shape:
+                max_shape = tuple(max(s1, s2) for s1, s2 in zip(w1_np.shape, w2_np.shape))
+                if w1_np.shape != max_shape:
+                    padded = np.zeros(max_shape, dtype=w1_np.dtype)
+                    padded[tuple(slice(0, s) for s in w1_np.shape)] = w1_np
+                    w1_np = padded
+                if w2_np.shape != max_shape:
+                    padded = np.zeros(max_shape, dtype=w2_np.dtype)
+                    padded[tuple(slice(0, s) for s in w2_np.shape)] = w2_np
+                    w2_np = padded
+
+            # Ensure dtypes align before converting to torch
+            target_dtype = w1_np.dtype
+            if w2_np.dtype != target_dtype:
+                w2_np = w2_np.astype(target_dtype, copy=False)
+
+            w1 = torch.from_numpy(w1_np).float()
+            w2 = torch.from_numpy(w2_np).float()
             
             # Flatten for SLERP computation
             w1_flat = w1.flatten()
@@ -261,20 +299,18 @@ class AdapterFusion:
                 sin_theta = torch.sin(theta)
                 
                 if sin_theta.abs() < 1e-6:
-                    # Handle degenerate case
                     result = (1 - t) * w1 + t * w2
                 else:
-                    # SLERP formula
                     a = torch.sin((1 - t) * theta) / sin_theta
                     b = torch.sin(t * theta) / sin_theta
                     result = a * w1 + b * w2
             
-            fused[key] = result.numpy()
+            fused[key] = result.numpy().astype(w1_np.dtype, copy=False)
         
         return fused
     
-    def save_fused_adapter(self, fused_weights: Dict[str, np.ndarray], output_dir: str, adapter_name: str = "fused_adapter"):
-        """Save fused adapter weights."""
+    def save_fused_adapter(self, fused_weights: Dict[str, np.ndarray], output_dir: str, adapter_name: str = "fused_adapter", source_adapter_names: List[str] = None):
+        """Save fused adapter weights and create adapter_config.json."""
         os.makedirs(output_dir, exist_ok=True)
         
         # Save as safetensors
@@ -284,6 +320,24 @@ class AdapterFusion:
         # Also save as 'adapters.safetensors' for MLX compatibility
         mlx_file = os.path.join(output_dir, "adapters.safetensors")
         save_file(fused_weights, mlx_file)
+        
+        # Create adapter_config.json by copying from first source adapter
+        if source_adapter_names and len(source_adapter_names) > 0:
+            source_adapter_dir = os.path.join(self.base_adapter_dir, source_adapter_names[0])
+            source_config_path = os.path.join(source_adapter_dir, "adapter_config.json")
+            
+            if os.path.exists(source_config_path):
+                try:
+                    with open(source_config_path, 'r') as f:
+                        config = json.load(f)
+                    
+                    dest_config_path = os.path.join(output_dir, "adapter_config.json")
+                    with open(dest_config_path, 'w') as f:
+                        json.dump(config, f, indent=2)
+                    
+                    logger.info(f"Copied adapter_config.json from {source_adapter_names[0]}")
+                except Exception as e:
+                    logger.warning(f"Failed to copy adapter_config.json: {e}")
         
         logger.info(f"Saved fused adapter to: {output_file}")
         logger.info(f"MLX-compatible file saved to: {mlx_file}")
@@ -328,7 +382,6 @@ def main():
     
     fusion = AdapterFusion()
     
-    # List available adapters if requested
     if args.list_adapters:
         adapters = fusion.list_available_adapters()
         print("Available adapters:")
@@ -336,13 +389,11 @@ def main():
             print(f"  - {adapter}")
         return
     
-    # Validate inputs (skip if just listing adapters)
     if not args.list_adapters:
         if not args.adapters or len(args.adapters) < 2:
             logger.error("At least 2 adapters are required for fusion")
             return
     
-    # Set default weights if not provided
     if args.weights is None:
         args.weights = [1.0 / len(args.adapters)] * len(args.adapters)
     
@@ -350,7 +401,6 @@ def main():
         logger.error("Number of weights must match number of adapters")
         return
     
-    # Load adapters
     logger.info("Loading adapter weights...")
     loaded_adapters = []
     for adapter_name in args.adapters:
@@ -362,26 +412,22 @@ def main():
             logger.error(f"Failed to load adapter {adapter_name}: {e}")
             return
     
-    # Validate compatibility
     if not fusion.validate_adapter_compatibility(loaded_adapters):
         logger.error("Adapters are not compatible for fusion")
         return
     
-    # Perform fusion
     logger.info(f"Starting fusion using method: {args.method}")
     if args.method == "weighted":
         fused_weights = fusion.weighted_average_fusion(loaded_adapters, args.weights)
     elif args.method == "slerp" and len(loaded_adapters) == 2:
-        t = args.weights[1]  # Use second weight as interpolation factor
+        t = args.weights[1]
         fused_weights = fusion.slerp_fusion(loaded_adapters[0], loaded_adapters[1], t)
     else:
         logger.error("SLERP fusion only supports exactly 2 adapters")
         return
     
-    # Save fused adapter
-    output_file = fusion.save_fused_adapter(fused_weights, args.output_dir, args.output_name)
+    output_file = fusion.save_fused_adapter(fused_weights, args.output_dir, args.output_name, source_adapter_names=args.adapters)
     
-    # Generate report
     fusion.generate_fusion_report(args.adapters, args.weights, args.method, args.output_dir)
     
     logger.info("Fusion completed successfully!")

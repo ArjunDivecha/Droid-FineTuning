@@ -1,0 +1,145 @@
+• Setup Tab Full-Layer LoRA SFT PRD
+
+  - Goal: Update the standard Setup tab to launch full-layer LoRA SFT runs while
+    leaving Enhanced Setup untouched for attention-only baselines.
+  - Scope: Frontend Setup UI + Redux config, backend /training/start flow and
+    session persistence, Compare tab parity with XXX repo.
+
+  Background
+
+  - Current Setup tab posts minimal TrainingConfig without LoRA metadata
+    (frontend/src/pages/SetupPage.tsx:19).
+  - Backend builds attention-only configs and filters unknown fields when
+    restoring sessions (backend/main.py:320, backend/main.py:175).
+  - Compare tab lacks XXX repo enhancements for inference/evaluation.
+
+  Target Users
+
+  - Practitioners experimenting with standard SFT from GUI.
+  - Power users running Enhanced Setup for attention-only comparison.
+
+  Success Metrics
+
+  - Users can start all-layer LoRA SFT from Setup tab with defaults matching
+    XXX repo.
+  - YAML sent to run_finetune.py reflects GUI LoRA parameters and architecture-
+    specific keys.
+  - Saved sessions retain LoRA fields and reload correctly.
+  - Compare tab supports new adapters with improved UX.
+
+  Functional Requirements
+
+  1. Setup UI
+      - Add “LoRA Configuration” card after training parameters with fields:
+          - LoRA Rank, LoRA Alpha, LoRA Dropout, Layer Coverage.
+          - Defaults: rank 32, alpha 32, dropout 0, coverage = all layers.
+          - Validate inputs (positive rank/alpha, dropout 0-1, coverage
+            selection).
+          - Contextual helper text describing full-layer coverage benefits.
+      - Adapt layer coverage options dynamically:
+          - Read config.json for selected model once models load.
+          - Offer “All layers (-1)” plus top-k presets (e.g., top 24/16/8)
+            matched to transformer depth.
+          - Update helper text if model depth is non-standard.
+      - Ensure save_every input remains; default 1000 in UI but backend respects
+        user-specified value with backend default fallback to 25.
+  2. Redux Store
+      - Extend TrainingConfig interface to include lora_rank, lora_alpha,
+        lora_dropout, lora_num_layers, fine_tune_type (frontend/src/store/
+        slices/trainingSlice.ts).
+      - Preserve enhanced training fields (GSPO/GRPO) for cross-tab
+        compatibility.
+  3. Backend
+      - Update TrainingConfig dataclass with new LoRA fields (backend/
+        main.py:43).
+      - Modify /training/start handler to parse LoRA params, defaulting to GUI
+        values.
+      - In TrainingManager.start_training:
+          - Incorporate GUI save_every (default 25 if not provided).
+          - Build lora_parameters including attention, MLP, and architecture-
+            specific keys (mixtral/phimoe gates, qwen2_moe shared gates,
+            qwen3_next linear attention, etc.) mirroring XXX logic.
+          - Set fine_tune_type, num_layers, lora_rank, lora_alpha, lora_dropout
+            in YAML.
+      - Update session restore filter to keep LoRA fields so legacy sessions
+        load with defaults but new sessions retain full config (backend/
+        main.py:170).
+      - Ensure /model/test and /model/test-base continue functioning with
+        adapters saved using full-layer keys (backend/main.py:1000).
+  4. Compare Tab Upgrade
+      - Port improved UI/logic from XXX (mlx-finetune-gui/frontend/src/pages/
+        ComparePage.tsx) including:
+          - Robust clipboard paste handling; fallbacks for Electron and browser
+            contexts.
+          - Enhanced session loading modal and status badges showing readiness.
+          - Evaluation pairing visualization (base vs adapter score cards).
+          - Buttons for “Evaluate Base vs Adapter,” progress meter, and error
+            handling.
+      - Confirm compatibility with new adapters and existing Enhanced Setup
+        outputs.
+  5. Data & Persistency
+      - Validate /tmp/gui_training_config.yaml reflects LoRA parameters and
+        architecture keys.
+      - Ensure training logs, websocket broadcasts, and saved sessions include
+        new fields so monitors show accurate config.
+
+  Non-Functional Requirements
+
+  - Keep Enhanced Setup untouched; route parity via /training/start-enhanced
+    remains.
+  - Maintain existing retry logic for model discovery and notifications.
+  - UI must stay responsive on small screens; reuse Tailwind patterns from XXX.
+  - No new backend dependencies; reuse existing scripts (run_finetune.py invoked
+    via venv python).
+
+  Dependencies
+
+  - Access to model config.json for depth (must ensure file readable in
+    sandbox).
+  - one_step_finetune script accepting new YAML fields (verify schema
+    alignment).
+  - Shared artifact directory for adapters remains the same.
+
+  Risks & Mitigations
+
+  - Architecture mismatch: fallback to base LoRA keys and log warning; display
+    notification in UI.
+  - Legacy sessions lacking LoRA: dataclass defaults avoid crashes; optionally
+    flag older sessions in Compare status.
+  - YAML schema drift: add unit test and manual dry-run to confirm compatibility
+    before release.
+  - UI regression: reuse tested layout from XXX, QA the Setup tab after
+    integration.
+
+  Testing Plan
+
+  - Unit test for /training/start to assert LoRA fields parsed and YAML includes
+    expected keys.
+  - Manual test: start training with default settings, inspect YAML, confirm
+    adapters saved, run Compare inference.
+  - Session persistence: resume from saved session and verify LoRA settings
+    intact.
+  - Compare tab regression: test clipboard paste, evaluation run, and session
+    load with both new and legacy adapters.
+
+  Rollout Steps
+
+  1. Implement frontend changes (Setup + Redux + Compare).
+  2. Update backend dataclass, parser, YAML builder, session filter.
+  3. Add tests; run existing backend integration tests
+     (test_backend_integration.py) and any Compare-related UI smoke tests.
+  4. Document behavior in README/ENHANCED_TRAINING_METHODS appendix if needed.
+  5. Coordinate release with user to test on target models.
+
+  Out of Scope
+
+  - Enhanced Setup modifications.
+  - New telemetry or logging pipelines.
+  - Automatic migration of existing YAML/configs beyond default handling.
+
+  Open Questions (Resolved)
+
+  1. Backend should respect GUI save_every (default remains 25).
+  2. Layer coverage must adapt to model depth dynamically.
+  3. Compare tab should adopt the improved version from XXX.
+  4. Additional logging not required.

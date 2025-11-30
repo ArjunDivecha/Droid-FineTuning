@@ -55,3 +55,8 @@ adapters/
 tmp/
 temp/
 .cache/
+adapter_fusion/.env
+
+# Datasets (not tracked)
+grpo_*/
+*.jsonl

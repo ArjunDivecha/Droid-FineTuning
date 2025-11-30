@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# MLX Fine-Tuning GUI Stop Script
+echo " Stopping MLX Fine-Tuning GUI..."
+# Kill Electron app
+echo " killing Electron app..."
+pkill -f "Electron.*MLX Fine-Tuner" 2>/dev/null
+pkill -f "npm start" 2>/dev/null
+
+# Kill backend
+echo " killing backend..."
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+pkill -f "uvicorn main:app" 2>/dev/null
+
+sleep 1
+echo " All processes stopped!"
+echo "✅ MLX Fine-Tuning GUI stopped!"

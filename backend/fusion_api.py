@@ -48,12 +48,28 @@ from fusion_adapters import AdapterFusion
 # Add evaluation path
 sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
 
+# Import model exporter
+try:
+    from model_export import ModelExporter
+except ImportError:
+    ModelExporter = None
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fusion", tags=["fusion"])
 
 # Global state for fusion operations
 fusion_state = {
+    "is_running": False,
+    "progress": 0,
+    "status": "idle",
+    "error": None,
+    "current_step": "",
+    "result": None
+}
+
+# Global state for export operations
+export_state = {
     "is_running": False,
     "progress": 0,
     "status": "idle",

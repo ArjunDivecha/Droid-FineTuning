@@ -16,6 +16,7 @@ import { setShowLogs, addNotification } from '../store/slices/uiSlice';
 import { resetTraining, clearLogs } from '../store/slices/trainingSlice';
 import { TrainingChart } from '../components/TrainingChart';
 import { LogViewer } from '../components/LogViewer';
+import TrainingErrorDisplay from '../components/TrainingErrorDisplay';
 import axios from 'axios';
 
 const BACKEND_URL = 'http://localhost:8000';
@@ -219,6 +220,44 @@ export const TrainingPage: React.FC = () => {
         </div>
       </div>
 
+      {/* RL Metrics (GSPO/GRPO) */}
+      {(metrics?.avg_reward != null || metrics?.success_rate != null || metrics?.kl != null || metrics?.entropy != null) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Avg Reward */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Avg Reward</p>
+              <p className="text-lg font-semibold">{metrics?.avg_reward != null ? Number(metrics.avg_reward).toFixed(4) : '--'}</p>
+            </div>
+          </div>
+          {/* Success Rate */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Success Rate</p>
+              <p className="text-lg font-semibold">
+                {metrics?.success_rate != null
+                  ? `${Number(metrics.success_rate > 1 ? metrics.success_rate : metrics.success_rate * 100).toFixed(1)}%`
+                  : '--'}
+              </p>
+            </div>
+          </div>
+          {/* KL */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">KL</p>
+              <p className="text-lg font-semibold">{metrics?.kl != null ? Number(metrics.kl).toFixed(4) : '--'}</p>
+            </div>
+          </div>
+          {/* Entropy */}
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-gray-500 dark:text-gray-400">Entropy</p>
+              <p className="text-lg font-semibold">{metrics?.entropy != null ? Number(metrics.entropy).toFixed(4) : '--'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Training Configuration */}
       {config && (
         <div className="card">
@@ -227,6 +266,12 @@ export const TrainingPage: React.FC = () => {
           </div>
           <div className="card-body">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+              {config.training_method && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Method:</span>
+                  <p className="font-medium">{config.training_method.toUpperCase()}</p>
+                </div>
+              )}
               <div>
                 <span className="text-gray-500 dark:text-gray-400">Learning Rate:</span>
                 <p className="font-medium">{config.learning_rate}</p>
@@ -243,6 +288,43 @@ export const TrainingPage: React.FC = () => {
                 <span className="text-gray-500 dark:text-gray-400">Adapter Name:</span>
                 <p className="font-medium">{config.adapter_name}</p>
               </div>
+              {/* RL Params */}
+              {config.group_size != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Group Size:</span>
+                  <p className="font-medium">{config.group_size}</p>
+                </div>
+              )}
+              {config.temperature != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Temperature:</span>
+                  <p className="font-medium">{config.temperature}</p>
+                </div>
+              )}
+              {config.epsilon != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Epsilon:</span>
+                  <p className="font-medium">{config.epsilon}</p>
+                </div>
+              )}
+              {config.max_completion_length != null && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Max Completion Len:</span>
+                  <p className="font-medium">{config.max_completion_length}</p>
+                </div>
+              )}
+              {config.importance_sampling_level && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">Importance Sampling:</span>
+                  <p className="font-medium">{config.importance_sampling_level}</p>
+                </div>
+              )}
+              {config.grpo_loss_type && (
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">GRPO Loss Type:</span>
+                  <p className="font-medium">{config.grpo_loss_type}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

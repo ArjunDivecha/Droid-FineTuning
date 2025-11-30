@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# MLX Fine-Tuning GUI Startup Script
+echo "🚀 Starting MLX Fine-Tuning GUI..."
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Kill any existing processes
+echo "🧹 Cleaning up existing processes..."
+lsof -ti:8000 | xargs kill -9 2>/dev/null
+pkill -f "Electron.*MLX Fine-Tuner" 2>/dev/null
+sleep 2
+
+# Start Electron app (which starts backend automatically)
+echo "🎨 Starting Electron app..."
+cd "$SCRIPT_DIR"
+npm start > "$SCRIPT_DIR/logs/electron.log" 2>&1 &
+APP_PID=$!
+echo "App PID: $APP_PID"
+
+sleep 5
+
+echo "✅ MLX Fine-Tuning GUI is running!"
+echo "   Backend:  http://localhost:8000"
+echo ""
+echo "📝 Logs are in $SCRIPT_DIR/logs/"
+echo "🛑 To stop, run: ./killmlxnew"

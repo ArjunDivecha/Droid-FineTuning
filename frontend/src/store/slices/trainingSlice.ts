@@ -8,6 +8,11 @@ export interface TrainingMetrics {
   learning_rate: number;
   start_time: string;
   estimated_time_remaining: number | null;
+  // Optional RL metrics (GSPO/GRPO)
+  avg_reward?: number | null;
+  success_rate?: number | null; // percentage (0-100) or fraction (0-1) depending on trainer
+  kl?: number | null;
+  entropy?: number | null;
 }
 
 export interface TrainingConfig {
@@ -24,6 +29,20 @@ export interface TrainingConfig {
   early_stop: boolean;
   patience: number;
   adapter_name: string;
+  // Full-Layer LoRA Configuration
+  fine_tune_type?: string;
+  lora_rank?: number;
+  lora_alpha?: number;
+  lora_dropout?: number;
+  lora_num_layers?: number;
+  // Enhanced/GSPO-GRPO fields (optional)
+  training_method?: string;
+  group_size?: number;
+  epsilon?: number;
+  temperature?: number;
+  max_completion_length?: number;
+  importance_sampling_level?: string | null;
+  grpo_loss_type?: string;
 }
 
 export type TrainingState = 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'stopped';
