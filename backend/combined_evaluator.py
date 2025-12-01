@@ -158,10 +158,14 @@ class CombinedEvaluator:
         # Get adapter path
         adapter_path = self._get_adapter_path(adapter_name)
 
+        # Get correct base model path for this adapter
+        base_model_path = self._get_base_model_path(adapter_path)
+        logger.info(f"Using base model from config: {base_model_path}")
+
         if include_base:
             # Compare to base model
             tier1_comparison = self.tier1.compare_to_base(
-                self.base_model_path,
+                base_model_path,
                 adapter_path,
                 max_samples=max_samples
             )
@@ -171,7 +175,7 @@ class CombinedEvaluator:
         else:
             # Just evaluate adapter
             tier1_report = self.tier1.evaluate(
-                self.base_model_path,
+                base_model_path,
                 adapter_path=adapter_path,
                 max_samples=max_samples
             )
@@ -299,6 +303,29 @@ class CombinedEvaluator:
             return regular_path
 
         raise FileNotFoundError(f"Adapter not found: {adapter_name}")
+
+    def _get_base_model_path(self, adapter_path: str) -> str:
+        """Get base model path from adapter config."""
+        try:
+            # Check nested learning
+            nested_config = os.path.join(adapter_path, "config.json")
+            if os.path.exists(nested_config):
+                with open(nested_config, 'r') as f:
+                    config = json.load(f)
+                    return config.get('base_model_path', self.base_model_path)
+
+            # Check regular adapters
+            regular_config = os.path.join(adapter_path, "adapter_config.json")
+            if os.path.exists(regular_config):
+                with open(regular_config, 'r') as f:
+                    config = json.load(f)
+                    return config.get('model', self.base_model_path)
+            
+            return self.base_model_path
+            
+        except Exception as e:
+            logger.warning(f"Failed to read adapter config: {e}")
+            return self.base_model_path
 
     @staticmethod
     def _score_to_grade(score: float) -> str:

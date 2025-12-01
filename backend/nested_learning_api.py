@@ -83,6 +83,9 @@ class NestedLearningManager:
         self.error_message = None
         self.training_task = None
         self.metrics_history = []
+        
+        # Trainer instance
+        self.trainer = None
 
         # Session management
         self.current_session_id = None
@@ -209,19 +212,36 @@ class NestedLearningManager:
         except Exception as e:
             logger.error(f"Failed to save nested learning session: {e}")
 
+    def _sanitize_metrics(self, data: Any) -> Any:
+        """Recursively replace infinite/NaN values with None for JSON serialization."""
+        import math
+        if isinstance(data, dict):
+            return {k: self._sanitize_metrics(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._sanitize_metrics(v) for v in data]
+        elif isinstance(data, float):
+            if math.isinf(data) or math.isnan(data):
+                return None
+            return data
+        return data
+
     def get_status(self) -> NestedLearningStatus:
         """Get current training status."""
         # Get last 100 metrics for graph (keep memory usage reasonable)
         recent_metrics = self.metrics_history[-100:] if self.metrics_history else None
+
+        # Sanitize metrics to avoid JSON serialization errors with Infinity/NaN
+        sanitized_metrics = self._sanitize_metrics(recent_metrics)
+        sanitized_tier_stats = self._sanitize_metrics(self.tier_stats)
 
         return NestedLearningStatus(
             status=self.current_status,
             current_step=self.current_step,
             total_steps=self.total_steps,
             experiment_name=self.experiment_name,
-            tier_stats=self.tier_stats,
+            tier_stats=sanitized_tier_stats,
             message=self.error_message,
-            metrics_history=recent_metrics,
+            metrics_history=sanitized_metrics,
             recent_logs=None  # TODO: Add log capture if needed
         )
 
@@ -297,10 +317,10 @@ class NestedLearningManager:
             training_config = NestedLearningConfig(**config.dict())
 
             # Create trainer with callback
-            trainer = NestedLoRATrainer(training_config)
+            self.trainer = NestedLoRATrainer(training_config)
 
             # Set callback for status updates
-            trainer.step_callback = self._training_step_callback
+            self.trainer.step_callback = self._training_step_callback
 
             # Store config and session ID
             self.current_config = training_config
@@ -308,23 +328,31 @@ class NestedLearningManager:
 
             # Setup and train (this will run in background)
             logger.info("Running trainer setup...")
-            trainer.setup()
+            self.trainer.setup()
             logger.info("Starting training loop...")
-            trainer.train()
+            self.trainer.train()
 
-            self.current_status = "completed"
-            logger.info("Training completed successfully")
+            # Only mark as completed if not stopped
+            if not self.trainer.stop_requested:
+                self.current_status = "completed"
+                logger.info("Training completed successfully")
+            else:
+                self.current_status = "idle"
+                logger.info("Training stopped by user")
 
             # Get final metrics from trainer
             final_metrics = {
-                "final_loss": getattr(trainer, 'current_train_loss', None),
-                "final_val_loss": getattr(trainer, 'current_val_loss', None),
-                "best_val_loss": getattr(trainer, 'best_val_loss', None),
-                "best_step": getattr(trainer, 'best_model_step', None)
+                "final_loss": getattr(self.trainer, 'current_train_loss', None),
+                "final_val_loss": getattr(self.trainer, 'current_val_loss', None),
+                "best_val_loss": getattr(self.trainer, 'best_val_loss', None),
+                "best_step": getattr(self.trainer, 'best_model_step', None)
             }
 
             # Save session for loading in Compare page
             self.save_session(training_config, final_metrics)
+            
+            # Cleanup
+            self.trainer = None
 
             return {
                 "success": True,
@@ -338,6 +366,7 @@ class NestedLearningManager:
             self.current_status = "error"
             self.error_message = str(e)
             logger.error(f"Training failed: {e}")
+            self.trainer = None
             raise HTTPException(status_code=500, detail=str(e))
 
     def stop_training(self) -> Dict[str, Any]:
@@ -349,7 +378,15 @@ class NestedLearningManager:
             )
 
         self.current_status = "idle"
-        logger.info("Nested Learning training stopped")
+        
+        # Signal trainer to stop
+        if self.trainer:
+            logger.info("Signaling trainer to stop...")
+            self.trainer.stop_training()
+        else:
+            logger.warning("No trainer instance found to stop")
+            
+        logger.info("Nested Learning training stop requested")
 
         return {
             "success": True,

@@ -458,6 +458,7 @@ class TrainingManager:
         # Start training process
         try:
             cmd = [
+                "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python",
                 "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Fine Tuner XXX/one_step_finetune/run_finetune.py",
                 "--config", config_path
             ]
@@ -1262,12 +1263,27 @@ async def list_adapters():
 
     return {"adapters": adapters}
 
+
+
+def sanitize_metrics(data: Any) -> Any:
+    """Recursively replace infinite/NaN values with None for JSON serialization."""
+    import math
+    if isinstance(data, dict):
+        return {k: sanitize_metrics(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_metrics(v) for v in data]
+    elif isinstance(data, float):
+        if math.isinf(data) or math.isnan(data):
+            return None
+        return data
+    return data
+
 @app.get("/training/status")
 async def get_training_status():
     """Get current training status"""
     return {
         "state": training_manager.training_state,
-        "metrics": training_manager.training_metrics,
+        "metrics": sanitize_metrics(training_manager.training_metrics),
         "config": asdict(training_manager.current_config) if training_manager.current_config else None
     }
 

@@ -346,7 +346,10 @@ class NestedLoRATrainer:
                 del gradients
 
                 # 6. Force evaluation of updated parameters
-                mx.eval(self.model.parameters())
+                # FIX: Flatten parameters before eval to ensure graph is freed
+                from mlx.utils import tree_flatten
+                flat_params = tree_flatten(self.model.parameters(), destination={})
+                mx.eval(flat_params)
 
                 # 7. AGGRESSIVE memory cleanup
                 mx.metal.clear_cache()
@@ -586,8 +589,11 @@ class NestedLoRATrainer:
         loss, gradients = loss_and_grad_fn(self.model)
 
         # CRITICAL: Force evaluation to free memory from computation graph
+        # FIX: Flatten gradients before eval
+        from mlx.utils import tree_flatten
+        flat_grads = tree_flatten(gradients, destination={})
         mx.eval(loss)
-        mx.eval(gradients)
+        mx.eval(flat_grads)
 
         return loss, gradients
 
@@ -717,6 +723,7 @@ class NestedLoRATrainer:
             adapter_weights = flattened
 
         # Evaluate all arrays
+        # FIX: Flatten before eval (already flattened above, but good practice to be explicit if it wasn't)
         mx.eval(adapter_weights)
 
         # Save using MLX

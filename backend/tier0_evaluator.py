@@ -343,12 +343,9 @@ class Tier0Evaluator:
                 training_score += 10
             elif training_analysis['final_train_loss'] < 2.0:
                 training_score += 5
-        else:
-            # No training data - give neutral score
-            training_score = 20
-            warnings.append("No training metrics available")
-
-        score += training_score
+        
+        # Note: If no training data, training_score remains 0
+        # and we re-normalize in the final calculation step.
 
         # Weight statistics score (20 points)
         weight_score = 0
@@ -367,7 +364,19 @@ class Tier0Evaluator:
 
         score += weight_score
 
-        return score, warnings
+        # Final score calculation
+        if training_analysis['has_data']:
+            score += training_score
+            # Max score is 100 (40 + 40 + 20)
+        else:
+            # Re-normalize if no training data
+            # Available points: 40 (Spectral) + 20 (Weight) = 60
+            # We scale this up to 100
+            raw_score = score
+            score = (raw_score / 60.0) * 100.0
+            warnings.append(f"No training metrics found - score re-normalized (Raw: {raw_score:.1f}/60)")
+
+        return min(100.0, score), warnings
 
     def evaluate_adapter(self, adapter_name: str) -> Dict:
         """

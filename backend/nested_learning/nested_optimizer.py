@@ -147,7 +147,10 @@ class NestedAdam:
 
         # Evaluate all updates
         if updates:
-            mx.eval(updates)
+            # FIX: Flatten updates before eval
+            # updates is already flat (dict of arrays), but mx.eval(dict) fails
+            # so we must pass list of values
+            mx.eval(list(updates.values()))
 
             logger.info(f"Applying {len(updates)} parameter updates via model.update()")
             if len(updates) > 0:
@@ -164,7 +167,9 @@ class NestedAdam:
             )
 
             # Evaluate all parameters
-            mx.eval(updated_params)
+            # FIX: Flatten updated_params before eval
+            flat_updated_params = tree_flatten(updated_params, destination={})
+            mx.eval(flat_updated_params)
 
             # Update model with new parameters
             model.update(updated_params)
