@@ -21,9 +21,25 @@ from typing import Dict, List
 import logging
 from datetime import datetime
 
-# Import tier evaluators
-from tier0_evaluator import Tier0Evaluator
-from tier1_evaluator import Tier1Evaluator
+# Project paths
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_MODEL_DIR = os.path.join(PROJECT_ROOT, 'models')
+
+# Import tier evaluators - handle both direct execution and import
+try:
+    # When imported from backend/main.py
+    from backend.tier0_evaluator import Tier0Evaluator, NESTED_LEARNING_DIR, ADAPTERS_DIR
+    from backend.tier1_evaluator import Tier1Evaluator
+except ImportError:
+    try:
+        # When run directly from backend/
+        from tier0_evaluator import Tier0Evaluator, NESTED_LEARNING_DIR, ADAPTERS_DIR
+        from tier1_evaluator import Tier1Evaluator
+    except ImportError:
+        # Fallback - add parent to path
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from tier0_evaluator import Tier0Evaluator, NESTED_LEARNING_DIR, ADAPTERS_DIR
+        from tier1_evaluator import Tier1Evaluator
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -42,7 +58,15 @@ class CombinedEvaluator:
     def __init__(self):
         self.tier0 = Tier0Evaluator()
         self.tier1 = Tier1Evaluator()
-        self.base_model_path = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model/qwen3-4b-mlx"
+        # Use first available model or default
+        if os.path.exists(BASE_MODEL_DIR):
+            models = [d for d in os.listdir(BASE_MODEL_DIR) if os.path.isdir(os.path.join(BASE_MODEL_DIR, d))]
+            if models:
+                self.base_model_path = os.path.join(BASE_MODEL_DIR, models[0])
+            else:
+                self.base_model_path = os.path.join(BASE_MODEL_DIR, 'qwen2.5-0.5b-bf16')
+        else:
+            self.base_model_path = os.path.join(BASE_MODEL_DIR, 'qwen2.5-0.5b-bf16')
 
     @staticmethod
     def print_score_card(report: Dict, show_details: bool = True):
@@ -293,12 +317,12 @@ class CombinedEvaluator:
     def _get_adapter_path(self, adapter_name: str) -> str:
         """Get full path to adapter."""
         # Check nested learning
-        nested_path = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}"
+        nested_path = os.path.join(NESTED_LEARNING_DIR, adapter_name)
         if os.path.exists(nested_path):
             return nested_path
 
         # Check regular adapters
-        regular_path = f"/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters/{adapter_name}"
+        regular_path = os.path.join(ADAPTERS_DIR, adapter_name)
         if os.path.exists(regular_path):
             return regular_path
 

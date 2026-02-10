@@ -27,6 +27,11 @@ import logging
 from datetime import datetime
 import time
 
+# Project paths
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+NESTED_LEARNING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nested_learning', 'checkpoints')
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -197,7 +202,7 @@ class Tier1Evaluator:
             # Try to find it automatically
             if adapter_path:
                 # Check adapter config
-                nested_config = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{os.path.basename(adapter_path)}/config.json"
+                nested_config = os.path.join(NESTED_LEARNING_DIR, os.path.basename(adapter_path), "config.json")
                 regular_config = f"{adapter_path}/adapter_config.json"
 
                 if os.path.exists(nested_config):
@@ -213,7 +218,17 @@ class Tier1Evaluator:
 
             if not validation_data:
                 # Use default
-                validation_data = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/data/train.jsonl"
+                # Find first available dataset
+                validation_data = None
+                for root, dirs, files in os.walk(DATA_DIR):
+                    for file in files:
+                        if file.endswith('.jsonl') and 'train' in file.lower():
+                            validation_data = os.path.join(root, file)
+                            break
+                    if validation_data:
+                        break
+                if not validation_data:
+                    raise FileNotFoundError(f"No training data found in {DATA_DIR}")
 
         logger.info(f"Tier 1 Evaluation")
         logger.info(f"  Model: {model_path}")
