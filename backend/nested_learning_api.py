@@ -90,7 +90,9 @@ class NestedLearningManager:
         # Session management
         self.current_session_id = None
         self.current_config = None
-        self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
+        # Use local sessions directory relative to project root
+        base_dir = Path(__file__).parent.parent  # Go up from backend/ to project root
+        self.sessions_dir = os.getenv("SESSIONS_DIR", str(base_dir / "sessions"))
         os.makedirs(self.sessions_dir, exist_ok=True)
 
         # Try to load metrics from last training session on startup

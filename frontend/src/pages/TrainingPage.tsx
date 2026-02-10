@@ -19,7 +19,7 @@ import { LogViewer } from '../components/LogViewer';
 import TrainingErrorDisplay from '../components/TrainingErrorDisplay';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://127.0.0.1:8000';
 
 export const TrainingPage: React.FC = () => {
   const dispatch = useDispatch();
@@ -47,8 +47,11 @@ export const TrainingPage: React.FC = () => {
     }
   };
 
-  const formatTime = (seconds: number | null) => {
-    if (!seconds) return '--:--:--';
+  const formatTime = (seconds: number | null | undefined) => {
+    // Handle null, undefined, NaN, or negative values
+    if (seconds === null || seconds === undefined || Number.isNaN(seconds) || seconds < 0) {
+      return '--:--:--';
+    }
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
@@ -56,8 +59,9 @@ export const TrainingPage: React.FC = () => {
   };
 
   const getProgress = () => {
-    if (!metrics) return 0;
-    return (metrics.current_step / metrics.total_steps) * 100;
+    if (!metrics || !metrics.total_steps || metrics.total_steps === 0) return 0;
+    const progress = (metrics.current_step / metrics.total_steps) * 100;
+    return Math.min(Math.max(progress, 0), 100); // Clamp between 0-100
   };
 
   const toggleLogs = () => {
@@ -179,7 +183,7 @@ export const TrainingPage: React.FC = () => {
                   />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {metrics.current_step.toLocaleString()} / {metrics.total_steps.toLocaleString()} steps
+                  {metrics.current_step?.toLocaleString?.() ?? 0} / {metrics.total_steps?.toLocaleString?.() ?? 0} steps
                 </p>
               </div>
             ) : (
@@ -195,8 +199,8 @@ export const TrainingPage: React.FC = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400">Time Remaining</p>
               <Clock className="h-5 w-5 text-primary-600" />
             </div>
-            <p className="text-lg font-semibold">
-              {formatTime(metrics?.estimated_time_remaining || null)}
+            <p className="text-lg font-semibold" title={`${metrics?.estimated_time_remaining ?? 'N/A'} seconds remaining`}>
+              {formatTime(metrics?.estimated_time_remaining)}
             </p>
           </div>
         </div>

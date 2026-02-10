@@ -1,0 +1,35 @@
+{
+  "session_id": "32fe56a1-bcd2-4e5e-b328-cc7ec037237e",
+  "timestamp": "2025-12-23T22:17:30.316567",
+  "training_state": "error",
+  "config": {
+    "model_path": "/Users/work2024/Library/CloudStorage/Dropbox/Droid-FineTuning/models/qwen2.5-0.5b-bf16",
+    "train_data_path": "/Users/work2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/arjun_voice_training.jsonl",
+    "val_data_path": "/Users/work2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/arjun_voice_validation.jsonl",
+    "learning_rate": 1e-05,
+    "batch_size": 1,
+    "max_seq_length": 1024,
+    "iterations": 7329,
+    "steps_per_report": 25,
+    "steps_per_eval": 25,
+    "save_every": 100,
+    "early_stop": true,
+    "patience": 3,
+    "adapter_name": "mlx_finetune"
+  },
+  "metrics": {
+    "current_step": 7329,
+    "total_steps": 7329,
+    "train_loss": 0.046,
+    "val_loss": 1.903,
+    "learning_rate": 1e-05,
+    "start_time": "2025-12-23T20:58:42.986265",
+    "estimated_time_remaining": 0.0
+  },
+  "adapter_path": "/Users/work2024/Library/CloudStorage/Dropbox/Droid-FineTuning/adapters/mlx_finetune/adapters.safetensors",
+  "best_model": {
+    "val_loss": 1.549,
+    "step": 275,
+    "path": null
+  }
+}

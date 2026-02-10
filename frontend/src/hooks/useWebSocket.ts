@@ -28,10 +28,11 @@ const WEBSOCKET_URL = 'ws://127.0.0.1:8000/ws';
 
 export const useWebSocket = () => {
   const dispatch = useDispatch();
-  const { isConnected } = useSelector((state: RootState) => state.training);
+  const { isConnected, metrics: currentMetrics } = useSelector((state: RootState) => state.training);
   const socketRef = useRef<WebSocket | null>(null);
   const lastLoggedStep = useRef<number>(-1);
   const lastRunStartTime = useRef<string | null>(null);
+  const hasInitialized = useRef<boolean>(false);
 
   const connect = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -69,15 +70,25 @@ export const useWebSocket = () => {
             const wsState = data.data?.state;
             const wsMetrics = data.data?.metrics;
             if (wsState === 'running') {
-              // Only clear logs if this is a NEW training session (start_time changed)
-              const startTimeChanged = wsMetrics?.start_time && wsMetrics.start_time !== lastRunStartTime.current;
-              if (startTimeChanged) {
-                dispatch(trainingStarted()); // This clears logs - only for NEW training
-                lastRunStartTime.current = wsMetrics.start_time as string;
+              // Detect new training by comparing with Redux state metrics
+              const currentStartTime = currentMetrics?.start_time;
+              const newStartTime = wsMetrics?.start_time;
+              const startTimeChanged = newStartTime && newStartTime !== currentStartTime && newStartTime !== lastRunStartTime.current;
+              const stepRegressed = currentMetrics && wsMetrics?.current_step && wsMetrics.current_step < currentMetrics.current_step;
+              
+              if (startTimeChanged || stepRegressed || !hasInitialized.current) {
+                // New training session detected - clear everything
+                dispatch(trainingStarted());
+                lastLoggedStep.current = -1;
+                if (newStartTime) {
+                  lastRunStartTime.current = newStartTime as string;
+                }
               } else {
-                // Same training session - just update state without clearing
+                // Same training session - just update state
                 dispatch(setTrainingState('running'));
               }
+              hasInitialized.current = true;
+              
               if (wsMetrics) {
                 dispatch(trainingProgress({ metrics: wsMetrics, log_line: '' }));
               }
@@ -109,7 +120,28 @@ export const useWebSocket = () => {
             break;
           case 'training_progress':
             // Accept real-time progress over WebSocket; polling remains as fallback
-            dispatch(trainingProgress(data.data));
+            // Ensure metrics have all required fields
+            if (data.data?.metrics) {
+              const metrics = data.data.metrics;
+              const safeMetrics = {
+                current_step: metrics.current_step ?? 0,
+                total_steps: metrics.total_steps ?? 0,
+                train_loss: metrics.train_loss ?? null,
+                val_loss: metrics.val_loss ?? null,
+                learning_rate: metrics.learning_rate ?? 0,
+                start_time: metrics.start_time ?? '',
+                estimated_time_remaining: metrics.estimated_time_remaining ?? null,
+                avg_reward: metrics.avg_reward ?? null,
+                success_rate: metrics.success_rate ?? null,
+                kl: metrics.kl ?? null,
+                entropy: metrics.entropy ?? null,
+                ...metrics
+              };
+              dispatch(trainingProgress({
+                metrics: safeMetrics,
+                log_line: data.data.log_line ?? ''
+              }));
+            }
             break;
           case 'training_completed':
             dispatch(trainingCompleted(data.data));
@@ -270,8 +302,9 @@ export const useWebSocket = () => {
             const currentStep: number = metrics.current_step ?? 0;
             const runStartTime: string | null = metrics.start_time ?? null;
 
-            // Detect a new run by start_time change (preferred) or step regression (fallback)
-            const startTimeChanged = runStartTime && runStartTime !== lastRunStartTime.current;
+            // Detect a new run by comparing with Redux state metrics (more reliable)
+            const currentStartTime = currentMetrics?.start_time;
+            const startTimeChanged = runStartTime && runStartTime !== currentStartTime && runStartTime !== lastRunStartTime.current;
             const stepRegressed = lastLoggedStep.current !== -1 && currentStep < lastLoggedStep.current;
 
             if (startTimeChanged || stepRegressed) {
@@ -292,8 +325,24 @@ export const useWebSocket = () => {
               lastLoggedStep.current = currentStep;
             }
 
+            // Ensure metrics has all required fields with proper defaults
+            const safeMetrics = {
+              current_step: metrics.current_step ?? 0,
+              total_steps: metrics.total_steps ?? 0,
+              train_loss: metrics.train_loss ?? null,
+              val_loss: metrics.val_loss ?? null,
+              learning_rate: metrics.learning_rate ?? 0,
+              start_time: metrics.start_time ?? '',
+              estimated_time_remaining: metrics.estimated_time_remaining ?? null,
+              avg_reward: metrics.avg_reward ?? null,
+              success_rate: metrics.success_rate ?? null,
+              kl: metrics.kl ?? null,
+              entropy: metrics.entropy ?? null,
+              ...metrics  // Allow actual values to override defaults
+            };
+
             dispatch(trainingProgress({
-              metrics: status.metrics,
+              metrics: safeMetrics,
               log_line: logLine
             }));
           } else if (status.state === 'completed') {

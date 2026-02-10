@@ -5,34 +5,87 @@ SCRIPT NAME: evaluate_adapters.py
 =============================================================================
 
 INPUT FILES:
-- Training data JSONL file (Q&A pairs)
-- Adapter directories with adapter_config.json and adapters.safetensors
+- Training data JSONL file: Q&A pairs used for adapter training
+- Adapter directories: Contains adapter_config.json and adapters.safetensors
+- .env file: ANTHROPIC_API_KEY for Claude evaluation service
+- MLX model files: Base models for inference comparison
 
 OUTPUT FILES:
-- evaluation_report.json: Detailed scores and analysis
-- evaluation_summary.txt: Human-readable summary
+- evaluation_report.json: Detailed evaluation scores and metrics
+- evaluation_summary.txt: Human-readable evaluation summary
+- evaluation_results/: Directory for storing evaluation outputs
+- Console output: Real-time evaluation progress and results
 
 VERSION: 1.0
-LAST UPDATED: 2025-01-29
+LAST UPDATED: 2025-12-02
 AUTHOR: Droid-FineTuning Project
 
 DESCRIPTION:
-Evaluates adapter faithfulness to training data using Claude Sonnet 4.5.
-Measures fact recall, consistency, and hallucination rates.
+Comprehensive adapter evaluation system that measures model performance against
+training data using Claude Sonnet 4.5 as an evaluation oracle. Evaluates
+faithfulness, fact recall, consistency, and hallucination rates for fine-tuned
+models.
+
+EVALUATION METHODOLOGY:
+- Extracts Q&A pairs from training data
+- Generates test questions using Claude Sonnet 4.5
+- Evaluates adapter responses against expected answers
+- Scores faithfulness, fact recall, consistency, hallucination
+- Provides detailed analysis and recommendations
+
+FUNCTIONALITY:
+- Adapter loading from multiple directory types (standard and nested learning)
+- Training data processing and Q&A pair extraction
+- Question generation using Cerebras/Claude services
+- Response generation from evaluated adapters
+- Automated scoring and analysis
+- Report generation in multiple formats
+- Base model comparison capabilities
 
 DEPENDENCIES:
-- anthropic
-- python-dotenv
-- mlx_lm
-- json
+- anthropic: Claude API client for evaluation
+- openai: Cerebras API client for question generation
+- mlx-lm: MLX model loading and inference
+- python-dotenv: Environment variable management
+- pandas: Data processing and analysis
+- json: Configuration and report handling
+
+EVALUATION METRICS:
+- Overall Score: 0-100 comprehensive performance rating
+- Faithfulness: 0-100 adherence to training data
+- Fact Recall: 0-100 factual accuracy measurement
+- Consistency: 0-100 response consistency rating
+- Hallucination: 0-100 hallucination detection (lower is better)
 
 USAGE:
+Command line evaluation:
 python evaluate_adapters.py --adapter mlx_finetune --training-data train.jsonl
 
-NOTES:
-- Requires ANTHROPIC_API_KEY in .env file
-- Uses Claude Sonnet 4.5 for evaluation
-- Evaluates 20 test questions by default
+Base model comparison:
+python evaluate_adapters.py --adapter mlx_finetune --training-data train.jsonl --compare-base
+
+Custom question count:
+python evaluate_adapters.py --adapter mlx_finetune --training-data train.jsonl --num-questions 50
+
+CONFIGURATION:
+- ANTHROPIC_API_KEY: Required for Claude evaluation
+- CEREBRAS_API_KEY: Required for question generation
+- Adapter paths: Supports both standard and nested learning locations
+- Evaluation parameters: Configurable question counts and thresholds
+
+INTEGRATION:
+- Backend API: Called via evaluation_api.py endpoints
+- Nested Learning: Supports nested learning adapter paths
+- MLX Framework: Uses MLX for model inference
+- GUI Interface: Results displayed in Compare tab
+
+ERROR HANDLING:
+- API key validation and error messages
+- Adapter loading failure handling
+- Network timeout management
+- Data validation and sanitization
+- Graceful degradation for missing components
+
 =============================================================================
 """
 
@@ -92,17 +145,41 @@ class AdapterEvaluator:
     
     def load_adapter_config(self, adapter_name: str) -> Dict:
         """Load adapter configuration."""
+        # First try standard adapter directory
         adapter_dir = os.path.join(self.adapter_base_dir, adapter_name)
         config_file = os.path.join(adapter_dir, "adapter_config.json")
         
+        # If not found, try nested learning directory
         if not os.path.exists(config_file):
-            raise FileNotFoundError(f"No config found at {config_file}")
+            nested_dir = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}/checkpoints/best"
+            config_file = os.path.join(nested_dir, "adapter_config.json")
+            if os.path.exists(config_file):
+                adapter_dir = nested_dir
+            else:
+                raise FileNotFoundError(f"No config found for adapter '{adapter_name}' in standard or nested learning directories")
         
         with open(config_file, 'r') as f:
             config = json.load(f)
         
-        logger.info(f"Loaded config for adapter: {adapter_name}")
+        logger.info(f"Loaded config for adapter: {adapter_name} from {adapter_dir}")
         return config
+    
+    def get_adapter_path(self, adapter_name: str) -> str:
+        """Get the correct adapter path for the given adapter name."""
+        # First try standard adapter directory
+        adapter_dir = os.path.join(self.adapter_base_dir, adapter_name)
+        adapter_file = os.path.join(adapter_dir, "adapters.safetensors")
+        
+        # If not found, try nested learning directory
+        if not os.path.exists(adapter_file):
+            nested_dir = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}/checkpoints/best"
+            adapter_file = os.path.join(nested_dir, "adapters.safetensors")
+            if os.path.exists(adapter_file):
+                adapter_dir = nested_dir
+            else:
+                raise FileNotFoundError(f"No adapter found for '{adapter_name}' in standard or nested learning directories")
+        
+        return adapter_dir
     
     def load_training_data(self, data_path: str) -> List[Dict]:
         """Load training data from JSONL file."""
@@ -398,7 +475,7 @@ Provide your evaluation in JSON format:
         # Load adapter config
         config = self.load_adapter_config(adapter_name)
         model_path = config.get('model', '')
-        adapter_path = os.path.join(self.adapter_base_dir, adapter_name)
+        adapter_path = self.get_adapter_path(adapter_name)
         
         # Load training data
         training_data = self.load_training_data(training_data_path)
@@ -557,7 +634,7 @@ Make questions diverse and challenging. Expected answers should be concise."""
         # Load adapter config
         config = self.load_adapter_config(adapter_name)
         model_path = config.get('model', '')
-        adapter_path = None if use_base_model else os.path.join(self.adapter_base_dir, adapter_name)
+        adapter_path = None if use_base_model else self.get_adapter_path(adapter_name)
         
         # Load training data
         training_data = self.load_training_data(training_data_path)

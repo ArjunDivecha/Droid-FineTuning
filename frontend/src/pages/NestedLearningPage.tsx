@@ -7,7 +7,7 @@ import { trainingProgress, trainingStarted } from '../store/slices/trainingSlice
 import { TrainingChart } from '../components/TrainingChart';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'nested_learning_last_config';
 
 interface NestedLearningConfig {

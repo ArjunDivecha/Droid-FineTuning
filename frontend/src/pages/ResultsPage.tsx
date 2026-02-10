@@ -96,7 +96,7 @@ export const ResultsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="text-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <div className="text-2xl font-bold text-primary-600">
-                {((metrics.current_step / metrics.total_steps) * 100).toFixed(1)}%
+                {metrics.current_step != null && metrics.total_steps ? ((metrics.current_step / metrics.total_steps) * 100).toFixed(1) : '0.0'}%
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Completion Rate
@@ -105,7 +105,7 @@ export const ResultsPage: React.FC = () => {
 
             <div className="text-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
               <div className="text-2xl font-bold text-success-600">
-                {metrics.current_step.toLocaleString()}
+                {metrics.current_step != null ? metrics.current_step.toLocaleString() : '0'}
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Steps Completed
@@ -172,7 +172,7 @@ export const ResultsPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-gray-400">Total Steps:</span>
-                    <span className="font-medium">{config.iterations.toLocaleString()}</span>
+                    <span className="font-medium">{config.iterations != null ? config.iterations.toLocaleString() : '--'}</span>
                   </div>
                 </div>
               </div>
@@ -228,7 +228,7 @@ export const ResultsPage: React.FC = () => {
               <div>
                 <div className="text-sm text-gray-500 dark:text-gray-400">Avg. Time per Step</div>
                 <div className="text-lg font-medium">
-                  {metrics.current_step > 0 ? (
+                  {metrics.current_step > 0 && metrics.start_time ? (
                     <>
                       {((new Date().getTime() - new Date(metrics.start_time).getTime()) / (metrics.current_step * 1000)).toFixed(2)}s
                     </>

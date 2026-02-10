@@ -6,10 +6,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Upload, Settings, Play, Database, Cpu, Zap, Brain, Target, Sparkles, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import { RootState } from '../store/store';
 import { addNotification } from '../store/slices/uiSlice';
-import { setTrainingConfig } from '../store/slices/trainingSlice';
+import { setTrainingConfig, trainingStarted } from '../store/slices/trainingSlice';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'enhanced_setup_page_last_config';
 
 // Training method types
@@ -120,8 +120,8 @@ const EnhancedSetupPage: React.FC = () => {
     train_data_path: '',
     val_data_path: '',
     learning_rate: 1e-5,
-    batch_size: 1,
-    max_seq_length: 1024,
+    batch_size: 4,
+    max_seq_length: 2048,
     iterations: 7329,
     steps_per_report: 25,
     steps_per_eval: 200,
@@ -334,18 +334,22 @@ const EnhancedSetupPage: React.FC = () => {
       // Save config before starting training
       saveConfig(formData, selectedMethod);
 
-      // Start training via backend API
-      const response = await axios.post(`${BACKEND_URL}/training/start`, formData);
+      // CRITICAL: Clear old training state BEFORE starting new training
+      // This prevents stale data from showing when navigating to Training page
+      dispatch(trainingStarted());
+
+      // Start training via enhanced backend API (supports GRPO, GSPO, Dr. GRPO)
+      const response = await axios.post(`${BACKEND_URL}/api/training/start-enhanced`, formData);
       
-      if (response.data.status === 'started') {
+      if (response.data.success) {
         dispatch(setTrainingConfig(formData as any));
         dispatch(addNotification({
           type: 'success',
           title: 'Training Started',
-          message: `${selectedMethod.toUpperCase()} training has been initiated successfully`
+          message: response.data.message || `${selectedMethod.toUpperCase()} training has been initiated successfully`
         }));
       } else {
-        throw new Error('Training failed to start');
+        throw new Error(response.data.error || 'Training failed to start');
       }
     } catch (error: any) {
       console.error('Training start error:', error);

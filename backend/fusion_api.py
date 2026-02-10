@@ -45,8 +45,10 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'adapter_fusion'))
 from fusion_adapters import AdapterFusion
 
-# Add evaluation path
-sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
+# Project paths
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ADAPTERS_DIR = os.path.join(PROJECT_ROOT, 'adapters')
+NESTED_LEARNING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nested_learning', 'checkpoints')
 
 # Import model exporter
 try:
@@ -116,7 +118,7 @@ def get_session_info(adapter_name: str) -> Dict[str, Any]:
     """Get session information for an adapter to determine base model."""
 
     # First check if this is a Tinker model (has model_info.json)
-    adapter_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
+    adapter_dir = ADAPTERS_DIR
     tinker_info_path = os.path.join(adapter_dir, adapter_name, "model_info.json")
     if os.path.exists(tinker_info_path):
         try:
@@ -141,7 +143,7 @@ def get_session_info(adapter_name: str) -> Dict[str, Any]:
             logger.warning(f"Error reading Tinker model info for {adapter_name}: {e}")
 
     # Check if this is a nested learning adapter
-    nested_config_path = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}/config.json"
+    nested_config_path = os.path.join(NESTED_LEARNING_DIR, f"{adapter_name}/config.json")
     if os.path.exists(nested_config_path):
         try:
             with open(nested_config_path, 'r') as f:
@@ -163,7 +165,7 @@ def get_session_info(adapter_name: str) -> Dict[str, Any]:
             logger.warning(f"Error reading nested learning config for {adapter_name}: {e}")
 
     # Otherwise check regular session files
-    sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
+    sessions_dir = os.path.join(PROJECT_ROOT, 'sessions')
 
     # Try to find matching session file
     if os.path.exists(sessions_dir):
@@ -543,10 +545,7 @@ async def export_fused_adapter(request: Dict[str, Any]):
         if not adapter_name:
             raise HTTPException(status_code=400, detail="adapter_name is required")
         
-        adapter_dir = os.path.join(
-            "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters",
-            adapter_name
-        )
+        adapter_dir = os.path.join(ADAPTERS_DIR, adapter_name)
         
         if not os.path.exists(adapter_dir):
             raise HTTPException(status_code=404, detail=f"Adapter not found: {adapter_name}")

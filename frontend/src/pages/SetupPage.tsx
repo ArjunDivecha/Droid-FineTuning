@@ -3,11 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Upload, Settings, Play, Database, Cpu } from 'lucide-react';
 import { RootState } from '../store/store';
 import { setModels, setSelectedModel, setLoading, setError } from '../store/slices/modelsSlice';
-import { setTrainingConfig, type TrainingConfig } from '../store/slices/trainingSlice';
+import { setTrainingConfig, trainingStarted, type TrainingConfig } from '../store/slices/trainingSlice';
 import { addNotification } from '../store/slices/uiSlice';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'setup_page_last_config';
 
 export const SetupPage: React.FC = () => {
@@ -29,8 +29,8 @@ export const SetupPage: React.FC = () => {
     train_data_path: '',
     val_data_path: '',
     learning_rate: 1e-5,
-    batch_size: 1,
-    max_seq_length: 1024,
+    batch_size: 4,
+    max_seq_length: 2048,
     iterations: 7329,
     steps_per_report: 25,
     steps_per_eval: 200,
@@ -113,18 +113,22 @@ export const SetupPage: React.FC = () => {
 
   const fetchModels = async () => {
     dispatch(setLoading(true));
+    console.log('Fetching models from:', `${BACKEND_URL}/models`);
     try {
       const response = await axios.get(`${BACKEND_URL}/models`);
+      console.log('Models response:', response.data);
       dispatch(setModels(response.data.models));
       if (response.data.models.length > 0) {
         dispatch(setSelectedModel(response.data.models[0]));
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Failed to fetch models:', error);
+      console.error('Error details:', error.message, error.response?.status, error.response?.data);
       dispatch(setError('Failed to fetch models'));
       dispatch(addNotification({
         type: 'error',
         title: 'Model Loading Error',
-        message: 'Failed to load available models. Check backend connection.',
+        message: `Failed to load available models: ${error.message}. Check backend connection.`,
       }));
     }
   };
@@ -207,19 +211,28 @@ export const SetupPage: React.FC = () => {
     // Save config before starting training
     saveConfig(formData);
     
+    // CRITICAL: Clear old training state BEFORE starting new training
+    // This prevents stale data from showing when navigating to Training page
+    dispatch(trainingStarted());
+    
     try {
-      await axios.post(`${BACKEND_URL}/training/start`, trainingConfig);
+      console.log('Starting training with config:', trainingConfig);
+      const response = await axios.post(`${BACKEND_URL}/training/start`, trainingConfig);
+      console.log('Training start response:', response.data);
       dispatch(addNotification({
         type: 'success',
         title: 'Training Started',
         message: 'Fine-tuning process has been initiated.',
         autoHide: true,
       }));
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Training start failed:', error);
+      console.error('Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.detail || error.message || 'Unknown error';
       dispatch(addNotification({
         type: 'error',
         title: 'Training Start Failed',
-        message: 'Failed to start training. Check configuration and try again.',
+        message: `Failed to start training: ${errorMessage}`,
       }));
     }
   };

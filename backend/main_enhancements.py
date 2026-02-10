@@ -165,8 +165,9 @@ class EnhancedTrainingManager:
 
         method = TrainingMethod(config.training_method)
 
-        # Use python3.11 explicitly for mlx-lm-lora
-        python_path = "python3.11"
+        # Use current Python executable (venv)
+        import sys
+        python_path = sys.executable
 
         # Adapter output path
         adapter_path = os.path.join(self.base_manager.output_dir, config.adapter_name)
@@ -300,13 +301,23 @@ class EnhancedTrainingManager:
         try:
             self.logger.info("SFT method detected - using wrapper script approach")
 
+            # CRITICAL: First reset to clean state to prevent pollution from previous runs
+            if hasattr(self.base_manager, '_reset_to_clean_state'):
+                self.base_manager._reset_to_clean_state()
+            else:
+                # Fallback for backward compatibility
+                self.base_manager.training_state = "idle"
+                self.base_manager.training_metrics = {}
+                self.base_manager.best_val_loss = None
+                self.base_manager.best_model_step = None
+                self.base_manager.best_model_path = None
+                self.base_manager.last_error = None
+
             # Update base manager state before starting process
             self.base_manager.current_config = config
             self.base_manager.training_state = "running"
             self.base_manager.current_session_id = str(uuid.uuid4())
-            self.base_manager.best_val_loss = None
-            self.base_manager.best_model_step = None
-            self.base_manager.best_model_path = None
+            # Note: best_val_loss, best_model_step, best_model_path already reset above
 
             self.base_manager.training_metrics = {
                 "current_step": 0,
@@ -443,6 +454,10 @@ class EnhancedTrainingManager:
     async def start_enhanced_training(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """Start training with enhanced method support"""
         try:
+            # Check if training is already running
+            if self.base_manager.current_process and self.base_manager.current_process.poll() is None:
+                return {"success": False, "error": "Training is already running. Please stop it first."}
+            
             # Normalize and validate required fields early to avoid NoneType errors
             if not isinstance(config_data, dict):
                 return {"success": False, "error": "Invalid payload: expected JSON object"}
@@ -475,6 +490,16 @@ class EnhancedTrainingManager:
 
             if method_enum == TrainingMethod.SFT:
                 return await self._start_sft_training(enhanced_config)
+
+            # CRITICAL: Reset to clean state before starting new training
+            if hasattr(self.base_manager, '_reset_to_clean_state'):
+                self.base_manager._reset_to_clean_state()
+            else:
+                # Fallback for backward compatibility
+                self.base_manager.best_val_loss = None
+                self.base_manager.best_model_step = None
+                self.base_manager.best_model_path = None
+                self.base_manager.last_error = None
 
             # Update base manager's configuration
             self.base_manager.current_config = enhanced_config

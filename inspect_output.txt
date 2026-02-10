@@ -1,0 +1,40 @@
+Tinker version: 0.3.0
+
+tinker.TrainingClient methods:
+  create_sampling_client
+  forward
+  forward_async
+  forward_backward
+  forward_backward_async
+  forward_backward_custom
+  forward_backward_custom_async
+  get_info
+  get_info_async
+  get_telemetry
+  get_tokenizer
+  load_state
+  load_state_async
+  on_queue_state_change
+  optim_step
+  optim_step_async
+  save_state
+  save_state_async
+  save_weights_and_get_sampling_client
+  save_weights_and_get_sampling_client_async
+  save_weights_and_get_sampling_client_submit
+  save_weights_for_sampler
+  save_weights_for_sampler_async
+
+tinker.ServiceClient.create_lora_training_client doc:
+None
+
+Searching for 'add_data' or similar in tinker module...
+
+tinker.resources.AsyncWeightsResource.list annotations:
+{'model_id': 'ModelID', 'extra_headers': 'Headers | None', 'extra_query': 'Query | None', 'extra_body': 'Body | None', 'timeout': 'float | httpx.Timeout | None | NotGiven', 'return': 'CheckpointsListResponse'}
+
+tinker.resources.weights.CheckpointArchiveUrlResponse annotations:
+{'url': <class 'str'>, 'expires': <class 'datetime.datetime'>}
+
+tinker.resources.weights.CheckpointsListResponse annotations:
+{'checkpoints': list[tinker.Checkpoint]}

@@ -47,6 +47,13 @@ import logging
 from datetime import datetime
 import random
 
+# Get project root directory (parent of backend/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+VENV_PYTHON = os.path.join(PROJECT_ROOT, '.venv', 'bin', 'python')
+ADAPTERS_DIR = os.path.join(PROJECT_ROOT, 'adapters')
+NESTED_LEARNING_DIR = os.path.join(BACKEND_DIR, 'nested_learning', 'checkpoints')
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -66,10 +73,10 @@ logger = logging.getLogger(__name__)
 class AdapterEvaluator:
     """Evaluates adapter faithfulness to training data."""
     
-    def __init__(self, adapter_base_dir: str = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"):
-        self.adapter_base_dir = adapter_base_dir
+    def __init__(self, adapter_base_dir: str = None):
+        self.adapter_base_dir = adapter_base_dir or ADAPTERS_DIR
         self.cerebras_client = None
-        self.python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
+        self.python_path = VENV_PYTHON
         self._init_cerebras()
         
     def _init_cerebras(self):
@@ -86,7 +93,7 @@ class AdapterEvaluator:
     def load_adapter_config(self, adapter_name: str) -> Dict:
         """Load adapter configuration."""
         # First check if this is a nested learning adapter
-        nested_config_path = f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}/config.json"
+        nested_config_path = os.path.join(NESTED_LEARNING_DIR, f"{adapter_name}/config.json")
 
         if os.path.exists(nested_config_path):
             # This is a nested learning adapter
@@ -97,7 +104,7 @@ class AdapterEvaluator:
             # NOTE: Nested learning uses plain text training data, but evaluation needs Q&A format
             # So we need to find the base adapter's training data which has Q&A structure
             base_adapter_name = nested_config.get("adapter_path", "").split("/")[-1]
-            base_adapter_config_path = f"/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters/{base_adapter_name}/adapter_config.json"
+            base_adapter_config_path = os.path.join(ADAPTERS_DIR, f"{base_adapter_name}/adapter_config.json")
 
             # Try to get the Q&A format training data from the base adapter
             training_data_path = nested_config.get("train_data_path")
@@ -125,7 +132,7 @@ class AdapterEvaluator:
                     "dropout": nested_config.get("lora_dropout"),
                     "scale": nested_config.get("lora_alpha")
                 },
-                "adapter_path": f"/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints/{adapter_name}"
+                "adapter_path": os.path.join(NESTED_LEARNING_DIR, adapter_name)
             }
             logger.info(f"Loaded nested learning config for adapter: {adapter_name}")
             return adapter_config

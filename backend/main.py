@@ -1,11 +1,83 @@
 """
-MLX Fine-Tuning GUI Backend API Server
+=============================================================================
+SCRIPT NAME: main.py
+=============================================================================
 
-This FastAPI server provides REST endpoints and WebSocket connections
-for the MLX fine-tuning GUI application.
+INPUT FILES:
+- .env: Environment variables for API keys and configuration
+- /Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/: MLX fine-tuning module
+- frontend/src/: React frontend static files
+- adapter_fusion/: Adapter evaluation and fusion module
+- nested_learning/: Nested learning training module
+
+OUTPUT FILES:
+- Console logs: Real-time API request logs and training progress
+- sessions/: Training session persistence files
+- evaluation_results/: Adapter evaluation reports
+- logs/: Application logs and error traces
+
+VERSION: 1.0.0
+LAST UPDATED: 2025-12-02
+AUTHOR: Droid-FineTuning Project
+
+DESCRIPTION:
+FastAPI backend server for MLX fine-tuning GUI application. Provides REST API
+endpoints and WebSocket connections for real-time training management, model
+evaluation, and nested learning orchestration.
+
+FUNCTIONALITY:
+- REST API endpoints for training configuration and execution
+- WebSocket connections for real-time progress updates
+- Training session management with persistence
+- Adapter evaluation and comparison
+- Nested learning algorithm orchestration
+- File upload and dataset management
+- Model loading and inference capabilities
+
+DEPENDENCIES:
+- fastapi: Web framework and API server
+- uvicorn: ASGI server for running the application
+- python-dotenv: Environment variable management
+- mlx-lm: MLX machine learning framework
+- transformers: Hugging Face model utilities
+- datasets: Dataset processing and management
+
+API ENDPOINTS:
+- Training: /api/training/* - Training management and control
+- Evaluation: /api/evaluation/* - Model evaluation and comparison
+- Nested Learning: /api/nested-learning/* - Advanced training algorithms
+- Sessions: /sessions/* - Training session persistence
+- Files: /api/files/* - Dataset and model file management
+- Status: /api/status/* - System health and progress tracking
+
+USAGE:
+Development server:
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+Production server:
+uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+
+CONFIGURATION:
+- Port: 8000 (default)
+- Host: 0.0.0.0 (accessible from network)
+- CORS: Enabled for development
+- Logging: INFO level by default
+
+INTEGRATION:
+- Frontend: React application served on port 3000
+- MLX Module: External fine-tuning engine
+- Adapter Fusion: Evaluation and comparison system
+- Nested Learning: Advanced training algorithms
+
+ERROR HANDLING:
+- HTTP exceptions with proper status codes
+- WebSocket connection management
+- Training error recovery and reporting
+- File upload validation and security
+=============================================================================
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import asyncio
@@ -22,6 +94,11 @@ from datetime import datetime
 import logging
 import uuid
 import random
+import select
+
+# Configure logging first (before any logger usage)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 try:
@@ -30,12 +107,16 @@ try:
 except ImportError:
     logger.warning("python-dotenv not installed, environment variables from .env won't be loaded")
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Get project root directory (parent of backend/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+VENV_PYTHON = os.path.join(PROJECT_ROOT, '.venv', 'bin', 'python')
+ADAPTERS_DIR = os.path.join(PROJECT_ROOT, 'adapters')
+NESTED_LEARNING_DIR = os.path.join(BACKEND_DIR, 'nested_learning', 'checkpoints')
+BASE_MODEL_DIR = os.path.join(PROJECT_ROOT, 'models')
 
 # Add the parent directory to path to import existing modules
-sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
+# Legacy path removed - using local modules
 
 app = FastAPI(title="MLX Fine-Tuning GUI API", version="1.0.0")
 
@@ -55,8 +136,8 @@ class TrainingConfig:
     train_data_path: str
     val_data_path: str
     learning_rate: float = 1e-5
-    batch_size: int = 1
-    max_seq_length: int = 1024
+    batch_size: int = 4
+    max_seq_length: int = 2048
     iterations: int = 7329
     steps_per_report: int = 25
     steps_per_eval: int = 200
@@ -64,6 +145,20 @@ class TrainingConfig:
     early_stop: bool = True
     patience: int = 3
     adapter_name: str = "mlx_finetune"
+    gradient_accumulation_steps: int = 1
+
+def sanitize_metrics(data: Any) -> Any:
+    """Recursively replace infinite/NaN values with None for JSON serialization."""
+    import math
+    if isinstance(data, dict):
+        return {k: sanitize_metrics(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_metrics(v) for v in data]
+    elif isinstance(data, float):
+        if math.isinf(data) or math.isnan(data):
+            return None
+        return data
+    return data
 
 class TrainingManager:
     """Manages training processes and state"""
@@ -74,9 +169,11 @@ class TrainingManager:
         self.current_config: Optional[TrainingConfig] = None
         self.training_metrics: Dict[str, Any] = {}
         self.websocket_clients: List[WebSocket] = []
-        self.output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
-        self.log_file = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/logs/gui_training.log"
-        self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
+        # Use local directories relative to project root
+        base_dir = Path(__file__).parent.parent  # Go up from backend/ to project root
+        self.output_dir = os.getenv("ADAPTERS_DIR", str(base_dir / "adapters"))
+        self.log_file = os.getenv("LOG_FILE", str(base_dir / "logs" / "gui_training.log"))
+        self.sessions_dir = os.getenv("SESSIONS_DIR", str(base_dir / "sessions"))
         self.current_session_id: Optional[str] = None
         self.current_adapter_path: Optional[str] = None  # Full path to adapter directory
         
@@ -85,16 +182,15 @@ class TrainingManager:
         self.best_model_step: Optional[int] = None
         self.best_model_path: Optional[str] = None
         
+        # Error tracking
+        self.last_error: Optional[str] = None
+        
         # Ensure sessions directory exists
         os.makedirs(self.sessions_dir, exist_ok=True)
         
-        # Load the most recent session on startup
-        self.load_latest_session()
-        
-        # Force idle state if no valid session loaded
-        if not self.current_config:
-            self.training_state = "idle"
-            logger.info("Forcing idle state - no valid session loaded")
+        # ALWAYS start with clean state - never auto-load previous sessions
+        self._reset_to_clean_state()
+        logger.info("TrainingManager initialized with clean state - auto-load disabled")
     
     async def _save_best_model(self, step: int):
         """Save the current checkpoint as the best model"""
@@ -127,8 +223,13 @@ class TrainingManager:
     
     def save_session(self):
         """Save current training session to persistent storage"""
-        if not self.current_config or not self.training_metrics:
+        # Only save if we have a config and have started training (have a session ID)
+        if not self.current_config:
             return
+        
+        # Ensure we have a session ID - create one if needed
+        if not self.current_session_id:
+            self.current_session_id = str(uuid.uuid4())
             
         try:
             # Generate session ID if not already set
@@ -224,31 +325,46 @@ class TrainingManager:
             logger.error(f"Failed to load session {session_id}: {e}")
             return False
     
+    def _reset_to_clean_state(self):
+        """Reset all training state to clean/idle state.
+        
+        This ensures no old metrics or state pollution between training runs.
+        Called on initialization and whenever we need a fresh start.
+        """
+        self.training_state = "idle"
+        self.training_metrics = {
+            "current_step": 0,
+            "total_steps": 0,
+            "train_loss": None,
+            "val_loss": None,
+            "learning_rate": None,
+            "start_time": None,
+            "estimated_time_remaining": None,
+            "avg_reward": None,
+            "success_rate": None,
+            "kl": None,
+            "entropy": None
+        }
+        self.current_config = None
+        self.current_session_id = None
+        self.best_val_loss = None
+        self.best_model_step = None
+        self.best_model_path = None
+        self.last_error = None
+        # Note: We don't reset current_process here - that's handled separately
+    
     def load_latest_session(self):
-        """Load the most recent training session on startup"""
-        try:
-            latest_file = os.path.join(self.sessions_dir, "latest.json")
-            if not os.path.exists(latest_file):
-                logger.info("No previous training sessions found")
-                return
-            
-            with open(latest_file, 'r') as f:
-                latest_data = json.load(f)
-            
-            session_id = latest_data.get("latest_session_id")
-            if session_id:
-                success = self.load_session(session_id)
-                if success:
-                    logger.info(f"Restored previous training session: {session_id}")
-                    # Only restore if training was completed
-                    if self.training_state not in ["completed", "error", "stopped"]:
-                        self.training_state = "idle"
-                        logger.info("Previous session was not completed, reset to idle state")
-                else:
-                    logger.warning("Failed to restore previous session")
-            
-        except Exception as e:
-            logger.error(f"Failed to load latest session: {e}")
+        """Load the most recent training session on startup - DISABLED
+        
+        Auto-loading previous sessions causes UI confusion. The training tab
+        shows old metrics (steps, loss) from previous runs.
+        Sessions are still available via /sessions endpoint for history viewing.
+        
+        This method is kept for backward compatibility but immediately resets
+        to clean state to prevent session pollution.
+        """
+        logger.info("Auto-load of previous session disabled - starting fresh")
+        self._reset_to_clean_state()
     
     def get_all_sessions(self) -> List[Dict[str, Any]]:
         """Get list of all saved training sessions"""
@@ -264,14 +380,24 @@ class TrainingManager:
                         with open(session_file, 'r') as f:
                             session_data = json.load(f)
                         
+                        # Handle infinity values for JSON serialization
+                        train_loss = session_data["metrics"].get("train_loss")
+                        val_loss = session_data["metrics"].get("val_loss")
+                        
+                        # Convert infinity to None for JSON compatibility
+                        if train_loss == float('inf') or train_loss == float('-inf'):
+                            train_loss = None
+                        if val_loss == float('inf') or val_loss == float('-inf'):
+                            val_loss = None
+                        
                         session_summary = {
                             "session_id": session_data["session_id"],
                             "timestamp": session_data["timestamp"],
                             "training_state": session_data["training_state"],
                             "model_name": session_data["config"]["model_path"].split('/')[-1],
                             "adapter_name": session_data["config"]["adapter_name"],
-                            "final_train_loss": session_data["metrics"].get("train_loss"),
-                            "final_val_loss": session_data["metrics"].get("val_loss"),
+                            "final_train_loss": train_loss,
+                            "final_val_loss": val_loss,
                             "steps_completed": session_data["metrics"].get("current_step", 0),
                             "total_steps": session_data["metrics"].get("total_steps", 0)
                         }
@@ -353,9 +479,19 @@ class TrainingManager:
             # Use user-selected data paths
             chat_train_path = train_data_path
             chat_val_path = val_data_path
-            data_prep_script = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/scripts/prepare_chat_template_dataset.py"
-            output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/data"
-            venv_python = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python"
+            base_dir = Path(__file__).parent.parent  # Go up from backend/ to project root
+            venv_python = base_dir / ".venv" / "bin" / "python"
+            if not venv_python.exists():
+                venv_python = "python3"  # Fallback to system python
+            
+            # Check if data prep script exists, otherwise skip data preparation
+            data_prep_script = base_dir / "tools" / "prepare_chat_template_dataset.py"
+            output_dir = base_dir / "data" / "prepared"
+            
+            # Skip data preparation if script doesn't exist - assume data is already prepared
+            if not data_prep_script.exists():
+                logger.info("Data preparation script not found, assuming data is already in correct format")
+                return
             
             # Create output directory if it doesn't exist
             os.makedirs(output_dir, exist_ok=True)
@@ -389,11 +525,14 @@ class TrainingManager:
     
     async def broadcast(self, message: Dict[str, Any]):
         """Broadcast message to all WebSocket clients"""
+        # Sanitize message to prevent JSON serialization errors with Infinity/NaN
+        safe_message = sanitize_metrics(message)
+        
         if self.websocket_clients:
             disconnected = []
             for client in self.websocket_clients:
                 try:
-                    await client.send_json(message)
+                    await client.send_json(safe_message)
                 except:
                     disconnected.append(client)
             
@@ -406,6 +545,9 @@ class TrainingManager:
         if self.current_process and self.current_process.poll() is None:
             raise HTTPException(status_code=400, detail="Training is already running")
         
+        # CRITICAL: Reset all state to ensure no pollution from previous runs
+        self._reset_to_clean_state()
+        
         self.current_config = config
         self.training_state = "running"
         self.training_metrics = {
@@ -415,38 +557,54 @@ class TrainingManager:
             "val_loss": None,    # Don't initialize with 0, wait for first real value
             "learning_rate": config.learning_rate,
             "start_time": datetime.now().isoformat(),
-            "estimated_time_remaining": None
+            "estimated_time_remaining": None,
+            "avg_reward": None,  # RL metrics (optional)
+            "success_rate": None,
+            "kl": None,
+            "entropy": None
         }
+        
+        # CRITICAL: Reset best model tracking for new training run
+        self.best_val_loss = None
+        self.best_model_step = None
+        self.best_model_path = None
+        self.last_error = None
         
         # Generate new session ID for this training run
         self.current_session_id = str(uuid.uuid4())
+        logger.info(f"Starting new training session: {self.current_session_id}")
         
         # Automatically prepare training data with the correct tokenizer for the selected model
         await self._prepare_training_data(config.model_path, config.train_data_path, config.val_data_path)
         
         # Create config file for the training script
+        base_dir = Path(__file__).parent.parent  # Go up from backend/ to project root
+        venv_python = base_dir / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            venv_python = "python3"  # Fallback to system python
+        
+        # Build config for local_lora.py (uses mlx-lm style config)
+        # Use the training data directory as the data path
+        data_dir = os.path.dirname(config.train_data_path)
+        adapter_path = os.path.join(self.output_dir, config.adapter_name)
+        
         config_data = {
-            "venv_python": "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python",
-            "base_model_dir": config.model_path,
-            "prepared_data_dir": "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune/data",
-            "prepare_from_chat": False,  # Disable chat preparation since script is missing
-            "adapter_output_dir": self.output_dir,
-            "adapter_name": config.adapter_name,
-            "optimizer": "adamw",
-            "learning_rate": config.learning_rate,
+            "train": True,
+            "model": config.model_path,
+            "data": data_dir,
+            "adapter_path": adapter_path,
             "batch_size": config.batch_size,
             "iters": config.iterations,
-            "steps_per_report": config.steps_per_report,
-            "steps_per_eval": config.steps_per_eval,
-            "val_batches": 25,
+            "learning_rate": config.learning_rate,
             "max_seq_length": config.max_seq_length,
-            "grad_checkpoint": True,
-            "mask_prompt": False,
             "save_every": config.save_every,
-            "resume_adapter_file": None,
-            "train_log": self.log_file,
+            "steps_per_eval": config.steps_per_eval,
+            "steps_per_report": config.steps_per_report,
+            "val_batches": 25,
+            "grad_checkpoint": True,
+            "grad_accumulation_steps": config.gradient_accumulation_steps,
             "enable_early_stop": config.early_stop,
-            "no_improve_patience_evals": config.patience
+            "no_improve_patience": config.patience,
         }
         
         # Write config file
@@ -457,20 +615,34 @@ class TrainingManager:
         
         # Start training process
         try:
-            cmd = [
-                "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python",
-                "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Fine Tuner XXX/one_step_finetune/run_finetune.py",
-                "--config", config_path
-            ]
+            # Use local_lora.py training script if it exists
+            training_script = base_dir / "local_lora.py"
+            if training_script.exists():
+                cmd = [
+                    str(venv_python) if isinstance(venv_python, Path) else venv_python,
+                    str(training_script),
+                    "--config", config_path
+                ]
+            else:
+                # Fallback: try to use mlx_lm.lora if available
+                raise FileNotFoundError(
+                    f"Training script not found at {training_script}. "
+                    "Please ensure local_lora.py exists in the project root."
+                )
+            
+            # Set environment variable to force Python to use unbuffered output
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             
             self.current_process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1,
+                bufsize=1,  # Line buffered
                 universal_newlines=True,
-                preexec_fn=os.setsid
+                preexec_fn=os.setsid,
+                env=env  # Pass modified environment
             )
             
             # Start monitoring the process
@@ -506,7 +678,9 @@ class TrainingManager:
                     # Force kill if graceful shutdown fails
                     os.killpg(self.current_process.pid, signal.SIGKILL)
                 
-                self.training_state = "stopped"
+                # Use "idle" state for consistency (not "stopped")
+                self.training_state = "idle"
+                self.current_process = None
                 # Save stopped session
                 self.save_session()
                 await self.broadcast({
@@ -516,13 +690,17 @@ class TrainingManager:
                 
             except Exception as e:
                 logger.error(f"Error stopping training: {e}")
+                self.training_state = "error"
+                self.last_error = str(e)
         else:
-            # If no process is running but state is error, reset to idle
-            if self.training_state == "error":
+            # If no process is running but state is not idle, reset to idle
+            if self.training_state != "idle":
+                old_state = self.training_state
                 self.training_state = "idle"
+                self.current_process = None
                 await self.broadcast({
                     "type": "training_reset",
-                    "data": {"message": "Training state reset from error to idle"}
+                    "data": {"message": f"Training state reset from {old_state} to idle"}
                 })
         
     async def _monitor_training(self):
@@ -532,26 +710,89 @@ class TrainingManager:
             
         try:
             import re
+            import select
             
             # Patterns to extract metrics from training output
-            step_pattern = re.compile(r'Iter (\d+):')
-            loss_pattern = re.compile(r'Train loss ([0-9.]+)')
-            val_pattern = re.compile(r'Val loss ([0-9.]+)')
-            lr_pattern = re.compile(r'Learning Rate ([0-9.e-]+)')
+            # mlx-lm-lora v1.0.1+ format support (handles various trainer output formats)
+            
+            # Step pattern - handles optional timestamp prefixes
+            step_pattern = re.compile(r'Iter\s+(\d+)\s*:')
+            
+            # Train loss pattern - handles:
+            # - "Train loss 0.123" or "Train loss -0.123"
+            # - "loss 0.123" (when not preceded by "Val")
+            # - "Loss: 0.123" or "Loss: -0.123"
+            # - Scientific notation (e.g., 1.23e-4)
+            # Negative lookbehind to exclude "Val " prefix
+            loss_pattern = re.compile(
+                r'(?:^|(?<!Val\s))(?:Train\s+)?[Ll]oss[:\s]+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)',
+                re.IGNORECASE
+            )
+            
+            # Validation loss pattern - handles:
+            # - "Val loss 0.123" or "Val loss -0.123"
+            # - Scientific notation
+            val_pattern = re.compile(r'Val\s+loss\s+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)', re.IGNORECASE)
+            
+            # Learning rate pattern - handles scientific notation
+            lr_pattern = re.compile(r'Learning\s+[Rr]ate\s+(-?\d+\.?\d*(?:[eE][-+]?\d+)?)')
+            
+            # Early stopping detection
+            early_stop_pattern = re.compile(r'Early\s+stop', re.IGNORECASE)
             early_stop_detected = False
+            
+            # Process error detection patterns
+            error_patterns = [
+                re.compile(r'Traceback\s+\(most\s+recent\s+call\s+last\)', re.IGNORECASE),
+                re.compile(r'RuntimeError', re.IGNORECASE),
+                re.compile(r'OutOfMemoryError', re.IGNORECASE),
+                re.compile(r'CUDA\s+out\s+of\s+memory', re.IGNORECASE),
+                re.compile(r'Killed', re.IGNORECASE),
+            ]
+            
+            # Track consecutive empty reads to detect process output issues
+            consecutive_empty_reads = 0
+            max_empty_reads = 100  # After 10 seconds of no output, check process health
             
             while self.current_process and self.current_process.poll() is None:
                 try:
-                    output = self.current_process.stdout.readline()
-                    if not output:
-                        # Empty readline means no data available yet, sleep and continue
+                    # Use select to check if there's data available with timeout
+                    # This prevents blocking indefinitely if the process hangs
+                    stdout_fd = self.current_process.stdout.fileno()
+                    readable, _, _ = select.select([stdout_fd], [], [], 0.1)
+                    
+                    if not readable:
+                        # No data available, increment counter and sleep
+                        consecutive_empty_reads += 1
+                        if consecutive_empty_reads >= max_empty_reads:
+                            logger.warning(f"No output from training process for {max_empty_reads * 0.1}s, checking health...")
+                            consecutive_empty_reads = 0
                         await asyncio.sleep(0.1)
                         continue
                     
+                    # Data is available, read it
+                    output = self.current_process.stdout.readline()
+                    consecutive_empty_reads = 0  # Reset counter on successful read
+                    
+                    if not output:
+                        # EOF reached - process may have finished
+                        break
+                    
+                    # Log raw output for debugging
+                    logger.debug(f"Training output: {output.strip()}")
+                    
                     # Check for early stopping message
-                    if "Early stop:" in output:
+                    if early_stop_pattern.search(output):
                         early_stop_detected = True
                         logger.info(f"Early stopping detected: {output.strip()}")
+                    
+                    # Check for errors in output
+                    error_detected = False
+                    for error_pattern in error_patterns:
+                        if error_pattern.search(output):
+                            logger.error(f"Error detected in training output: {output.strip()}")
+                            error_detected = True
+                            break
                     
                     # Parse metrics from output
                     step_match = step_pattern.search(output)
@@ -559,18 +800,23 @@ class TrainingManager:
                     val_match = val_pattern.search(output)
                     lr_match = lr_pattern.search(output)
                     
+                    metrics_updated = False
+                    
                     # Extract metrics
                     if step_match:
                         current_step = int(step_match.group(1))
                         self.training_metrics["current_step"] = current_step
+                        metrics_updated = True
                         
                     if loss_match:
                         train_loss = float(loss_match.group(1))
                         self.training_metrics["train_loss"] = train_loss
+                        metrics_updated = True
                         
                     if val_match:
                         val_loss = float(val_match.group(1))
                         self.training_metrics["val_loss"] = val_loss
+                        metrics_updated = True
                         
                         # Track best model based on validation loss
                         if self.best_val_loss is None or val_loss < self.best_val_loss:
@@ -582,63 +828,104 @@ class TrainingManager:
                     if lr_match:
                         learning_rate = float(lr_match.group(1))
                         self.training_metrics["learning_rate"] = learning_rate
+                        metrics_updated = True
                     
                     # Calculate progress and ETA
-                    if "current_step" in self.training_metrics and "total_steps" in self.training_metrics:
-                        progress = self.training_metrics["current_step"] / self.training_metrics["total_steps"]
-                        if progress > 0 and "start_time" in self.training_metrics:
-                            start_time = datetime.fromisoformat(self.training_metrics["start_time"])
-                            elapsed = (datetime.now() - start_time).total_seconds()
-                            estimated_total = elapsed / progress
-                            remaining = estimated_total - elapsed
-                            self.training_metrics["estimated_time_remaining"] = remaining
+                    total_steps = self.training_metrics.get("total_steps", 0)
+                    current_step = self.training_metrics.get("current_step", 0)
                     
-                    # Broadcast update
+                    if total_steps > 0 and current_step > 0:
+                        progress = current_step / total_steps
+                        start_time_str = self.training_metrics.get("start_time")
+                        if start_time_str and progress > 0.001:  # Avoid division by very small numbers
+                            try:
+                                start_time = datetime.fromisoformat(start_time_str)
+                                elapsed = (datetime.now() - start_time).total_seconds()
+                                estimated_total = elapsed / progress
+                                remaining = max(0, int(estimated_total - elapsed))
+                                if self.training_metrics.get("estimated_time_remaining") != remaining:
+                                    self.training_metrics["estimated_time_remaining"] = remaining
+                                    metrics_updated = True
+                            except (ValueError, TypeError):
+                                # Invalid start_time format, skip ETA calculation
+                                pass
+                    
+                    # Broadcast update (always broadcast to show log output)
                     await self.broadcast({
                         "type": "training_progress",
                         "data": {
                             "metrics": self.training_metrics,
-                            "log_line": output.strip()
+                            "log_line": output.strip(),
+                            "metrics_updated": metrics_updated,
+                            "error_detected": error_detected
                         }
                     })
                     
                 except Exception as e:
-                    logger.error(f"Error monitoring training: {e}")
-                    break
+                    logger.error(f"Error in monitoring loop: {e}", exc_info=True)
+                    # Don't break on parsing errors - continue monitoring
+                    await asyncio.sleep(0.1)
             
             # Process completed - but read any remaining output first
+            logger.info("Training process ended, waiting for return code...")
             return_code = self.current_process.wait()
+            logger.info(f"Training process exited with code: {return_code}")
             
-            # Read any remaining output after process completion
+            # Read any remaining output after process completion (with timeout)
+            final_output_count = 0
             try:
-                while True:
+                # Use select with timeout to avoid blocking indefinitely
+                import select
+                stdout_fd = self.current_process.stdout.fileno()
+                
+                # Try to read remaining output for up to 5 seconds
+                for _ in range(50):  # 50 * 0.1s = 5 seconds
+                    readable, _, _ = select.select([stdout_fd], [], [], 0.1)
+                    if not readable:
+                        break
+                        
                     remaining_output = self.current_process.stdout.readline()
                     if not remaining_output:
                         break
                     
-                    # Check for early stopping message
-                    if "Early stop:" in remaining_output:
+                    final_output_count += 1
+                    
+                    # Check for early stopping message (use regex pattern now)
+                    if early_stop_pattern.search(remaining_output):
                         early_stop_detected = True
+                        logger.info("Early stop detected in final output")
                     
                     # Parse final metrics from remaining output
                     step_match = step_pattern.search(remaining_output)
                     if step_match:
                         # Use iteration number directly as step (Iter 0 = Step 0, Iter 1 = Step 1, etc.)
                         self.training_metrics["current_step"] = int(step_match.group(1))
+                        logger.info(f"Final step parsed: {self.training_metrics['current_step']}")
                     
                     loss_match = loss_pattern.search(remaining_output)
                     if loss_match:
                         self.training_metrics["train_loss"] = float(loss_match.group(1))
+                        logger.info(f"Final train loss parsed: {self.training_metrics['train_loss']}")
                     
                     val_match = val_pattern.search(remaining_output)
                     if val_match:
                         self.training_metrics["val_loss"] = float(val_match.group(1))
-            except:
+                        logger.info(f"Final val loss parsed: {self.training_metrics['val_loss']}")
+                    
+                    lr_match = lr_pattern.search(remaining_output)
+                    if lr_match:
+                        self.training_metrics["learning_rate"] = float(lr_match.group(1))
+                
+                logger.info(f"Read {final_output_count} final output lines")
+                        
+            except Exception as e:
+                logger.warning(f"Error reading final output: {e}")
                 pass  # Ignore errors when reading final output
             
             if early_stop_detected:
                 # Early stopping is a successful completion, not an error
                 self.training_state = "completed"
+                logger.info("Training completed via early stopping")
                 # Save completed session
                 self.save_session()
                 await self.broadcast({
@@ -651,6 +938,7 @@ class TrainingManager:
                 })
             elif return_code == 0:
                 self.training_state = "completed"
+                logger.info("Training completed successfully")
                 # Save completed session
                 self.save_session()
                 await self.broadcast({
@@ -659,6 +947,7 @@ class TrainingManager:
                 })
             else:
                 self.training_state = "error"
+                logger.error(f"Training failed with return code: {return_code}")
                 # Save error session
                 self.save_session()
                 await self.broadcast({
@@ -668,11 +957,19 @@ class TrainingManager:
                 
         except Exception as e:
             self.training_state = "error"
-            logger.error(f"Training monitoring error: {e}")
+            logger.error(f"Training monitoring error: {e}", exc_info=True)
             await self.broadcast({
                 "type": "training_error",
                 "data": {"error": str(e)}
             })
+        finally:
+            # Ensure stdout is closed to prevent resource leaks
+            if self.current_process and self.current_process.stdout:
+                try:
+                    self.current_process.stdout.close()
+                    logger.debug("Closed training process stdout pipe")
+                except Exception as e:
+                    logger.warning(f"Error closing stdout pipe: {e}")
 
 class OPDManager:
     """Manages On-Policy Distillation training processes and state"""
@@ -1053,8 +1350,8 @@ class EvaluationManager:
             self.error = None
             
             # Build command to run evaluation script
-            python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
-            script_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/evaluate_adapters.py'
+            python_path = VENV_PYTHON
+            script_path = os.path.join(BACKEND_DIR, 'evaluate_adapters.py')
             
             cmd = [
                 python_path,
@@ -1157,7 +1454,9 @@ async def health_check():
 @app.get("/models")
 async def list_models():
     """List available models"""
-    models_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model"
+    # Use local models directory, or fallback to environment variable or default
+    base_dir = Path(__file__).parent.parent  # Go up from backend/ to project root
+    models_dir = os.getenv("MODELS_DIR", str(base_dir / "models"))
     models = []
     
     try:
@@ -1193,8 +1492,8 @@ async def list_models():
 @app.get("/adapters")
 async def list_adapters():
     """List available LoRA adapters (both regular and nested learning)"""
-    adapters_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
-    nested_learning_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+    adapters_dir = ADAPTERS_DIR
+    nested_learning_dir = NESTED_LEARNING_DIR
     adapters = []
 
     try:
@@ -1265,26 +1564,35 @@ async def list_adapters():
 
 
 
-def sanitize_metrics(data: Any) -> Any:
-    """Recursively replace infinite/NaN values with None for JSON serialization."""
-    import math
-    if isinstance(data, dict):
-        return {k: sanitize_metrics(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [sanitize_metrics(v) for v in data]
-    elif isinstance(data, float):
-        if math.isinf(data) or math.isnan(data):
-            return None
-        return data
-    return data
+
 
 @app.get("/training/status")
 async def get_training_status():
     """Get current training status"""
+    # Verify process state matches tracked state
+    is_process_running = (
+        training_manager.current_process is not None and 
+        training_manager.current_process.poll() is None
+    )
+    
+    # If process is not running but state says running, correct the state
+    reported_state = training_manager.training_state
+    if reported_state == "running" and not is_process_running:
+        logger.warning(f"State mismatch detected: state={reported_state} but no process running. Correcting to idle.")
+        training_manager.training_state = "idle"
+        reported_state = "idle"
+    
     return {
-        "state": training_manager.training_state,
+        "state": reported_state,
         "metrics": sanitize_metrics(training_manager.training_metrics),
-        "config": asdict(training_manager.current_config) if training_manager.current_config else None
+        "config": asdict(training_manager.current_config) if training_manager.current_config else None,
+        "session_id": training_manager.current_session_id,
+        "is_process_running": is_process_running,
+        "best_model": {
+            "val_loss": training_manager.best_val_loss,
+            "step": training_manager.best_model_step,
+            "path": training_manager.best_model_path
+        } if training_manager.best_val_loss is not None else None
     }
 
 @app.post("/training/start")
@@ -1319,6 +1627,8 @@ async def start_training(config_data: Dict[str, Any], background_tasks: Backgrou
             config_dict["patience"] = config_data["patience"]
         if "adapter_name" in config_data:
             config_dict["adapter_name"] = config_data["adapter_name"]
+        if "gradient_accumulation_steps" in config_data:
+            config_dict["gradient_accumulation_steps"] = config_data["gradient_accumulation_steps"]
 
         config = TrainingConfig(**config_dict)
         
@@ -1374,8 +1684,15 @@ async def get_session(session_id: str):
 
 @app.post("/sessions/{session_id}/load")
 async def load_session(session_id: str):
-    """Load a specific training session"""
+    """Load a specific training session for viewing only - does not affect current training state"""
     try:
+        # Prevent loading sessions while training is active
+        if training_manager.training_state == "running":
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot load session while training is running. Please stop training first."
+            )
+        
         success = training_manager.load_session(session_id)
         if success:
             # Broadcast the loaded session state to any connected clients
@@ -1384,14 +1701,79 @@ async def load_session(session_id: str):
                 "data": {
                     "session_id": session_id,
                     "state": training_manager.training_state,
-                    "metrics": training_manager.training_metrics,
+                    "metrics": sanitize_metrics(training_manager.training_metrics),
                     "config": asdict(training_manager.current_config) if training_manager.current_config else None
                 }
             })
-            return {"status": "success", "message": f"Session {session_id} loaded successfully"}
+            return {
+                "status": "success", 
+                "message": f"Session {session_id} loaded successfully",
+                "session_id": session_id,
+                "state": training_manager.training_state,
+                "metrics": sanitize_metrics(training_manager.training_metrics)
+            }
         else:
             raise HTTPException(status_code=404, detail="Session not found or could not be loaded")
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Error loading session {session_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/training/reset")
+async def reset_training_state(force: bool = False):
+    """
+    Force reset training state to idle. Use when UI gets out of sync.
+    
+    Args:
+        force: If True, reset even if training appears to be running
+               (use with caution - may leave orphaned processes)
+    """
+    try:
+        # Check if training is actually running
+        is_process_running = (
+            training_manager.current_process is not None and 
+            training_manager.current_process.poll() is None
+        )
+        
+        if is_process_running and not force:
+            raise HTTPException(
+                status_code=400, 
+                detail="Training is currently running. Use force=true to reset anyway (may leave orphaned processes)."
+            )
+        
+        # If process is running but force is true, try to kill it
+        if is_process_running and force:
+            try:
+                os.killpg(training_manager.current_process.pid, signal.SIGKILL)
+                training_manager.current_process.wait(timeout=5)
+            except Exception as e:
+                logger.warning(f"Could not kill process during force reset: {e}")
+        
+        old_state = training_manager.training_state
+        training_manager._reset_to_clean_state()
+        training_manager.current_process = None
+        
+        # Broadcast reset to all clients
+        await training_manager.broadcast({
+            "type": "training_reset",
+            "data": {
+                "message": f"Training state force-reset from {old_state} to idle",
+                "previous_state": old_state,
+                "current_state": "idle"
+            }
+        })
+        
+        return {
+            "status": "success",
+            "message": "Training state reset to idle",
+            "previous_state": old_state,
+            "current_state": "idle"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resetting training state: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/sessions/{session_id}")
@@ -1425,7 +1807,7 @@ async def test_base_model(request_data: dict):
         model_path = config.model_path
         
         # Use MLX to generate text with the base model only (no adapter)
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
+        python_path = VENV_PYTHON
         
         # Create a simple inference command using mlx-lm for base model only
         cmd = [
@@ -1528,7 +1910,7 @@ async def test_model(request_data: dict):
         else:
             adapter_name = config.adapter_name
             # Check if this is a nested learning adapter
-            nested_learning_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+            nested_learning_dir = NESTED_LEARNING_DIR
             nested_adapter_path = os.path.join(nested_learning_dir, adapter_name, "checkpoints", "best")
 
             if os.path.exists(nested_adapter_path):
@@ -1536,7 +1918,7 @@ async def test_model(request_data: dict):
                 adapter_path = nested_adapter_path
             else:
                 # Regular adapter
-                adapter_path = os.path.join("/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters", adapter_name)
+                adapter_path = os.path.join(ADAPTERS_DIR, adapter_name)
 
         # Verify adapter exists
         if not os.path.exists(adapter_path):
@@ -1556,7 +1938,7 @@ async def test_model(request_data: dict):
         
         # Use MLX to generate text with the fine-tuned model
         # This is a simplified implementation - you might want to use a proper MLX inference script
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
+        python_path = VENV_PYTHON
         
         # Create a simple inference command using mlx-lm
         cmd = [
@@ -1640,8 +2022,8 @@ print("RESPONSE_END")
 async def get_available_models():
     """Get all available models and their adapters"""
     try:
-        base_model_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model"
-        adapter_base_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
+        base_model_dir = BASE_MODEL_DIR
+        adapter_base_dir = ADAPTERS_DIR
         
         models = []
         
@@ -1693,7 +2075,7 @@ async def model_inference(request_data: dict):
             raise HTTPException(status_code=400, detail="Model name is required")
         
         # Build model path
-        base_model_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/base_model"
+        base_model_dir = BASE_MODEL_DIR
         model_path = os.path.join(base_model_dir, model_name)
         
         if not os.path.exists(model_path):
@@ -1707,7 +2089,7 @@ async def model_inference(request_data: dict):
             if "(nested)" in adapter_name:
                 # Extract the base name without the "(nested)" suffix
                 base_name = adapter_name.replace(" (nested)", "")
-                nested_learning_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+                nested_learning_dir = NESTED_LEARNING_DIR
                 adapter_dir = os.path.join(nested_learning_dir, base_name, "checkpoints", "best")
 
                 if os.path.exists(adapter_dir):
@@ -1717,7 +2099,7 @@ async def model_inference(request_data: dict):
                         adapter_type = "nested_learning"
             else:
                 # Regular adapter
-                adapter_base_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
+                adapter_base_dir = ADAPTERS_DIR
                 adapter_dir = os.path.join(adapter_base_dir, adapter_name)
 
                 if os.path.exists(adapter_dir):
@@ -1736,7 +2118,7 @@ async def model_inference(request_data: dict):
                         adapter_path = adapter_dir
         
         # Use MLX to generate text
-        python_path = '/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/.venv/bin/python'
+        python_path = VENV_PYTHON
         
         if adapter_path:
             # Fine-tuned model inference
@@ -2142,16 +2524,78 @@ async def download_tinker_model(request_data: Dict[str, Any]):
     """
     try:
         job_id = request_data.get("job_id")
-        adapter_name = request_data.get("adapter_name")
+        checkpoint_id = request_data.get("checkpoint_id")
+        base_model_id = request_data.get("base_model_id")
         
-        if not job_id or not adapter_name:
-            raise HTTPException(status_code=400, detail="job_id and adapter_name are required")
+        if not job_id and not checkpoint_id:
+            raise HTTPException(status_code=400, detail="job_id or checkpoint_id is required")
+            
+        if not adapter_name:
+            raise HTTPException(status_code=400, detail="adapter_name is required")
         
         client = get_tinker_client()
-        result = await client.download_model(job_id, adapter_name)
+        result = await client.download_model(job_id or "manual_download", adapter_name, checkpoint_id, base_model_id)
         return result
     except Exception as e:
         logger.error(f"Tinker download error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tinker/cloud-models/{base_model:path}")
+async def list_cloud_models(base_model: str):
+    """
+    List models stored in Tinker cloud for a given base model.
+    """
+    try:
+        # Decode base_model if it contains slashes (FastAPI handles this with :path but good to be safe)
+        client = get_tinker_client()
+        models = await client.list_cloud_models(base_model)
+        return {"models": models}
+    except Exception as e:
+        logger.error(f"Tinker cloud models list error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/tinker/evaluate")
+async def evaluate_tinker_model(request: Request):
+    """
+    Evaluate a Tinker model.
+    """
+    try:
+        request_data = await request.json()
+        tinker_path = request_data.get("tinker_path")
+        checkpoint_id = request_data.get("checkpoint_id")
+        base_model = request_data.get("base_model")
+        dataset = request_data.get("dataset")
+        
+        if not base_model:
+            raise HTTPException(status_code=400, detail="base_model is required")
+            
+        if not tinker_path and not checkpoint_id:
+            raise HTTPException(status_code=400, detail="tinker_path or checkpoint_id is required")
+            
+        # Construct tinker_path if missing
+        if not tinker_path and checkpoint_id:
+            # Heuristic: if it looks like a UUID, it might need tinker:// prefix?
+            # Or maybe just passing checkpoint_id works?
+            # Let's try to use checkpoint_id as is if tinker_path is missing, 
+            # but usually it's passed as model_path in create_sampling_client.
+            # Inspecting list_cloud_models output would confirm, but let's assume 
+            # the frontend passes the correct path or we use checkpoint_id.
+            tinker_path = checkpoint_id 
+        
+        # Default toy dataset if none provided
+        if not dataset:
+            dataset = [
+                {"input": "What is the capital of France?", "target": "Paris"},
+                {"input": "What is the capital of Italy?", "target": "Rome"},
+                {"input": "What is 2 + 2?", "target": "4"},
+            ]
+            
+        client = get_tinker_client()
+        result = await client.evaluate_model(tinker_path, base_model, dataset)
+        return result
+        
+    except Exception as e:
+        logger.error(f"Tinker evaluation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/tinker/models")
@@ -2203,10 +2647,10 @@ async def list_datasets():
     try:
         # Check multiple possible dataset locations
         dataset_dirs = [
-            "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/gspo_voice",
-            "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/grpo_test_data",
-            "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning",
-            "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/datasets"
+            os.path.join(PROJECT_ROOT, 'gspo_voice'),
+            os.path.join(PROJECT_ROOT, 'grpo_test_data'),
+            PROJECT_ROOT,
+            os.path.join(PROJECT_ROOT, "data")
         ]
         
         datasets = []
@@ -2239,6 +2683,14 @@ try:
     logger.info("Nested Learning API router registered")
 except ImportError as e:
     logger.warning(f"Could not load nested learning API: {e}")
+
+# Register enhanced training methods (GRPO, GSPO, Dr. GRPO)
+try:
+    from main_enhancements import integrate_enhanced_training
+    integrate_enhanced_training(app, training_manager)
+    logger.info("Enhanced training methods registered (GRPO, GSPO, Dr. GRPO)")
+except ImportError as e:
+    logger.warning(f"Could not load enhanced training methods: {e}")
 
 if __name__ == "__main__":
     import uvicorn

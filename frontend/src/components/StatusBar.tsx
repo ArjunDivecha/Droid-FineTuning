@@ -48,7 +48,7 @@ export const StatusBar: React.FC = () => {
             <div className="flex items-center space-x-1">
               <Activity className="h-3 w-3" />
               <span>
-                Step {metrics.current_step.toLocaleString()} of {metrics.total_steps.toLocaleString()}
+                Step {(metrics.current_step ?? 0).toLocaleString()} of {(metrics.total_steps ?? 0).toLocaleString()}
               </span>
             </div>
 

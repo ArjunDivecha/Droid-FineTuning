@@ -52,14 +52,18 @@ export const TrainingChart: React.FC = () => {
   useEffect(() => {
     if (metrics) {
       // Only add data points when we have actual loss values (not null)
-      if (metrics.train_loss != null || metrics.val_loss != null || metrics.avg_reward != null || metrics.kl != null) {
+      // Also require valid step number
+      const hasValidStep = typeof metrics.current_step === 'number' && metrics.current_step >= 0;
+      const hasValidLoss = metrics.train_loss != null || metrics.val_loss != null || metrics.avg_reward != null || metrics.kl != null;
+      
+      if (hasValidStep && hasValidLoss) {
         const newPoint: DataPoint = {
           step: metrics.current_step,
-          trainLoss: metrics.train_loss,
-          valLoss: metrics.val_loss,
-          learningRate: metrics.learning_rate,
-          avgReward: (metrics as any).avg_reward ?? null,
-          kl: (metrics as any).kl ?? null,
+          trainLoss: metrics.train_loss ?? null,
+          valLoss: metrics.val_loss ?? null,
+          learningRate: metrics.learning_rate ?? 0,
+          avgReward: metrics.avg_reward ?? null,
+          kl: metrics.kl ?? null,
         };
 
         // Avoid duplicate points and ensure steps are sequential

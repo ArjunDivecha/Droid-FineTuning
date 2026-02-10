@@ -1,4 +1,5 @@
 import argparse
+import json
 import math
 import os
 import re
@@ -79,6 +80,8 @@ CONFIG_DEFAULTS = {
     "mask_prompt": False,
     "report_to": None,
     "project_name": None,
+    "enable_early_stop": True,
+    "no_improve_patience": 3,
 }
 
 # COPIED AND FIXED TRAIN FUNCTION
@@ -91,6 +94,8 @@ def train(
     loss: callable = default_loss,
     iterate_batches: callable = iterate_batches,
     training_callback: TrainingCallback = None,
+    enable_early_stop: bool = False,
+    no_improve_patience: int = 3,
 ):
     if mx.metal.is_available():
         mx.set_wired_limit(mx.metal.device_info()["max_recommended_working_set_size"])
@@ -138,6 +143,12 @@ def train(
     
     final_train_loss = None
     final_val_loss = None
+    
+    # Early stopping tracking
+    best_val_loss = float('inf')
+    no_improve_count = 0
+    early_stop_triggered = False
+    patience = no_improve_patience
 
     # Main training loop
     for it, batch in zip(
@@ -146,7 +157,7 @@ def train(
             dataset=train_dataset,
             batch_size=args.batch_size,
             max_seq_length=args.max_seq_length,
-            train=True,
+            loop=True,
         ),
     ):
         tic = time.perf_counter()
@@ -165,22 +176,41 @@ def train(
             )
             model.train()
             val_time = time.perf_counter() - tic
+            # Convert to Python float immediately for consistent handling
+            val_loss_float = float(val_loss)
             if rank == 0:
                 print(
                     f"Iter {it}: "
-                    f"Val loss {val_loss:.3f}, "
+                    f"Val loss {val_loss_float:.3f}, "
                     f"Val took {val_time:.3f}s",
                     flush=True,
                 )
-            final_val_loss = float(val_loss)
+            final_val_loss = val_loss_float
 
             if training_callback is not None:
                 val_info = {
                     "iteration": it - 1,
-                    "val_loss": val_loss,
+                    "val_loss": val_loss_float,
                     "val_time": val_time,
                 }
                 training_callback.on_val_loss_report(val_info)
+            
+            # Early stopping check - includes first evaluation
+            if enable_early_stop:
+                if val_loss_float < best_val_loss:
+                    best_val_loss = val_loss_float
+                    no_improve_count = 0
+                else:
+                    no_improve_count += 1
+                    if no_improve_count >= patience:
+                        if rank == 0:
+                            print(
+                                f"Early stop: No improvement for {patience} evaluations. "
+                                f"Best val loss: {best_val_loss:.3f}",
+                                flush=True,
+                            )
+                        early_stop_triggered = True
+                        break
 
             tic = time.perf_counter()
 
@@ -259,14 +289,15 @@ def train(
             mx.save_safetensors(str(checkpoint), adapter_weights)
             print(
                 f"Iter {it}: Saved adapter weights to "
-                f"{args.adapter_file} and {checkpoint}."
+                f"{args.adapter_file} and {checkpoint}.",
+                flush=True,
             )
 
     # Save final weights
     if rank == 0:
         adapter_weights = dict(tree_flatten(model.trainable_parameters()))
         mx.save_safetensors(str(args.adapter_file), adapter_weights)
-        print(f"Saved final weights to {args.adapter_file}.")
+        print(f"Saved final weights to {args.adapter_file}.", flush=True)
 
     return {
         'final_train_loss': final_train_loss,
@@ -489,6 +520,8 @@ def train_model(
         train_dataset=CacheDataset(train_set),
         val_dataset=CacheDataset(valid_set),
         training_callback=training_callback,
+        enable_early_stop=args.enable_early_stop,
+        no_improve_patience=args.no_improve_patience,
     )
 
     # Save final metrics to config

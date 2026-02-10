@@ -8,7 +8,7 @@ import { OPDResults } from '../components/OPDResults';
 import { setRuns } from '../store/slices/opdSlice';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://127.0.0.1:8000';
 
 export const OPDPage: React.FC = () => {
   const dispatch = useDispatch();

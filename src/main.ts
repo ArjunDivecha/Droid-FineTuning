@@ -44,7 +44,10 @@ const createWindow = (): void => {
   console.log('👀 Window visible:', mainWindow.isVisible());
 
   // Load the frontend
-  const isDev = process.env.NODE_ENV === 'development';
+  // Check if built frontend exists, otherwise try dev server
+  const builtFrontendPath = path.join(__dirname, '../frontend/dist/index.html');
+  const builtFrontendExists = require('fs').existsSync(builtFrontendPath);
+  const isDev = process.env.NODE_ENV === 'development' && !builtFrontendExists;
   
   let frontendPath: string;
   if (isDev) {
@@ -53,11 +56,10 @@ const createWindow = (): void => {
     console.log('🔗 Loading frontend from dev server:', frontendPath);
   } else {
     // In production, load from built dist folder
-    frontendPath = `file://${path.join(__dirname, '../frontend/dist/index.html')}`;
+    frontendPath = `file://${builtFrontendPath}`;
     console.log('🔗 Loading frontend from:', frontendPath);
     
-    // Check if the file exists
-    if (require('fs').existsSync(path.join(__dirname, '../frontend/dist/index.html'))) {
+    if (builtFrontendExists) {
       console.log('✅ Frontend index.html exists');
     } else {
       console.error('❌ Frontend index.html NOT FOUND!');
@@ -96,10 +98,8 @@ const createWindow = (): void => {
     }
   }, 5000);
 
-  // Open DevTools in development
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
+  // Open DevTools to debug issues
+  mainWindow.webContents.openDevTools();
 
   // Handle window closed
   mainWindow.on('closed', () => {
@@ -110,7 +110,9 @@ const createWindow = (): void => {
 const startBackendServer = async (): Promise<void> => {
   return new Promise((resolve, reject) => {
     const backendPath = path.join(__dirname, '../backend');
-    const pythonPath = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python';
+    // Use venv Python if available, otherwise system python3 - can be overridden with PYTHON_PATH env var
+    const venvPython = path.join(__dirname, '../.venv/bin/python');
+    const pythonPath = process.env.PYTHON_PATH || (require('fs').existsSync(venvPython) ? venvPython : 'python3');
 
     backendProcess = spawn(pythonPath, ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', BACKEND_PORT.toString()], {
       cwd: backendPath,

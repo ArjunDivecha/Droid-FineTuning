@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Cloud, Upload, Settings, Play, Download, CheckCircle, Loader, Database, Cpu } from 'lucide-react';
+import { Cloud, Upload, Settings, Play, Download, CheckCircle, Loader, Database, Cpu, RefreshCw } from 'lucide-react';
 import { RootState } from '../store/store';
 import { addNotification } from '../store/slices/uiSlice';
 import axios from 'axios';
 
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'tinker_page_last_config';
 
 interface TinkerConfig {
@@ -28,10 +28,17 @@ interface TinkerJob {
   ready_for_download: boolean;
 }
 
+interface CloudModel {
+  checkpoint_id: string;
+  created_at: string;
+  tinker_path: string;
+  base_model: string;
+}
+
 export const TinkerPage: React.FC = () => {
   const dispatch = useDispatch();
   const { models } = useSelector((state: RootState) => state.models);
-  
+
   // Default configuration
   const getDefaultConfig = (): TinkerConfig => ({
     base_model: 'Qwen/Qwen3-4B-Instruct-2507',
@@ -61,9 +68,11 @@ export const TinkerPage: React.FC = () => {
   const [formData, setFormData] = useState<TinkerConfig>(loadSavedConfig);
   const [isTraining, setIsTraining] = useState(false);
   const [currentJob, setCurrentJob] = useState<TinkerJob | null>(null);
-  const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
+  const statusCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [tinkerModels, setTinkerModels] = useState<any[]>([]);
   const [availableDatasets, setAvailableDatasets] = useState<string[]>([]);
+  const [cloudModels, setCloudModels] = useState<CloudModel[]>([]);
+  const [downloadingCloudId, setDownloadingCloudId] = useState<string | null>(null);
 
   // Save config to localStorage
   useEffect(() => {
@@ -74,7 +83,7 @@ export const TinkerPage: React.FC = () => {
         console.error('Failed to save config:', error);
       }
     }, 500);
-    
+
     return () => clearTimeout(timeoutId);
   }, [formData]);
 
@@ -82,16 +91,18 @@ export const TinkerPage: React.FC = () => {
   useEffect(() => {
     fetchTinkerModels();
     fetchAvailableDatasets();
+    // Also fetch cloud models for initial base model
+    fetchCloudModels(formData.base_model);
   }, []);
 
   // Cleanup interval on unmount
   useEffect(() => {
     return () => {
-      if (statusCheckInterval) {
-        clearInterval(statusCheckInterval);
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
       }
     };
-  }, [statusCheckInterval]);
+  }, []);
 
   const fetchTinkerModels = async () => {
     try {
@@ -115,38 +126,45 @@ export const TinkerPage: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof TinkerConfig, value: any) => {
+  const fetchCloudModels = async (baseModel: string) => {
+    if (!baseModel) return;
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/tinker/cloud-models/${encodeURIComponent(baseModel)}`);
+      setCloudModels(response.data.models);
+    } catch (error) {
+      console.error('Failed to fetch cloud models:', error);
+      // Don't notify on error to avoid spam if API key is missing etc.
+    }
+  };
+
+  const handleInputChange = (field: keyof typeof formData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+    if (field === 'base_model') {
+      // Clear cloud models list when base model changes to avoid confusion
+      setCloudModels([]);
+    }
   };
 
   const handleFileSelect = async (type: 'train' | 'val') => {
     try {
-      if (window.electronAPI) {
-        const result = await window.electronAPI.showOpenDialog({
-          title: `Select ${type === 'train' ? 'Training' : 'Validation'} Data File`,
-          filters: [
-            { name: 'JSONL Files', extensions: ['jsonl'] },
-            { name: 'All Files', extensions: ['*'] }
-          ],
-          properties: ['openFile']
-        });
-        
-        if (!result.canceled && result.filePaths.length > 0) {
-          const field = type === 'train' ? 'train_data_path' : 'val_data_path';
-          handleInputChange(field, result.filePaths[0]);
+      // In a real app, this would open a file picker.
+      // For now, we'll scan for .jsonl files in common locations
+      const response = await axios.get(`${BACKEND_URL}/api/datasets`);
+      const datasets = response.data.datasets;
+
+      if (datasets.length > 0) {
+        // Simple heuristic: pick the first one or let user type
+        // Ideally we'd show a modal. For now, just notify available datasets
+        console.log('Available datasets:', datasets);
+        if (type === 'train' && !formData.train_data_path) {
+          setFormData(prev => ({ ...prev, train_data_path: datasets[0] }));
         }
-      } else {
-        dispatch(addNotification({
-          type: 'warning',
-          title: 'File Selection',
-          message: 'Please enter the file path manually.',
-        }));
       }
     } catch (error) {
-      console.error('File selection error:', error);
+      console.error('Failed to list datasets:', error);
     }
   };
 
@@ -171,7 +189,7 @@ export const TinkerPage: React.FC = () => {
 
     try {
       setIsTraining(true);
-      
+
       dispatch(addNotification({
         type: 'info',
         title: 'Starting Tinker Training',
@@ -179,7 +197,7 @@ export const TinkerPage: React.FC = () => {
       }));
 
       const response = await axios.post(`${BACKEND_URL}/api/tinker/start-training`, formData);
-      
+
       if (response.data.success) {
         setCurrentJob({
           job_id: response.data.job_id,
@@ -195,16 +213,21 @@ export const TinkerPage: React.FC = () => {
           message: `Tinker job ${response.data.job_id} started successfully!`,
         }));
 
+        // Clear any existing interval
+        if (statusCheckIntervalRef.current) {
+          clearInterval(statusCheckIntervalRef.current);
+        }
+
         // Start polling for status
         const interval = setInterval(() => checkTrainingStatus(response.data.job_id), 10000);
-        setStatusCheckInterval(interval);
+        statusCheckIntervalRef.current = interval;
       } else {
         throw new Error(response.data.message || 'Failed to start training');
       }
     } catch (error: any) {
       console.error('Training start error:', error);
       setIsTraining(false);
-      
+
       dispatch(addNotification({
         type: 'error',
         title: 'Training Failed',
@@ -218,13 +241,23 @@ export const TinkerPage: React.FC = () => {
       const response = await axios.get(`${BACKEND_URL}/api/tinker/status/${jobId}`);
       const status = response.data;
 
-      setCurrentJob(prev => prev ? { ...prev, ...status } : null);
+      // Update job state
+      setCurrentJob(prev => {
+        // If we already marked it as completed, don't update again to avoid loops
+        if (prev?.status === 'completed' && status.status === 'completed') {
+          return prev;
+        }
+        return prev ? { ...prev, ...status } : null;
+      });
 
       if (status.status === 'completed') {
-        if (statusCheckInterval) {
-          clearInterval(statusCheckInterval);
-          setStatusCheckInterval(null);
+        // Clear interval immediately
+        if (statusCheckIntervalRef.current) {
+          clearInterval(statusCheckIntervalRef.current);
+          statusCheckIntervalRef.current = null;
         }
+
+        setIsTraining(false);
 
         dispatch(addNotification({
           type: 'success',
@@ -232,9 +265,9 @@ export const TinkerPage: React.FC = () => {
           message: 'Tinker training finished! Ready to download model.',
         }));
       } else if (status.status === 'error') {
-        if (statusCheckInterval) {
-          clearInterval(statusCheckInterval);
-          setStatusCheckInterval(null);
+        if (statusCheckIntervalRef.current) {
+          clearInterval(statusCheckIntervalRef.current);
+          statusCheckIntervalRef.current = null;
         }
         setIsTraining(false);
 
@@ -261,7 +294,8 @@ export const TinkerPage: React.FC = () => {
 
       const response = await axios.post(`${BACKEND_URL}/api/tinker/download`, {
         job_id: currentJob.job_id,
-        adapter_name: formData.adapter_name
+        adapter_name: formData.adapter_name,
+        base_model_id: formData.base_model
       });
 
       if (response.data.success) {
@@ -274,7 +308,7 @@ export const TinkerPage: React.FC = () => {
         // Reset state
         setIsTraining(false);
         setCurrentJob(null);
-        
+
         // Refresh models list
         fetchTinkerModels();
       } else {
@@ -282,12 +316,111 @@ export const TinkerPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Download error:', error);
-      
+
       dispatch(addNotification({
         type: 'error',
         title: 'Download Failed',
         message: error.response?.data?.detail || error.message || 'Failed to download model',
       }));
+    }
+  };
+
+  const downloadCloudModel = async (model: CloudModel) => {
+    try {
+      setDownloadingCloudId(model.checkpoint_id);
+      dispatch(addNotification({
+        type: 'info',
+        title: 'Downloading Cloud Model',
+        message: `Downloading checkpoint ${model.checkpoint_id.substring(0, 8)}...`,
+      }));
+
+      // Generate a name if not provided (using checkpoint ID)
+      const adapterName = `tinker_${model.base_model.split('/').pop()}_${model.checkpoint_id.substring(0, 8)}`;
+
+      const response = await axios.post(`${BACKEND_URL}/api/tinker/download`, {
+        job_id: '', // Not needed for cloud download
+        adapter_name: adapterName,
+        checkpoint_id: model.checkpoint_id,
+        base_model_id: model.base_model
+      });
+
+      if (response.data.success) {
+        dispatch(addNotification({
+          type: 'success',
+          title: 'Download Complete',
+          message: `Model saved to ${response.data.local_path}`,
+        }));
+
+        // Refresh local models list
+        fetchTinkerModels();
+      } else {
+        throw new Error(response.data.message || 'Download failed');
+      }
+    } catch (error: any) {
+      console.error('Download error:', error);
+      dispatch(addNotification({
+        type: 'error',
+        title: 'Download Failed',
+        message: error.response?.data?.detail || error.message || 'Failed to download model',
+      }));
+    } finally {
+      setDownloadingCloudId(null);
+    }
+  };
+
+  // Evaluation State
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evalResult, setEvalResult] = useState<any>(null);
+  const [selectedEvalModel, setSelectedEvalModel] = useState<string>("");
+
+  const handleEvaluate = async () => {
+    if (!selectedEvalModel) {
+      dispatch(addNotification({
+        type: 'error',
+        title: 'Selection Required',
+        message: 'Please select a model to evaluate.',
+      }));
+      return;
+    }
+
+    try {
+      setIsEvaluating(true);
+      setEvalResult(null);
+
+      // Parse selection: "type:id:base_model:tinker_path"
+      const [type, id, baseModel, tinkerPath] = selectedEvalModel.split('|');
+
+      dispatch(addNotification({
+        type: 'info',
+        title: 'Starting Evaluation',
+        message: 'Running LLM-as-a-judge evaluation on Tinker cloud...',
+      }));
+
+      const response = await axios.post(`${BACKEND_URL}/api/tinker/evaluate`, {
+        checkpoint_id: id,
+        tinker_path: tinkerPath && tinkerPath !== 'undefined' ? tinkerPath : undefined,
+        base_model: baseModel
+      });
+
+      if (response.data.success) {
+        setEvalResult(response.data);
+        dispatch(addNotification({
+          type: 'success',
+          title: 'Evaluation Complete',
+          message: 'Evaluation finished successfully.',
+        }));
+      } else {
+        throw new Error(response.data.error || 'Evaluation failed');
+      }
+    } catch (error: any) {
+      console.error('Evaluation error:', error);
+      dispatch(addNotification({
+        type: 'error',
+        title: 'Evaluation Failed',
+        message: error.response?.data?.detail || error.message || 'Failed to evaluate model',
+      }));
+    } finally {
+      setIsEvaluating(false);
     }
   };
 
@@ -361,19 +494,25 @@ export const TinkerPage: React.FC = () => {
               <Database className="w-4 h-4 inline mr-2" />
               Training Data (JSONL)
             </label>
-            <select
-              value={formData.train_data_path}
-              onChange={(e) => handleInputChange('train_data_path', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-              disabled={isTraining}
-            >
-              <option value="">Select training dataset...</option>
-              {availableDatasets.map((dataset) => (
-                <option key={dataset} value={dataset}>
-                  {dataset.split('/').pop()}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center space-x-3">
+              <input
+                type="text"
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                value={formData.train_data_path}
+                onChange={(e) => handleInputChange('train_data_path', e.target.value)}
+                placeholder="Path to training data file..."
+                disabled={isTraining}
+              />
+              <button
+                type="button"
+                onClick={() => handleFileSelect('train')}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-2"
+                disabled={isTraining}
+              >
+                <Upload className="h-4 w-4" />
+                <span>Browse</span>
+              </button>
+            </div>
           </div>
 
           {/* Validation Data */}
@@ -382,19 +521,25 @@ export const TinkerPage: React.FC = () => {
               <Database className="w-4 h-4 inline mr-2" />
               Validation Data (Optional)
             </label>
-            <select
-              value={formData.val_data_path}
-              onChange={(e) => handleInputChange('val_data_path', e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-              disabled={isTraining}
-            >
-              <option value="">None (optional)</option>
-              {availableDatasets.map((dataset) => (
-                <option key={dataset} value={dataset}>
-                  {dataset.split('/').pop()}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center space-x-3">
+              <input
+                type="text"
+                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                value={formData.val_data_path}
+                onChange={(e) => handleInputChange('val_data_path', e.target.value)}
+                placeholder="Path to validation data file..."
+                disabled={isTraining}
+              />
+              <button
+                type="button"
+                onClick={() => handleFileSelect('val')}
+                className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center space-x-2"
+                disabled={isTraining}
+              >
+                <Upload className="h-4 w-4" />
+                <span>Browse</span>
+              </button>
+            </div>
           </div>
 
           {/* Adapter Name */}
@@ -492,75 +637,186 @@ export const TinkerPage: React.FC = () => {
               </>
             )}
           </button>
+
+          {/* Training Status */}
+          {currentJob && (
+            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h3 className="font-medium mb-2">Training Status</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Job ID:</span>
+                  <span className="font-mono">{currentJob.job_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Status:</span>
+                  <span className={`font-medium ${currentJob.status === 'completed' ? 'text-green-600' :
+                    currentJob.status === 'error' ? 'text-red-600' :
+                      'text-blue-600'
+                    }`}>
+                    {currentJob.status.toUpperCase()}
+                  </span>
+                </div>
+                <div className="text-gray-500 mt-2">{currentJob.message}</div>
+
+                {currentJob.ready_for_download && (
+                  <button
+                    onClick={downloadModel}
+                    className="w-full mt-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download Trained Model
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Training Status */}
-      {currentJob && (
+        {/* Model Evaluation */}
         <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-800">
-          <h2 className="text-xl font-semibold mb-4">Training Status</h2>
-          
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Job ID:</span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">{currentJob.job_id}</span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Status:</span>
-              <span className={`text-sm font-medium ${
-                currentJob.status === 'completed' ? 'text-green-600' :
-                currentJob.status === 'error' ? 'text-red-600' :
-                'text-blue-600'
-              }`}>
-                {currentJob.status === 'training' && <Loader className="w-4 h-4 inline animate-spin mr-1" />}
-                {currentJob.status === 'completed' && <CheckCircle className="w-4 h-4 inline mr-1" />}
-                {currentJob.status.toUpperCase()}
-              </span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Message:</span>
-              <span className="text-sm text-gray-600 dark:text-gray-400">{currentJob.message}</span>
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5" />
+            Model Evaluation
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Select Model to Evaluate</label>
+              <select
+                value={selectedEvalModel}
+                onChange={(e) => setSelectedEvalModel(e.target.value)}
+                className="w-full p-2 rounded border dark:bg-gray-800 dark:border-gray-700"
+              >
+                <option value="">-- Select a model --</option>
+                {/* Local Models */}
+                {tinkerModels.map((m, i) => (
+                  <option key={`local-${i}`} value={`local|${m.checkpoint_id}|${m.base_model}|${m.tinker_path}`}>
+                    Local: {m.adapter_name} ({m.base_model})
+                  </option>
+                ))}
+                {/* Cloud Models */}
+                {cloudModels.map((m, i) => (
+                  <option key={`cloud-${i}`} value={`cloud|${m.checkpoint_id}|${m.base_model}|${m.tinker_path}`}>
+                    Cloud: {m.checkpoint_id.substring(0, 8)}... ({m.base_model})
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {currentJob.ready_for_download && (
-              <button
-                onClick={downloadModel}
-                className="w-full mt-4 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium"
-              >
-                <Download className="w-5 h-5" />
-                Download Trained Model
-              </button>
+            <button
+              onClick={handleEvaluate}
+              disabled={isEvaluating || !selectedEvalModel}
+              className="w-full py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isEvaluating ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+              Run Evaluation
+            </button>
+
+            {/* Results Display */}
+            {evalResult && (
+              <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <h3 className="font-medium mb-2">Evaluation Results</h3>
+
+                {/* Metrics */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {evalResult.metrics.map((m: any, i: number) => (
+                    <div key={i} className="p-2 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
+                      <div className="text-xs text-gray-500">{m.metric}</div>
+                      <div className="font-bold text-lg">{typeof m.value === 'number' ? m.value.toFixed(2) : m.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Samples */}
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {evalResult.samples.map((s: any, i: number) => (
+                    <div key={i} className="text-xs p-2 border-b border-gray-200 dark:border-gray-700 last:border-0">
+                      <div className="font-medium text-blue-600">Q: {s.input}</div>
+                      <div className="text-gray-600 dark:text-gray-400">A: {s.output}</div>
+                      <div className={`font-bold ${s.score === 'C' ? 'text-green-600' : 'text-red-600'}`}>
+                        Grade: {s.score}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
-      )}
 
-      {/* Trained Models List */}
-      {tinkerModels.length > 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-800">
-          <h2 className="text-xl font-semibold mb-4">Tinker-Trained Models</h2>
-          
-          <div className="space-y-3">
-            {tinkerModels.map((model, index) => (
-              <div key={index} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">{model.adapter_name}</span>
-                  <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
-                    Tinker
-                  </span>
+        {/* Trained Models List */}
+        {tinkerModels.length > 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-800">
+            <h2 className="text-xl font-semibold mb-4">Local Tinker Models</h2>
+
+            <div className="space-y-3">
+              {tinkerModels.map((model, index) => (
+                <div key={index} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium">{model.adapter_name}</span>
+                    <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded">
+                      Tinker
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                    <div>Base: {model.base_model}</div>
+                    <div>Rank: {model.lora_rank} | Epochs: {model.num_epochs}</div>
+                    <div>Completed: {new Date(model.completed_at).toLocaleString()}</div>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  <div>Base: {model.base_model}</div>
-                  <div>Rank: {model.lora_rank} | Epochs: {model.num_epochs}</div>
-                  <div>Completed: {new Date(model.completed_at).toLocaleString()}</div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+        )}
+
+        {/* Cloud Models List */}
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6 border border-gray-200 dark:border-gray-800">
+          <h2 className="text-xl font-semibold mb-4 flex items-center justify-between">
+            <span>Cloud Models (Tinker)</span>
+            <button
+              onClick={() => fetchCloudModels(formData.base_model)}
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            >
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </button>
+          </h2>
+
+          {cloudModels.length === 0 ? (
+            <p className="text-gray-500 text-sm">No cloud models found for {formData.base_model}</p>
+          ) : (
+            <div className="space-y-3">
+              {cloudModels.map((model, index) => (
+                <div key={index} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium mb-1">Checkpoint: {model.checkpoint_id.substring(0, 8)}...</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                      <div>Created: {model.created_at ? new Date(model.created_at).toLocaleString() : 'Unknown'}</div>
+                      <div>Base: {model.base_model}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => downloadCloudModel(model)}
+                    disabled={downloadingCloudId === model.checkpoint_id}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+                  >
+                    {downloadingCloudId === model.checkpoint_id ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                    Download
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
+
   );
 };

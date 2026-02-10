@@ -92,8 +92,6 @@ export const trainingSlice = createSlice({
     },
     clearLogs: (state) => {
       state.logs = [];
-      // Force array to be completely new to trigger React re-render
-      state.logs = [...state.logs];
     },
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
@@ -102,26 +100,51 @@ export const trainingSlice = createSlice({
       state.isConnected = action.payload;
     },
     resetTraining: (state) => {
+      // Complete reset to initial state
       state.state = 'idle';
       state.metrics = null;
       state.error = null;
       state.logs = [];
+      state.config = null;
     },
     trainingStarted: (state) => {
       state.state = 'running';
       state.error = null;
       state.metrics = null; // Clear old metrics
       state.logs = []; // Clear logs
+      // Also clear config to force new configuration on next training
     },
     trainingProgress: (state, action: PayloadAction<{ metrics: TrainingMetrics; log_line: string }>) => {
       // Handle both direct payload and nested data structures
       const data = action.payload;
       if (data && data.metrics) {
-        // If step regressed, assume a fresh run and clear logs
-        if (state.metrics && typeof data.metrics.current_step === 'number' && data.metrics.current_step < state.metrics.current_step) {
+        const newMetrics = data.metrics;
+        
+        // If step regressed significantly, assume a fresh run and clear logs
+        if (state.metrics && typeof newMetrics.current_step === 'number' && 
+            newMetrics.current_step < state.metrics.current_step - 10) {
           state.logs = [];
         }
-        state.metrics = data.metrics;
+        
+        // Merge metrics: preserve existing values if new ones are null/undefined
+        // This ensures we don't lose val_loss when only train_loss is reported
+        state.metrics = {
+          ...state.metrics,
+          ...newMetrics,
+          // Explicitly handle nullable fields - don't overwrite valid values with null
+          train_loss: newMetrics.train_loss !== undefined ? newMetrics.train_loss : (state.metrics?.train_loss ?? null),
+          val_loss: newMetrics.val_loss !== undefined ? newMetrics.val_loss : (state.metrics?.val_loss ?? null),
+          learning_rate: newMetrics.learning_rate !== undefined ? newMetrics.learning_rate : (state.metrics?.learning_rate ?? 0),
+          estimated_time_remaining: newMetrics.estimated_time_remaining !== undefined 
+            ? newMetrics.estimated_time_remaining 
+            : (state.metrics?.estimated_time_remaining ?? null),
+          // RL metrics
+          avg_reward: newMetrics.avg_reward !== undefined ? newMetrics.avg_reward : (state.metrics?.avg_reward ?? null),
+          success_rate: newMetrics.success_rate !== undefined ? newMetrics.success_rate : (state.metrics?.success_rate ?? null),
+          kl: newMetrics.kl !== undefined ? newMetrics.kl : (state.metrics?.kl ?? null),
+          entropy: newMetrics.entropy !== undefined ? newMetrics.entropy : (state.metrics?.entropy ?? null),
+        };
+        
         // Ensure state reflects running when progress arrives
         state.state = 'running';
       }

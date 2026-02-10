@@ -1,0 +1,35 @@
+{
+  "session_id": "58073f2a-59df-41fa-b05b-eafdfbf41108",
+  "timestamp": "2026-01-29T13:40:40.371562",
+  "training_state": "completed",
+  "config": {
+    "model_path": "/Users/arjundivecha/Dropbox/Droid-FineTuning/models/qwen2.5-0.5b-bf16",
+    "train_data_path": "/Users/arjundivecha/Dropbox/Droid-FineTuning/data/converted/train.jsonl",
+    "val_data_path": "",
+    "learning_rate": 1e-05,
+    "batch_size": 1,
+    "max_seq_length": 512,
+    "iterations": 20,
+    "steps_per_report": 5,
+    "steps_per_eval": 10,
+    "save_every": 10,
+    "early_stop": true,
+    "patience": 3,
+    "adapter_name": "gui_test_adapter"
+  },
+  "metrics": {
+    "current_step": 20,
+    "total_steps": 20,
+    "train_loss": 2.581,
+    "val_loss": 2.834,
+    "learning_rate": 1e-05,
+    "start_time": "2026-01-29T13:40:33.993339",
+    "estimated_time_remaining": 0.0
+  },
+  "adapter_path": "/Users/arjundivecha/Dropbox/Droid-FineTuning/adapters/gui_test_adapter/adapters.safetensors",
+  "best_model": {
+    "val_loss": 2.834,
+    "step": 20,
+    "path": null
+  }
+}

@@ -24,6 +24,11 @@ from typing import Dict, List, Optional, Tuple
 import logging
 from datetime import datetime
 
+# Get project root directory
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ADAPTERS_DIR = os.path.join(PROJECT_ROOT, 'adapters')
+NESTED_LEARNING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'nested_learning', 'checkpoints')
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -48,9 +53,9 @@ class Tier0Evaluator:
     """
 
     def __init__(self,
-                 adapter_base_dir: str = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"):
-        self.adapter_base_dir = adapter_base_dir
-        self.nested_base_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/Droid-FineTuning/backend/nested_learning/checkpoints"
+                 adapter_base_dir: str = None):
+        self.adapter_base_dir = adapter_base_dir or ADAPTERS_DIR
+        self.nested_base_dir = NESTED_LEARNING_DIR
 
     def load_adapter_weights(self, adapter_name: str) -> Dict[str, np.ndarray]:
         """Load adapter weights from safetensors file."""
