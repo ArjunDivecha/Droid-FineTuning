@@ -242,7 +242,7 @@ class TrainingManager:
                 "training_state": self.training_state,
                 "config": asdict(self.current_config),
                 "metrics": self.training_metrics,
-                "adapter_path": os.path.join(self.output_dir, self.current_config.adapter_name, "adapters.safetensors"),
+                "adapter_path": os.path.join(self.output_dir, self.current_config.adapter_name),
                 "best_model": {
                     "val_loss": self.best_val_loss,
                     "step": self.best_model_step,
@@ -306,11 +306,11 @@ class TrainingManager:
             # Get adapter path from session data
             if "adapter_path" in session_data:
                 adapter_path = session_data["adapter_path"]
+                # Remove the filename if present (e.g., adapters.safetensors)
+                if adapter_path.endswith(".safetensors"):
+                    adapter_path = os.path.dirname(adapter_path)
                 # Convert relative path to absolute path
                 if not os.path.isabs(adapter_path):
-                    # Remove the filename if present (e.g., adapters.safetensors)
-                    if adapter_path.endswith(".safetensors"):
-                        adapter_path = os.path.dirname(adapter_path)
                     adapter_path = os.path.abspath(adapter_path)
                 self.current_adapter_path = adapter_path
             else:
