@@ -476,7 +476,23 @@ def train_model(
     adapter_path.mkdir(parents=True, exist_ok=True)
 
     adapter_file = adapter_path / "adapters.safetensors"
-    save_config(vars(args), adapter_path / "adapter_config.json")
+    
+    # Save adapter config in mlx-lm compatible format
+    adapter_config = {
+        # Required for load_adapters()
+        "num_layers": getattr(args, 'num_layers', getattr(args, 'num_hidden_layers', 24)),
+        "lora_parameters": {
+            "rank": getattr(args, 'lora_rank', 8),
+            "alpha": getattr(args, 'lora_alpha', 16),
+            "dropout": getattr(args, 'lora_dropout', 0.0),
+            "scale": getattr(args, 'lora_scale', getattr(args, 'lora_alpha', 16) / getattr(args, 'lora_rank', 8)),
+        },
+        "fine_tune_type": "lora",
+        # Also save full config for reference
+        **vars(args),
+    }
+    with open(adapter_path / "adapter_config.json", "w") as f:
+        json.dump(adapter_config, f, indent=4)
 
     # init training args
     training_args = TrainingArgs(
