@@ -26,9 +26,10 @@ backend with a thin service that wraps the `mlx-lm-lora` training engine.
 
 This app implements the EXACT HTTP + WebSocket contract the existing React
 frontend expects (verified against frontend/src/**). The SFT training path is
-fully functional; OPD / nested-learning / fusion / tier-evaluation endpoints
-return HTTP 501 with a clear message and will be wired to mlx-lm-lora's
-online/teacher flows in a later phase.
+fully functional; Compare-tab evaluation (Tier 0+1 perplexity/weight analysis
+and LLM-as-judge via DeepSeek) is implemented in app/evaluator.py. OPD /
+nested-learning / fusion endpoints still return HTTP 501 with a clear message
+and will be wired to mlx-lm-lora's online/teacher flows in a later phase.
 
 The frontend contract (all hardcoded to localhost:8000):
   GET  /training/status                      -> {state, metrics, config}
@@ -41,8 +42,11 @@ The frontend contract (all hardcoded to localhost:8000):
   DELETE /sessions/{id}
   POST /api/training/generate-sample-data     (body {num_samples}) -> {success, output_path}
   POST /model/test                            (body {prompt,max_tokens,temperature})
+  POST /api/evaluate/base-model               (Tier 1 perplexity) -> {success, result}
+  POST /api/evaluate/adapter                  (Tier 0+1) -> {success, result}
+  POST /api/evaluation/start | /status | /result  (LLM judge via DeepSeek)
   WS   /ws                                    (streams training_progress/completed/error)
-  OPD/nested/fusion/evaluate/*                -> 501 (not implemented in v2 yet)
+  OPD/nested/fusion/*                         -> 501 (not implemented in v2 yet)
 
 DEPENDENCIES:
 - fastapi, uvicorn, websockets, pydantic, pyyaml, psutil
@@ -59,6 +63,7 @@ Electron (src/main.ts) spawns this same command on app launch.
 import asyncio
 import json
 import logging
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +75,7 @@ from pydantic import BaseModel, ConfigDict
 
 from . import paths
 from .training_runner import TrainingConfig, TrainingRunner
+from . import evaluator as evaluator_mod
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -139,6 +145,28 @@ class ModelTestRequest(BaseModel):
     # Optional, used by ModelTestModal when testing a fine-tuned model.
     model_path: Optional[str] = None
     adapter_path: Optional[str] = None
+
+
+class EvaluateAdapterRequest(BaseModel):
+    """Body for POST /api/evaluate/adapter (Tier 0 + Tier 1)."""
+
+    adapter_name: str
+    max_samples: int = 20
+
+
+class EvaluateBaseModelRequest(BaseModel):
+    """Body for POST /api/evaluate/base-model (Tier 1 only)."""
+
+    max_samples: int = 20
+
+
+class EvaluationStartRequest(BaseModel):
+    """Body for POST /api/evaluation/start (LLM-as-judge)."""
+
+    adapter_name: Optional[str] = None
+    training_data_path: Optional[str] = None
+    num_questions: int = 20
+    evaluate_base_model: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -324,6 +352,96 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# --------------------------------------------------------------------------- #
+# LLM-as-judge evaluation manager (async start / poll status / fetch result)
+# --------------------------------------------------------------------------- #
+class EvaluationManager:
+    """Runs LLM-judge evaluations on a background thread.
+
+    The frontend's "Evaluate (LLM Judge)" flow is asynchronous:
+      1. POST /api/evaluation/start  -> kicks off a run, returns immediately
+      2. GET  /api/evaluation/status -> {running, progress, error}
+      3. GET  /api/evaluation/result -> {success, result} once finished
+    """
+
+    def __init__(self) -> None:
+        self._thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
+        self.running: bool = False
+        self.progress: float = 0.0
+        self.error: Optional[str] = None
+        self.result: Optional[Dict[str, Any]] = None
+        self._stop_flag = False
+
+    def get_status(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "running": self.running,
+                "progress": self.progress,
+                "error": self.error,
+            }
+
+    def get_result(self) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            return None if self.result is None else dict(self.result)
+
+    def start(
+        self,
+        adapter_name: Optional[str],
+        num_questions: int,
+        evaluate_base_model: bool,
+    ) -> bool:
+        """Start a new evaluation. Returns False if one is already running."""
+        with self._lock:
+            if self.running:
+                return False
+            self.running = True
+            self.progress = 0.0
+            self.error = None
+            self.result = None
+            self._stop_flag = False
+
+        self._thread = threading.Thread(
+            target=self._run,
+            args=(adapter_name, num_questions, evaluate_base_model),
+            daemon=True,
+        )
+        self._thread.start()
+        return True
+
+    def _set(self, **kwargs: Any) -> None:
+        with self._lock:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    def _run(
+        self,
+        adapter_name: Optional[str],
+        num_questions: int,
+        evaluate_base_model: bool,
+    ) -> None:
+        try:
+
+            def on_progress(done: int, total: int) -> None:
+                self._set(progress=(done / total) * 100.0 if total else 0.0)
+
+            res = evaluator_mod.llm_judge_evaluate(
+                adapter_name=adapter_name,
+                num_questions=num_questions,
+                evaluate_base_model=evaluate_base_model,
+                on_progress=on_progress,
+            )
+            self._set(result=res, progress=100.0)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("LLM-judge evaluation failed")
+            self._set(error=str(exc))
+        finally:
+            self._set(running=False)
+
+
+evaluation_manager = EvaluationManager()
 
 
 async def _drain_runner_updates() -> None:
@@ -730,13 +848,76 @@ async def fusion_fuse() -> None:
 
 
 @app.post("/api/evaluate/adapter")
-async def evaluate_adapter() -> None:
-    raise _not_implemented(_NOT_IMPL_MSG)
+async def evaluate_adapter(req: EvaluateAdapterRequest) -> Dict[str, Any]:
+    """Evaluate a LoRA adapter with Tier 0 (mathematical) + Tier 1 (perplexity)."""
+    try:
+        result = await asyncio.to_thread(
+            evaluator_mod.evaluate_adapter,
+            req.adapter_name,
+            req.max_samples,
+        )
+        return {"success": True, "result": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Adapter evaluation error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/evaluate/base-model")
-async def evaluate_base_model() -> None:
-    raise _not_implemented(_NOT_IMPL_MSG)
+async def evaluate_base_model(req: EvaluateBaseModelRequest) -> Dict[str, Any]:
+    """Evaluate the base model with Tier 1 (perplexity) only."""
+    try:
+        result = await asyncio.to_thread(
+            evaluator_mod.evaluate_base_model,
+            req.max_samples,
+        )
+        return {"success": True, "result": result}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Base model evaluation error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# --------------------------------------------------------------------------- #
+# Routes: LLM-as-judge evaluation (async start/status/result)
+# --------------------------------------------------------------------------- #
+@app.post("/api/evaluation/start")
+async def start_evaluation(req: EvaluationStartRequest) -> Dict[str, Any]:
+    """Start an LLM-as-judge (DeepSeek) evaluation. Runs on a background thread."""
+    if not req.adapter_name and not req.evaluate_base_model:
+        raise HTTPException(
+            status_code=400,
+            detail="adapter_name is required (or set evaluate_base_model=true).",
+        )
+    started = evaluation_manager.start(
+        adapter_name=req.adapter_name,
+        num_questions=req.num_questions,
+        evaluate_base_model=req.evaluate_base_model,
+    )
+    if not started:
+        raise HTTPException(status_code=409, detail="An evaluation is already running.")
+    return {
+        "success": True,
+        "message": "Evaluation started",
+        "adapter_name": req.adapter_name or "base_model",
+    }
+
+
+@app.get("/api/evaluation/status")
+async def get_evaluation_status() -> Dict[str, Any]:
+    """Poll the running LLM-judge evaluation's progress."""
+    return evaluation_manager.get_status()
+
+
+@app.get("/api/evaluation/result")
+async def get_evaluation_result() -> Dict[str, Any]:
+    """Fetch the completed LLM-judge evaluation result."""
+    result = evaluation_manager.get_result()
+    if result is None:
+        raise HTTPException(status_code=404, detail="No evaluation result available")
+    return {"success": True, "result": result}
 
 
 @app.on_event("startup")

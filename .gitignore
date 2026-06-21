@@ -63,3 +63,9 @@ temp/
 
 # Cursor IDE local state (machine-specific)
 .cursor/
+
+# Secrets — never commit
+.env
+.env.backup
+.env.*
+!.env.example

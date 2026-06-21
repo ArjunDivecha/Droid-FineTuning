@@ -11,7 +11,13 @@ A streamlined MLX fine-tuning desktop application for Apple Silicon Macs. Simple
 > - **Machine-independent paths**: all hardcoded `/Users/macbook2024/...` paths are gone. Every directory is derived from `PROJECT_ROOT` in `backend/app/paths.py`. The app now boots on any machine.
 > - **In-process training with structured callbacks**: instead of spawning a subprocess and parsing stdout, `backend/app/training_runner.py` calls `mlx_lm_lora.train.run(args, training_callback=...)` in a background thread. A custom `TrainingCallback` receives structured per-step dicts (`iteration`, `train_loss`, `learning_rate`, `iterations_per_second`, ...) and forwards them to the WebSocket — no fragile stdout parsing.
 > - **Frontend contract preserved**: the React UI is unchanged. The v2 backend implements the exact same HTTP + WebSocket contract (`/training/status`, `/training/start`, `/training/stop`, `/models`, `/adapters`, `/sessions/*`, `/api/training/generate-sample-data`, `/model/test`, `WS /ws`).
-> - **OPD / nested-learning / fusion / tier-eval endpoints return HTTP 501** for now (the frontend degrades gracefully). These will be re-wired to `mlx-lm-lora`'s online/teacher flows in a later phase.
+> - **Compare tab fully wired (3 functions)**: all three Compare-page features now work against the v2 backend via a new `backend/app/evaluator.py`:
+>   - **Generate Comparison** — `POST /model/test-base` + `POST /model/test` run the base vs LoRA-applied model on a prompt (uses `mlx_lm.load(model_path, adapter_path=...)` + `make_sampler(temp=...)`).
+>   - **Evaluate (Tier 0+1)** — `POST /api/evaluate/base-model` and `/api/evaluate/adapter` compute Tier 1 perplexity (avg cross-entropy loss on validation text → 0–100 score + grade) and, for adapters, Tier 0 mathematical weight analysis (spectral norm, effective rank, L2 norm, sparsity, concentration of the `lora_a @ lora_b` updates).
+>   - **Evaluate (LLM Judge)** — `POST /api/evaluation/start` → poll `GET /api/evaluation/status` → `GET /api/evaluation/result`. Generates QA answers from the model and grades each on faithfulness / fact_recall / consistency / hallucination via **DeepSeek** (`deepseek-v4-flash`, key in `.env`).
+>   - **Restart-safe model resolution**: the resolver falls back to the most recent `runs/*/config.yaml` on disk, so Compare works after a backend restart (the in-memory `runner.config` is lost on relaunch).
+> - **OPD / nested-learning / fusion endpoints still return HTTP 501** for now (the frontend degrades gracefully). These will be re-wired to `mlx-lm-lora`'s online/teacher flows in a later phase.
+> - **Secrets hygiene**: `.env` is gitignored and untracked. Add `DEEPSEEK_API_KEY` (and `DEEPSEEK_MODEL`) there for the LLM Judge. No API keys are committed.
 >
 > ### v2 file layout
 > ```
@@ -35,6 +41,14 @@ A streamlined MLX fine-tuning desktop application for Apple Silicon Macs. Simple
 > ```
 > The Electron main process (`src/main.ts`) starts the backend as:
 > `(.venv/bin/python) -m uvicorn app.main:app --host 0.0.0.0 --port 8000` with `cwd=backend/`, then health-checks `GET /training/status`.
+>
+> ### Optional: enable the LLM Judge (Compare tab)
+> Create a `.env` in the repo root (gitignored) with a DeepSeek key for the "Evaluate (LLM Judge)" button:
+> ```
+> DEEPSEEK_API_KEY=sk-...
+> DEEPSEEK_MODEL=deepseek-v4-flash
+> ```
+> Without it, the other two Compare functions (Generate Comparison, Tier 0+1) still work; only the LLM Judge requires the key.
 >
 > ### Add a model to fine-tune
 > Drop an MLX-format model directory under `models/` (or point `DROID_MODELS_DIR` at an existing folder). It will appear in the Setup page's model list. Any HuggingFace repo id also works directly (mlx-lm downloads it on first use).
