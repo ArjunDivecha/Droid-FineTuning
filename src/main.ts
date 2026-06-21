@@ -99,10 +99,14 @@ const createWindow = (): void => {
 
 const startBackendServer = async (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    const backendPath = path.join(__dirname, '../backend');
-    const pythonPath = '/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/.venv/bin/python';
+    // Backend lives at <repo_root>/backend; the venv is at <repo_root>/.venv.
+    // __dirname is the dist/ folder (compiled main.js), so repo root is two up.
+    const repoRoot = path.resolve(__dirname, '..');
+    const backendPath = path.join(repoRoot, 'backend');
+    const pythonPath = path.join(repoRoot, '.venv', 'bin', 'python');
 
-    backendProcess = spawn(pythonPath, ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', BACKEND_PORT.toString()], {
+    // v2 backend: FastAPI app at backend/app/main.py (module `app.main:app`).
+    backendProcess = spawn(pythonPath, ['-m', 'uvicorn', 'app.main:app', '--host', '0.0.0.0', '--port', BACKEND_PORT.toString()], {
       cwd: backendPath,
       stdio: ['pipe', 'pipe', 'pipe']
     });

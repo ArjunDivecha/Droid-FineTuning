@@ -45,6 +45,11 @@ logs/
 *.log
 training_logs/
 
+# Training artifacts (regenerated per run; user data, not source)
+runs/
+data/
+sessions/
+
 # Model files (too large for git)
 models/
 adapters/
@@ -55,3 +60,6 @@ adapters/
 tmp/
 temp/
 .cache/
+
+# Cursor IDE local state (machine-specific)
+.cursor/

@@ -37,7 +37,8 @@ export const SetupPage: React.FC = () => {
     save_every: 100,
     early_stop: true,
     patience: 3,
-    adapter_name: 'mlx_finetune'
+    adapter_name: 'mlx_finetune',
+    resume_from: ''
   });
 
   // Load saved config from localStorage or use defaults
@@ -100,7 +101,31 @@ export const SetupPage: React.FC = () => {
 
   useEffect(() => {
     fetchModels();
+    fetchLatestCheckpoint();
   }, []);
+
+  // Auto-default the "Resume from Checkpoint" field + adapter name to the
+  // last-trained model on disk, so the user doesn't have to hunt for the
+  // checkpoint path. Only prefill fields the user hasn't already set (e.g.
+  // from a restored localStorage config) — respect their explicit choices.
+  const fetchLatestCheckpoint = async () => {
+    try {
+      const response = await axios.get(`${BACKEND_URL}/training/latest-checkpoint`);
+      const { adapter_name, checkpoint_path } = response.data;
+      if (checkpoint_path && adapter_name) {
+        setFormData(prev => ({
+          ...prev,
+          resume_from: prev.resume_from || checkpoint_path,
+          adapter_name: prev.adapter_name && prev.adapter_name !== 'mlx_finetune'
+            ? prev.adapter_name
+            : adapter_name,
+        }));
+      }
+    } catch (error) {
+      // Non-fatal: the resume field just stays empty.
+      console.warn('Could not fetch latest checkpoint:', error);
+    }
+  };
 
   useEffect(() => {
     if (selectedModel) {
@@ -134,33 +159,51 @@ export const SetupPage: React.FC = () => {
     dispatch(setSelectedModel(model || null));
   };
 
-  const handleFileSelect = async (type: 'train' | 'val') => {
+  const handleFileSelect = async (type: 'train' | 'val' | 'resume') => {
     try {
       // Use Electron's file dialog if available
       if (window.electronAPI) {
+        const isResume = type === 'resume';
         const result = await window.electronAPI.showOpenDialog({
-          title: `Select ${type === 'train' ? 'Training' : 'Validation'} Data File`,
-          filters: [
-            { name: 'JSONL Files', extensions: ['jsonl'] },
-            { name: 'JSON Files', extensions: ['json'] },
-            { name: 'All Files', extensions: ['*'] }
-          ],
+          title: isResume
+            ? 'Select LoRA Checkpoint (.safetensors) to Resume From'
+            : `Select ${type === 'train' ? 'Training' : 'Validation'} Data File`,
+          filters: isResume
+            ? [
+                { name: 'Safetensors', extensions: ['safetensors'] },
+                { name: 'All Files', extensions: ['*'] }
+              ]
+            : [
+                { name: 'JSONL Files', extensions: ['jsonl'] },
+                { name: 'JSON Files', extensions: ['json'] },
+                { name: 'All Files', extensions: ['*'] }
+              ],
           properties: ['openFile']
         });
-        
+
         if (!result.canceled && result.filePaths.length > 0) {
+          const field = type === 'train'
+            ? 'train_data_path'
+            : type === 'val'
+              ? 'val_data_path'
+              : 'resume_from';
           setFormData(prev => ({
             ...prev,
-            [type === 'train' ? 'train_data_path' : 'val_data_path']: result.filePaths[0]
+            [field]: result.filePaths[0]
           }));
         }
       } else {
         // Fallback for development without Electron
-        const path = prompt(`Enter path to ${type} data file (JSONL format):`);
+        const path = prompt(`Enter path to ${type} ${type === 'resume' ? 'checkpoint file (.safetensors)' : 'data file (JSONL format)'}:`);
         if (path) {
+          const field = type === 'train'
+            ? 'train_data_path'
+            : type === 'val'
+              ? 'val_data_path'
+              : 'resume_from';
           setFormData(prev => ({
             ...prev,
-            [type === 'train' ? 'train_data_path' : 'val_data_path']: path
+            [field]: path
           }));
         }
       }
@@ -199,7 +242,8 @@ export const SetupPage: React.FC = () => {
       save_every: formData.save_every!,
       early_stop: formData.early_stop!,
       patience: formData.patience!,
-      adapter_name: formData.adapter_name!
+      adapter_name: formData.adapter_name!,
+      resume_from: formData.resume_from || ''
     };
 
     dispatch(setTrainingConfig(trainingConfig));
@@ -346,6 +390,46 @@ export const SetupPage: React.FC = () => {
                   <span>Browse</span>
                 </button>
               </div>
+            </div>
+
+            {/* Resume from Checkpoint */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Resume from Checkpoint (Optional)
+              </label>
+              <div className="flex items-center space-x-3">
+                <input
+                  type="text"
+                  className="input-field flex-1"
+                  value={formData.resume_from || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, resume_from: e.target.value }))}
+                  placeholder="Path to a saved LoRA .safetensors checkpoint to continue from..."
+                />
+                <button
+                  type="button"
+                  onClick={() => handleFileSelect('resume')}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Browse</span>
+                </button>
+                {formData.resume_from && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, resume_from: '' }))}
+                    className="btn-secondary flex items-center space-x-2"
+                    title="Clear resume checkpoint"
+                  >
+                    <span>Clear</span>
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Loads the LoRA weights from this checkpoint before training (weight-only resume).
+                The optimizer, step counter, and LR schedule restart — so set Training Steps to the
+                number of <em>additional</em> steps you want, and keep the same Adapter Name so new
+                checkpoints save into the same folder. First ~50-100 steps may be slightly noisy.
+              </p>
             </div>
           </div>
         </div>

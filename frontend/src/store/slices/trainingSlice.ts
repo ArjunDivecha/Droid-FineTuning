@@ -24,6 +24,8 @@ export interface TrainingConfig {
   early_stop: boolean;
   patience: number;
   adapter_name: string;
+  // Optional path to a saved LoRA .safetensors checkpoint to resume from.
+  resume_from: string;
 }
 
 export type TrainingState = 'idle' | 'running' | 'paused' | 'completed' | 'error' | 'stopped';

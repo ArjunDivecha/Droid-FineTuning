@@ -34,8 +34,12 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Project root (this file lives in <root>/backend/main.py)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+VENV_PYTHON = str(PROJECT_ROOT / ".venv" / "bin" / "python")
+
 # Add the parent directory to path to import existing modules
-sys.path.append('/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/one_step_finetune')
+sys.path.append(str(PROJECT_ROOT / "local_qwen" / "one_step_finetune"))
 
 app = FastAPI(title="MLX Fine-Tuning GUI API", version="1.0.0")
 
@@ -74,9 +78,9 @@ class TrainingManager:
         self.current_config: Optional[TrainingConfig] = None
         self.training_metrics: Dict[str, Any] = {}
         self.websocket_clients: List[WebSocket] = []
-        self.output_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/artifacts/lora_adapters"
-        self.log_file = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/logs/gui_training.log"
-        self.sessions_dir = "/Users/macbook2024/Library/CloudStorage/Dropbox/AAA Backup/A Working/Arjun LLM Writing/local_qwen/sessions"
+        self.output_dir = str(PROJECT_ROOT / "adapters")
+        self.log_file = str(PROJECT_ROOT / "outputs" / "logs" / "gui_training.log")
+        self.sessions_dir = str(PROJECT_ROOT / "sessions")
         self.current_session_id: Optional[str] = None
         self.current_adapter_path: Optional[str] = None  # Full path to adapter directory
         

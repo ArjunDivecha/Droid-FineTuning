@@ -2,6 +2,52 @@
 
 A streamlined MLX fine-tuning desktop application for Apple Silicon Macs. Simple, fast, and focused on core fine-tuning functionality.
 
+> ## ⚡ v2 Backend (current) — rebuilt on `mlx-lm-lora`
+>
+> The backend was rebuilt on top of the [`mlx-lm-lora`](https://pypi.org/project/mlx-lm-lora/) training engine. The original backend (`backend/main.py`, `backend/opd/`, etc.) is kept on disk as reference but is **no longer used**; Electron now launches the v2 backend at `backend/app/main.py`.
+>
+> ### What changed
+> - **Training engine**: replaced the hand-rolled training code with `mlx-lm-lora` v2.1.0 (SFT/DPO/CPO/ORPO/GRPO/GSPO/Dr.GRPO/DAPO/Online-DPO/XPO/RLHF/PPO, LoRA/DoRA/QLoRA/QAT, synthetic data). Phase 1 (this rebuild) wires up **SFT + LoRA only**; the other modes are deferred.
+> - **Machine-independent paths**: all hardcoded `/Users/macbook2024/...` paths are gone. Every directory is derived from `PROJECT_ROOT` in `backend/app/paths.py`. The app now boots on any machine.
+> - **In-process training with structured callbacks**: instead of spawning a subprocess and parsing stdout, `backend/app/training_runner.py` calls `mlx_lm_lora.train.run(args, training_callback=...)` in a background thread. A custom `TrainingCallback` receives structured per-step dicts (`iteration`, `train_loss`, `learning_rate`, `iterations_per_second`, ...) and forwards them to the WebSocket — no fragile stdout parsing.
+> - **Frontend contract preserved**: the React UI is unchanged. The v2 backend implements the exact same HTTP + WebSocket contract (`/training/status`, `/training/start`, `/training/stop`, `/models`, `/adapters`, `/sessions/*`, `/api/training/generate-sample-data`, `/model/test`, `WS /ws`).
+> - **OPD / nested-learning / fusion / tier-eval endpoints return HTTP 501** for now (the frontend degrades gracefully). These will be re-wired to `mlx-lm-lora`'s online/teacher flows in a later phase.
+>
+> ### v2 file layout
+> ```
+> backend/app/
+> ├── __init__.py
+> ├── main.py              # FastAPI app: routes + WS + ConnectionManager
+> ├── paths.py             # PROJECT_ROOT + all dir resolution (no macbook2024 paths)
+> └── training_runner.py   # in-process mlx-lm-lora run() + TrainingCallback -> TrainingMetrics
+> ```
+> Working directories (all gitignored, auto-created on boot): `models/`, `adapters/`, `sessions/`, `runs/`, `data/`, `outputs/logs/`.
+>
+> ### Run it
+> ```bash
+> # one-time: create the project venv and install deps
+> python3.11 -m venv .venv
+> .venv/bin/pip install -r backend/requirements.txt
+>
+> # build + launch (Electron spawns the v2 backend from .venv)
+> npm install && cd frontend && npm install && cd ..
+> npm run dev:frontend
+> ```
+> The Electron main process (`src/main.ts`) starts the backend as:
+> `(.venv/bin/python) -m uvicorn app.main:app --host 0.0.0.0 --port 8000` with `cwd=backend/`, then health-checks `GET /training/status`.
+>
+> ### Add a model to fine-tune
+> Drop an MLX-format model directory under `models/` (or point `DROID_MODELS_DIR` at an existing folder). It will appear in the Setup page's model list. Any HuggingFace repo id also works directly (mlx-lm downloads it on first use).
+>
+> ### Verified
+> - Smoke test: real SFT on `openai-community/gpt2`, loss 4.72 → 1.67 over 6 steps, adapter saved. See `scripts/smoke_sft.py`.
+> - End-to-end: `POST /training/start` → live `training_progress` WS frames with per-step loss → `training_completed` frame. See `scripts/e2e_ws_test.py`.
+> - Electron launches, spawns the v2 backend, the React UI connects over WS and polls `/training/status`.
+>
+> The sections below describe the original (v1) design and are kept for historical context.
+
+---
+
 ## ✨ Features
 
 - 🖥️ **Modern Desktop GUI** - Clean Electron app with React interface
