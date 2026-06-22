@@ -75,6 +75,19 @@ logger = logging.getLogger(__name__)
 VALID_STATES = {"idle", "running", "paused", "completed", "error", "stopped"}
 
 
+class EarlyStopRequested(Exception):
+    """Raised from the training callback to halt training when early-stop fires.
+
+    mlx-lm-lora has no native early-stopping/patience argument (it only has
+    steps_per_eval). We implement it ourselves: the val-loss callback tracks
+    the best validation loss and, if it fails to improve for `patience`
+    consecutive evaluations, raises this exception. Because the callback runs
+    synchronously inside the trainer's `for it in range(iters)` loop, the
+    exception propagates out of run() cleanly, where _run_training catches it
+    and treats it as a normal early completion (NOT an error).
+    """
+
+
 @dataclass
 class MetricsUpdate:
     """One streamed training update, ready to broadcast over WebSocket.
@@ -120,10 +133,25 @@ class _StreamCallback:
     enqueue a MetricsUpdate per call.
     """
 
-    def __init__(self, runner: "TrainingRunner", total_steps: int, start_time: str):
+    def __init__(
+        self,
+        runner: "TrainingRunner",
+        total_steps: int,
+        start_time: str,
+        early_stop: bool = False,
+        patience: int = 3,
+    ):
         self._runner = runner
         self._total_steps = total_steps
         self._start_time = start_time
+        # Early-stopping state. mlx-lm-lora reports val_loss via
+        # on_val_loss_report; we track the best seen so far and count how many
+        # consecutive evals have failed to improve. When that count reaches
+        # `patience`, we raise EarlyStopRequested to halt the trainer loop.
+        self._early_stop = bool(early_stop)
+        self._patience = max(1, int(patience))
+        self._best_val_loss: Optional[float] = None
+        self._bad_evals = 0
         # Last-seen metrics; we accumulate so a train report retains the
         # most recent val_loss and vice versa.
         self._current: Dict[str, Any] = {
@@ -167,12 +195,50 @@ class _StreamCallback:
 
     def on_val_loss_report(self, val_info: Dict[str, Any]) -> None:
         it = int(val_info.get("iteration", 0))
-        self._current["val_loss"] = float(val_info.get("val_loss", 0.0))
+        val_loss = float(val_info.get("val_loss", 0.0))
+        self._current["val_loss"] = val_loss
         self._current["current_step"] = it
-        log_line = f"Iter {it}: Val loss {self._current['val_loss']:.4f}"
-        self._runner._enqueue(
-            MetricsUpdate(metrics=dict(self._current), log_line=log_line)
-        )
+        log_line = f"Iter {it}: Val loss {val_loss:.4f}"
+
+        # Early-stopping check (only when enabled AND we actually have a val
+        # loss to compare). A "best" improvement must beat the prior best by a
+        # small epsilon to avoid noise-driven resets.
+        if self._early_stop:
+            improved = (
+                self._best_val_loss is None
+                or val_loss < self._best_val_loss - 1e-4
+            )
+            if improved:
+                self._best_val_loss = val_loss
+                self._bad_evals = 0
+                log_line += f" (new best; patience reset)"
+            else:
+                self._bad_evals += 1
+                log_line += (
+                    f" (no improvement x{self._bad_evals}/{self._patience};"
+                    f" best={self._best_val_loss:.4f})"
+                )
+            self._runner._enqueue(
+                MetricsUpdate(metrics=dict(self._current), log_line=log_line)
+            )
+            if self._bad_evals >= self._patience:
+                # Halt the trainer. This raises out of the trainer's loop,
+                # through run(), into _run_training where it's caught as a
+                # clean early stop.
+                stop_msg = (
+                    f"Early stopping at iter {it}: val loss hasn't improved "
+                    f"for {self._patience} evals (best={self._best_val_loss:.4f})."
+                )
+                self._runner._enqueue(
+                    MetricsUpdate(
+                        metrics=dict(self._current), log_line=stop_msg
+                    )
+                )
+                raise EarlyStopRequested(stop_msg)
+        else:
+            self._runner._enqueue(
+                MetricsUpdate(metrics=dict(self._current), log_line=log_line)
+            )
 
     @staticmethod
     def _fmt(v: Any) -> str:
@@ -394,6 +460,11 @@ class TrainingRunner:
                 runner=self,
                 total_steps=int(config.iterations),
                 start_time=self._start_time,
+                # Early stopping only makes sense if there's a validation set
+                # to compute val_loss from. _build_args stages valid.jsonl
+                # only when config.val_data_path is set, so gate on that.
+                early_stop=bool(config.early_stop and config.val_data_path),
+                patience=int(config.patience),
             )
 
             self._enqueue(
@@ -442,15 +513,29 @@ class TrainingRunner:
             # receive structured per-step metrics.
             import contextlib
 
-            with open(log_path, "w") as logf, contextlib.redirect_stdout(logf):
-                lora_train.run(ns, training_callback=callback)
+            try:
+                with open(log_path, "w") as logf, contextlib.redirect_stdout(logf):
+                    lora_train.run(ns, training_callback=callback)
+            except EarlyStopRequested as es:
+                # Clean early stop — NOT an error. The trainer's loop exited
+                # early because val loss plateaued for `patience` evals. The
+                # most recent adapter weights were already saved at the last
+                # steps_per_save checkpoint; we surface a completion message.
+                # Note: we do NOT raise, so we fall through to the "completed"
+                # block below unless an external stop was also requested.
+                logger.info("Early stop fired: %s", es)
+                self._early_stopped = True
 
             # If stop was requested mid-run, state is already 'stopped'.
             if not self._stop_event.is_set():
                 self._enqueue(
                     MetricsUpdate(
                         metrics=self._metrics or {},
-                        log_line="Training completed.",
+                        log_line=(
+                            "Training completed (early stop)."
+                            if getattr(self, "_early_stopped", False)
+                            else "Training completed."
+                        ),
                         state="completed",
                     )
                 )
